@@ -1,9 +1,9 @@
-use jsonrpc_stdio_server::ServerBuilder;
+#![recursion_limit = "256"]
+// use jsonrpc_stdio_server::ServerBuilder;
 
+mod completion;
 mod server;
-use server::init;
 
 fn main() {
-    init();
-    // ServerBuilder::new(init()).build();
+    let io = server::init();
 }

@@ -1,29 +1,23 @@
+use codespan::LineIndex;
+use codespan_lsp::position_to_byte_index;
 use jsonrpc_core::futures;
-use jsonrpc_core::futures::future::{Future, FutureResult};
-use jsonrpc_core::{Error, IoHandler, Params};
-use lsp_types::Url;
-use lsp_types::{DidOpenTextDocumentParams, TextDocumentItem};
-use serde_json::Value;
+use jsonrpc_core::futures::future::FutureResult;
+use jsonrpc_core::{Error, IoHandler, Params, Value};
+use lsp_types::*;
+use serde_json::to_string;
 use std::sync::{Arc, Mutex};
-use sv_parser::SyntaxTree;
-use trie_rs::trie::Trie;
+
+use crate::completion::*;
 
 pub struct LSPServer {
-    srcs: Vec<TextDocumentItem>,
-}
-
-struct Document {
-    name: Url,
-    language_id: String,
-    version: i64,
-    text: String,
-    stree: SyntaxTree,
-    ctree: Trie<u8>,
+    srcs: Sources,
 }
 
 impl LSPServer {
     pub fn new() -> LSPServer {
-        LSPServer { srcs: Vec::new() }
+        LSPServer {
+            srcs: Sources::new(),
+        }
     }
 
     fn did_open(&mut self, params: Params) {
@@ -31,11 +25,29 @@ impl LSPServer {
             .parse::<DidOpenTextDocumentParams>()
             .unwrap()
             .text_document;
-        self.srcs.push(document);
+        self.srcs.add(document.uri, document.text);
     }
 
-    fn say_hello(&self, _: Params) -> FutureResult<Value, Error> {
-        futures::finished(Value::String("hello, world".to_owned()))
+    fn completion(&self, params: Params) -> FutureResult<Value, Error> {
+        let c_params = params.parse::<CompletionParams>().unwrap();
+        let doc = c_params.text_document_position;
+        let id = self.srcs.get_id(doc.text_document.uri.as_str()).to_owned();
+        let data = self.srcs.get_file_data(&id).unwrap();
+        let span = self
+            .srcs
+            .files
+            .line_span(id, LineIndex(doc.position.line as u32))
+            .unwrap();
+        let line = self.srcs.files.source_slice(id, span).unwrap().to_owned();
+        futures::finished(Value::String(
+            to_string(&get_completion(
+                line,
+                data,
+                doc.position,
+                position_to_byte_index(&self.srcs.files, id, &doc.position).unwrap(),
+            ))
+            .unwrap(),
+        ))
     }
 }
 
@@ -59,17 +71,8 @@ pub fn init() -> IoHandler {
     let server: Arc<Mutex<LSPServer>> = Arc::new(Mutex::new(LSPServer::new()));
     let mut io = IoHandler::new();
 
-    notification!("didOpen", did_open, server, io);
-    request!("say_hello", say_hello, server, io);
-
-    let request =
-        r#"{"jsonrpc": "2.0", "method": "say_hello", "params": { "name": "world" }, "id": 1}"#;
-    let response = r#"{"jsonrpc":"2.0","result":"hello, world","id":1}"#;
-
-    assert_eq!(
-        io.handle_request(request).wait().unwrap(),
-        Some(response.to_owned())
-    );
+    notification!("textDocument/didOpen", did_open, server, io);
+    request!("textDocument/completion", completion, server, io);
 
     io
 }
