@@ -1,3 +1,7 @@
-/target
-test.txt
-tests_rtl
+*
+!Cargo.lock
+!Cargo.toml
+!src
+!build.rs
+!rustfmt.toml
+!tests

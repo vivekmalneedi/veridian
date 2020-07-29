@@ -18,3 +18,5 @@ jsonrpc-stdio-server = "14.2.0"
 codespan = "0.9.5"
 codespan-lsp = "0.9.5"
 pretty_assertions = "0.6.1"
+
+verilogls_slang_wrapper = { path = "verilogls_slang_wrapper" }

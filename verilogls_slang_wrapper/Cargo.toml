@@ -1,0 +1,18 @@
+[package]
+name = "verilogls_slang_wrapper"
+version = "0.1.0"
+authors = ["Vivek Malneedi <vivekmalneedi@gmail.com>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+
+[build-dependencies]
+bindgen = "0.54.1"
+cmake = "0.1.44"
+cc = { version = "1.0.58", features = ["parallel"] }
+
+[dev-dependencies]
+tempdir = "0.3.7"
+serial_test = "0.4.0"

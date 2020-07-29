@@ -1,0 +1,3 @@
+[submodule "verilogls_slang_wrapper/slang"]
+	path = verilogls_slang_wrapper/slang
+	url = git@github.com:MikePopoloski/slang.git
