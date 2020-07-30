@@ -3,6 +3,7 @@
 
 mod completion;
 mod server;
+mod sources;
 
 fn main() {
     let io = server::init();

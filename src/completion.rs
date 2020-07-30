@@ -1,18 +1,38 @@
-use codespan::{ByteIndex, FileId, Files};
+use crate::server::LSPServer;
+use crate::sources::{FileData, Scope};
+use codespan::ByteIndex;
+use codespan::LineIndex;
+use codespan_lsp::position_to_byte_index;
+use jsonrpc_core::futures;
+use jsonrpc_core::futures::future::FutureResult;
+use jsonrpc_core::{Error, Params, Value};
 use lsp_types::*;
-use std::collections::HashMap;
-use std::path::PathBuf;
+use serde_json::to_string;
 use std::str;
 use sv_parser::*;
 use trie_rs::{Trie, TrieBuilder};
 
-fn parse(doc: &str) -> Result<SyntaxTree, sv_parser::Error> {
-    match parse_sv_str(doc, PathBuf::from(""), &HashMap::new(), &[""], false) {
-        Ok((syntax_tree, _)) => Ok(syntax_tree),
-        Err(err) => {
-            eprintln!("{}", err);
-            Err(err)
-        }
+impl LSPServer {
+    pub fn completion(&self, params: Params) -> FutureResult<Value, Error> {
+        let c_params = params.parse::<CompletionParams>().unwrap();
+        let doc = c_params.text_document_position;
+        let id = self.srcs.get_id(doc.text_document.uri.as_str()).to_owned();
+        let data = self.srcs.get_file_data(&id).unwrap();
+        let span = self
+            .srcs
+            .files
+            .line_span(id, LineIndex(doc.position.line as u32))
+            .unwrap();
+        let line = self.srcs.files.source_slice(id, span).unwrap().to_owned();
+        futures::finished(Value::String(
+            to_string(&get_completion(
+                line,
+                data,
+                doc.position,
+                position_to_byte_index(&self.srcs.files, id, &doc.position).unwrap(),
+            ))
+            .unwrap(),
+        ))
     }
 }
 
@@ -35,7 +55,7 @@ fn get_identifiers(syntax_tree: &SyntaxTree) -> Vec<(String, ByteIndex)> {
     idents
 }
 
-fn get_scopes(syntax_tree: &SyntaxTree) -> Vec<Scope> {
+pub fn get_scopes(syntax_tree: &SyntaxTree) -> Vec<Scope> {
     let mut scopes: Vec<Scope> = Vec::new();
     let identifiers = get_identifiers(&syntax_tree);
 
@@ -109,60 +129,6 @@ fn get_scopes(syntax_tree: &SyntaxTree) -> Vec<Scope> {
         }
     }
     scopes
-}
-
-pub struct Sources {
-    pub files: Files<String>,
-    fdata: Vec<FileData>,
-    names: HashMap<String, FileId>,
-}
-
-impl Sources {
-    pub fn new() -> Sources {
-        Sources {
-            files: Files::new(),
-            fdata: Vec::new(),
-            names: HashMap::new(),
-        }
-    }
-    pub fn add(&mut self, name: Url, doc: String) {
-        let fid = self.files.add(name.as_str().to_owned(), doc);
-        self.names.insert(name.as_str().to_owned(), fid);
-        match parse(self.files.source(fid)) {
-            Ok(syntax_tree) => self.fdata.push(FileData {
-                id: fid,
-                scopes: get_scopes(&syntax_tree),
-                syntax_tree,
-            }),
-            Err(_) => (),
-        };
-    }
-
-    pub fn get_id(&self, name: &str) -> &FileId {
-        self.names.get(name).unwrap()
-    }
-
-    pub fn get_file_data(&self, id: &FileId) -> Option<&FileData> {
-        for data in self.fdata.iter() {
-            if data.id == id.to_owned() {
-                return Some(&data);
-            }
-        }
-        None
-    }
-}
-
-pub struct FileData {
-    id: FileId,
-    scopes: Vec<Scope>,
-    syntax_tree: SyntaxTree,
-}
-
-struct Scope {
-    name: String,
-    start: ByteIndex,
-    end: ByteIndex,
-    trie: Trie<u8>,
 }
 
 pub fn get_completion(
