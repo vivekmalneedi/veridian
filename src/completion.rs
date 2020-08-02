@@ -1,38 +1,45 @@
 use crate::server::LSPServer;
-use crate::sources::{FileData, Scope};
+use crate::sources::{ParseData, Scope};
 use codespan::ByteIndex;
 use codespan::LineIndex;
 use codespan_lsp::position_to_byte_index;
-use jsonrpc_core::futures;
-use jsonrpc_core::futures::future::FutureResult;
-use jsonrpc_core::{Error, Params, Value};
+use lsp_server::{RequestId, Response};
 use lsp_types::*;
-use serde_json::to_string;
+use serde_json::to_value;
 use std::str;
 use sv_parser::*;
 use trie_rs::{Trie, TrieBuilder};
 
 impl LSPServer {
-    pub fn completion(&self, params: Params) -> FutureResult<Value, Error> {
-        let c_params = params.parse::<CompletionParams>().unwrap();
-        let doc = c_params.text_document_position;
-        let id = self.srcs.get_id(doc.text_document.uri.as_str()).to_owned();
-        let data = self.srcs.get_file_data(&id).unwrap();
+    pub fn completion(&self, id: RequestId, params: CompletionParams) -> Response {
+        let doc = params.text_document_position;
+        let file_id = self.srcs.get_id(doc.text_document.uri.as_str()).to_owned();
+        let data = self.srcs.get_file_data(&file_id).unwrap();
         let span = self
             .srcs
             .files
-            .line_span(id, LineIndex(doc.position.line as u32))
+            .line_span(file_id, LineIndex(doc.position.line as u32))
             .unwrap();
-        let line = self.srcs.files.source_slice(id, span).unwrap().to_owned();
-        futures::finished(Value::String(
-            to_string(&get_completion(
-                line,
-                data,
-                doc.position,
-                position_to_byte_index(&self.srcs.files, id, &doc.position).unwrap(),
-            ))
-            .unwrap(),
-        ))
+        let line = self
+            .srcs
+            .files
+            .source_slice(file_id, span)
+            .unwrap()
+            .to_owned();
+        Response {
+            id,
+            result: Some(
+                to_value(get_completion(
+                    line,
+                    data,
+                    doc.position,
+                    position_to_byte_index(&self.srcs.files, file_id, &doc.position)
+                        .unwrap(),
+                ))
+                .unwrap(),
+            ),
+            error: None,
+        }
     }
 }
 
@@ -133,7 +140,7 @@ pub fn get_scopes(syntax_tree: &SyntaxTree) -> Vec<Scope> {
 
 pub fn get_completion(
     line: String,
-    data: &FileData,
+    data: &ParseData,
     pos: Position,
     bpos: ByteIndex,
 ) -> CompletionList {

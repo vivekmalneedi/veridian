@@ -1,8 +1,3 @@
-use jsonrpc_core::futures::Future;
-use jsonrpc_core::types::{
-    to_string, to_value, Call, Id, MethodCall, Notification, Output, Params, Request,
-    Response, Version,
-};
 use lsp_types::*;
 use verilogls::server;
 
