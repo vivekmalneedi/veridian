@@ -1,10 +1,12 @@
 use crate::sources::*;
 
-use log::info;
-use lsp_server::{Connection, Message, Notification, Request, RequestId};
-use lsp_types::{notification::*, request::*, InitializeParams};
 use notify::{RecommendedWatcher, Watcher};
-use std::error::Error;
+use tower_lsp::lsp_types::*;
+use tower_lsp::{Client, LanguageServer};
+// use tower_lsp::{Client, LanguageServer, LspService, Server};
+use tokio::sync::Mutex;
+use tower_lsp::jsonrpc::Result;
+use log::info;
 
 pub struct LSPServer {
     pub srcs: Sources,
@@ -24,74 +26,60 @@ impl LSPServer {
     }
 }
 
-pub fn main_loop(
-    connection: &Connection,
-    params: serde_json::Value,
-) -> Result<(), Box<dyn Error + Sync + Send>> {
-    let mut server = LSPServer::new();
+pub struct Backend(Mutex<LSPServer>);
 
-    let _params: InitializeParams = serde_json::from_value(params).unwrap();
-    info!("starting server loop");
-    for msg in &connection.receiver {
-        info!("got msg: {:?}", msg);
-        match msg {
-            Message::Request(req) => {
-                if connection.handle_shutdown(&req)? {
-                    return Ok(());
-                }
-                info!("got request: {:?}", req);
-                match cast_request::<Completion>(req) {
-                    Ok((id, params)) => {
-                        info!("got completion request #{}: {:?}", id, params);
-                        connection
-                            .sender
-                            .send(Message::Response(server.completion(id, params)))?;
-                        continue;
-                    }
-                    Err(req) => req,
-                };
-                // ...
-            }
-            Message::Response(resp) => {
-                info!("got response: {:?}", resp);
-            }
-            Message::Notification(not) => {
-                info!("got notification: {:?}", not);
-                match cast_notification::<DidOpenTextDocument>(not) {
-                    Ok(params) => {
-                        info!("handling didOpen");
-                        server.did_open(params);
-                        continue;
-                    }
-                    Err(not) => not,
-                };
-                /*
-                match cast_notification::<DidChangeTextDocument>(not) {
-                    Ok(params) => {
-                        info!("handling change");
-                        continue;
-                    }
-                    Err(not) => not,
-                };
-                */
-            }
-        }
+impl Backend {
+    pub fn new() -> Backend {
+        Backend(Mutex::new(LSPServer::new()))
     }
-    Ok(())
 }
 
-fn cast_request<R>(req: Request) -> Result<(RequestId, R::Params), Request>
-where
-    R: lsp_types::request::Request,
-    R::Params: serde::de::DeserializeOwned,
-{
-    req.extract(R::METHOD)
-}
-
-fn cast_notification<N>(not: Notification) -> Result<N::Params, Notification>
-where
-    N: lsp_types::notification::Notification,
-    N::Params: serde::de::DeserializeOwned,
-{
-    not.extract(N::METHOD)
+#[tower_lsp::async_trait]
+impl LanguageServer for Backend {
+    async fn initialize(
+        &self,
+        _: &Client,
+        _: InitializeParams,
+    ) -> Result<InitializeResult> {
+        Ok(InitializeResult {
+            server_info: None,
+            capabilities: ServerCapabilities {
+                text_document_sync: Some(TextDocumentSyncCapability::Options(
+                    TextDocumentSyncOptions {
+                        open_close: Some(true),
+                        change: Some(TextDocumentSyncKind::Incremental),
+                        will_save: None,
+                        will_save_wait_until: None,
+                        save: None,
+                    },
+                )),
+                selection_range_provider: None,
+                hover_provider: None,
+                completion_provider: Some(CompletionOptions {
+                    resolve_provider: Some(false),
+                    trigger_characters: None,
+                    work_done_progress_options: WorkDoneProgressOptions {
+                        work_done_progress: None,
+                    },
+                }),
+                ..ServerCapabilities::default()
+            },
+        })
+    }
+    async fn initialized(&self, client: &Client, _: InitializedParams) {
+        client.log_message(MessageType::Info, "server initialized!");
+    }
+    async fn shutdown(&self) -> Result<()> {
+        Ok(())
+    }
+    async fn did_open(&self, client: &Client, params: DidOpenTextDocumentParams) {
+        self.0.lock().await.did_open(params);
+    }
+    async fn did_change(&self, client: &Client, params: DidChangeTextDocumentParams) {
+        self.0.lock().await.did_change(params);
+    }
+    async fn completion(&self, params: CompletionParams) -> Result<Option<CompletionResponse>> {
+        info!("{:?}", params);
+        Ok(self.0.lock().await.completion(params))
+    }
 }

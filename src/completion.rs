@@ -1,32 +1,24 @@
 use crate::server::LSPServer;
 use crate::sources::{LSPSupport, ParseData, Scope};
-use lsp_server::{RequestId, Response};
-use lsp_types::*;
+use log::info;
 use ropey::RopeSlice;
-use serde_json::to_value;
 use std::str;
 use sv_parser::*;
+use tower_lsp::lsp_types::*;
 use trie_rs::{Trie, TrieBuilder};
 
 impl LSPServer {
-    pub fn completion(&self, id: RequestId, params: CompletionParams) -> Response {
+    pub fn completion(&self, params: CompletionParams) -> Option<CompletionResponse> {
         let doc = params.text_document_position;
         let file_id = self.srcs.get_id(doc.text_document.uri).to_owned();
         let data = self.srcs.get_parse_data(file_id).unwrap();
         let file = self.srcs.get_file(file_id).unwrap();
-        Response {
-            id,
-            result: Some(
-                to_value(get_completion(
-                    file.text.line(doc.position.line as usize),
-                    data,
-                    doc.position,
-                    file.text.pos_to_byte(doc.position),
-                ))
-                .unwrap(),
-            ),
-            error: None,
-        }
+        Some(CompletionResponse::List(get_completion(
+            file.text.line(doc.position.line as usize),
+            data,
+            doc.position,
+            file.text.pos_to_byte(doc.position),
+        )))
     }
 }
 
@@ -124,6 +116,8 @@ pub fn get_completion(
     bpos: usize,
 ) -> CompletionList {
     let token = get_completion_token(line, pos);
+    info!("line: {}", line);
+    info!("token: {}, char: {}", token, pos.character);
     let mut scopes: Vec<&Scope> = data
         .scopes
         .iter()
@@ -162,9 +156,10 @@ pub fn get_completion(
 }
 
 fn get_completion_token(line: RopeSlice, pos: Position) -> String {
+    info!("line: {}", line);
     let mut token = String::new();
     let mut line_iter = line.chars();
-    for _ in 0..(line.utf16_cu_to_char(pos.character as usize) + 1) {
+    for _ in 0..(line.utf16_cu_to_char(pos.character as usize)) {
         line_iter.next();
     }
     let mut c = line_iter.prev();
@@ -187,7 +182,7 @@ mod tests {
             text.line(0),
             Position {
                 line: 0,
-                character: 2,
+                character: 3,
             },
         );
         assert_eq!(&result, "abc");
@@ -195,7 +190,7 @@ mod tests {
             text.line(0),
             Position {
                 line: 0,
-                character: 10,
+                character: 11,
             },
         );
         assert_eq!(&result, "cba");
@@ -203,7 +198,7 @@ mod tests {
             text.line(0),
             Position {
                 line: 0,
-                character: 15,
+                character: 16,
             },
         );
         assert_eq!(&result, "defg");
