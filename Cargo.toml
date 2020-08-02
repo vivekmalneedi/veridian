@@ -13,12 +13,11 @@ serde_json = "1.0.56"
 sv-parser = "0.7.0"
 trie-rs = "0.1.1"
 lsp-types = "0.74.2"
-codespan = "0.9.5"
-codespan-lsp = "0.9.5"
 pretty_assertions = "0.6.1"
 notify = "5.0.0-pre.2"
 log = "0.4.11"
 lsp-server = "0.3.3"
 flexi_logger = "0.15.10"
+ropey = "1.2.0"
 
 verilogls_slang_wrapper = { path = "verilogls_slang_wrapper" }

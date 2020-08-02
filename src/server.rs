@@ -65,6 +65,7 @@ pub fn main_loop(
                     }
                     Err(not) => not,
                 };
+                /*
                 match cast_notification::<DidChangeTextDocument>(not) {
                     Ok(params) => {
                         info!("handling change");
@@ -72,6 +73,7 @@ pub fn main_loop(
                     }
                     Err(not) => not,
                 };
+                */
             }
         }
     }

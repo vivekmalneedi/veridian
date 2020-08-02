@@ -1,10 +1,8 @@
 use crate::server::LSPServer;
-use crate::sources::{ParseData, Scope};
-use codespan::ByteIndex;
-use codespan::LineIndex;
-use codespan_lsp::position_to_byte_index;
+use crate::sources::{LSPSupport, ParseData, Scope};
 use lsp_server::{RequestId, Response};
 use lsp_types::*;
+use ropey::RopeSlice;
 use serde_json::to_value;
 use std::str;
 use sv_parser::*;
@@ -13,28 +11,17 @@ use trie_rs::{Trie, TrieBuilder};
 impl LSPServer {
     pub fn completion(&self, id: RequestId, params: CompletionParams) -> Response {
         let doc = params.text_document_position;
-        let file_id = self.srcs.get_id(doc.text_document.uri.as_str()).to_owned();
-        let data = self.srcs.get_file_data(&file_id).unwrap();
-        let span = self
-            .srcs
-            .files
-            .line_span(file_id, LineIndex(doc.position.line as u32))
-            .unwrap();
-        let line = self
-            .srcs
-            .files
-            .source_slice(file_id, span)
-            .unwrap()
-            .to_owned();
+        let file_id = self.srcs.get_id(doc.text_document.uri).to_owned();
+        let data = self.srcs.get_parse_data(file_id).unwrap();
+        let file = self.srcs.get_file(file_id).unwrap();
         Response {
             id,
             result: Some(
                 to_value(get_completion(
-                    line,
+                    file.text.line(doc.position.line as usize),
                     data,
                     doc.position,
-                    position_to_byte_index(&self.srcs.files, file_id, &doc.position)
-                        .unwrap(),
+                    file.text.pos_to_byte(doc.position),
                 ))
                 .unwrap(),
             ),
@@ -43,8 +30,8 @@ impl LSPServer {
     }
 }
 
-fn get_identifiers(syntax_tree: &SyntaxTree) -> Vec<(String, ByteIndex)> {
-    let mut idents: Vec<(String, ByteIndex)> = Vec::new();
+fn get_identifiers(syntax_tree: &SyntaxTree) -> Vec<(String, usize)> {
+    let mut idents: Vec<(String, usize)> = Vec::new();
     for node in syntax_tree {
         match node {
             RefNode::Identifier(x) => {
@@ -53,7 +40,7 @@ fn get_identifiers(syntax_tree: &SyntaxTree) -> Vec<(String, ByteIndex)> {
                     Identifier::EscapedIdentifier(x) => x.nodes.0,
                 };
                 let id_str = syntax_tree.get_str(&id).unwrap();
-                let idb = ByteIndex(syntax_tree.get_origin(&id).unwrap().1 as u32);
+                let idb = syntax_tree.get_origin(&id).unwrap().1;
                 idents.push((id_str.to_owned(), idb));
             }
             _ => (),
@@ -67,9 +54,9 @@ pub fn get_scopes(syntax_tree: &SyntaxTree) -> Vec<Scope> {
     let identifiers = get_identifiers(&syntax_tree);
 
     fn build_trie(
-        start: ByteIndex,
-        end: ByteIndex,
-        identifiers: &Vec<(String, ByteIndex)>,
+        start: usize,
+        end: usize,
+        identifiers: &Vec<(String, usize)>,
     ) -> Trie<u8> {
         let mut builder = TrieBuilder::new();
         for id in identifiers {
@@ -98,13 +85,9 @@ pub fn get_scopes(syntax_tree: &SyntaxTree) -> Vec<Scope> {
                 let name = syntax_tree.get_str(&name).unwrap();
                 scopes.push(Scope {
                     name: name.to_owned(),
-                    start: ByteIndex(start as u32),
-                    end: ByteIndex(end as u32),
-                    trie: build_trie(
-                        ByteIndex(start as u32),
-                        ByteIndex(end as u32),
-                        &identifiers,
-                    ),
+                    start,
+                    end,
+                    trie: build_trie(start, end, &identifiers),
                 });
             }
             RefNode::ModuleDeclarationNonansi(x) => {
@@ -123,13 +106,9 @@ pub fn get_scopes(syntax_tree: &SyntaxTree) -> Vec<Scope> {
                 let name = syntax_tree.get_str(&name).unwrap();
                 scopes.push(Scope {
                     name: name.to_owned(),
-                    start: ByteIndex(start as u32),
-                    end: ByteIndex(end as u32),
-                    trie: build_trie(
-                        ByteIndex(start as u32),
-                        ByteIndex(end as u32),
-                        &identifiers,
-                    ),
+                    start,
+                    end,
+                    trie: build_trie(start, end, &identifiers),
                 });
             }
             _ => (),
@@ -139,12 +118,12 @@ pub fn get_scopes(syntax_tree: &SyntaxTree) -> Vec<Scope> {
 }
 
 pub fn get_completion(
-    line: String,
+    line: RopeSlice,
     data: &ParseData,
     pos: Position,
-    bpos: ByteIndex,
+    bpos: usize,
 ) -> CompletionList {
-    let token = get_completion_token(line.clone(), pos);
+    let token = get_completion_token(line, pos);
     let mut scopes: Vec<&Scope> = data
         .scopes
         .iter()
@@ -182,17 +161,51 @@ pub fn get_completion(
     }
 }
 
-fn get_completion_token(line: String, pos: Position) -> String {
-    let count = line.chars().count();
-    let mut line_rev = line.chars().rev();
-    for _ in 0..(count - (pos.character + 1) as usize) {
-        line_rev.next();
-    }
+fn get_completion_token(line: RopeSlice, pos: Position) -> String {
     let mut token = String::new();
-    let mut c: char = line_rev.next().unwrap();
-    while c.is_alphanumeric() {
-        token.push(c);
-        c = line_rev.next().unwrap();
+    let mut line_iter = line.chars();
+    for _ in 0..(line.utf16_cu_to_char(pos.character as usize) + 1) {
+        line_iter.next();
+    }
+    let mut c = line_iter.prev();
+    while !c.is_none() && c.unwrap().is_alphanumeric() {
+        token.push(c.unwrap());
+        c = line_iter.prev();
     }
     token.chars().rev().collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use ropey::Rope;
+
+    #[test]
+    fn test_get_completion_token() {
+        let text = Rope::from_str("abc abc.cba defg");
+        let mut result = get_completion_token(
+            text.line(0),
+            Position {
+                line: 0,
+                character: 2,
+            },
+        );
+        assert_eq!(&result, "abc");
+        result = get_completion_token(
+            text.line(0),
+            Position {
+                line: 0,
+                character: 10,
+            },
+        );
+        assert_eq!(&result, "cba");
+        result = get_completion_token(
+            text.line(0),
+            Position {
+                line: 0,
+                character: 15,
+            },
+        );
+        assert_eq!(&result, "defg");
+    }
 }
