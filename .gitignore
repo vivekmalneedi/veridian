@@ -1,7 +1,9 @@
-*
+/*
+verilogls_slang_wrapper/*
 !Cargo.lock
 !Cargo.toml
-!src
+!src/
 !build.rs
 !rustfmt.toml
 !tests
+!verilogls_slang_wrapper
