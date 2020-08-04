@@ -1,4 +1,6 @@
 #![recursion_limit = "256"]
+#![allow(unused_imports)]
+#![allow(unused_variables)]
 
 use log::info;
 use tower_lsp::{LspService, Server};
@@ -6,6 +8,7 @@ use tower_lsp::{LspService, Server};
 mod completion;
 mod server;
 mod sources;
+mod diagnostics;
 use server::Backend;
 
 #[tokio::main]

@@ -1,6 +1,5 @@
 use crate::sources::*;
 
-use notify::{RecommendedWatcher, Watcher};
 use tower_lsp::lsp_types::*;
 use tower_lsp::{Client, LanguageServer};
 // use tower_lsp::{Client, LanguageServer, LspService, Server};
@@ -10,18 +9,12 @@ use log::info;
 
 pub struct LSPServer {
     pub srcs: Sources,
-    pub watcher: RecommendedWatcher,
 }
 
 impl LSPServer {
     pub fn new() -> LSPServer {
         LSPServer {
             srcs: Sources::new(),
-            watcher: Watcher::new_immediate(|res| match res {
-                Ok(event) => (),
-                Err(e) => println!("watch error: {:?}", e),
-            })
-            .unwrap(),
         }
     }
 }
@@ -73,10 +66,12 @@ impl LanguageServer for Backend {
         Ok(())
     }
     async fn did_open(&self, client: &Client, params: DidOpenTextDocumentParams) {
-        self.0.lock().await.did_open(params);
+        let diagnostics = self.0.lock().await.did_open(params);
+        client.publish_diagnostics(diagnostics.uri, diagnostics.diagnostics, diagnostics.version);
     }
     async fn did_change(&self, client: &Client, params: DidChangeTextDocumentParams) {
-        self.0.lock().await.did_change(params);
+        let diagnostics = self.0.lock().await.did_change(params);
+        client.publish_diagnostics(diagnostics.uri, diagnostics.diagnostics, diagnostics.version);
     }
     async fn completion(&self, params: CompletionParams) -> Result<Option<CompletionResponse>> {
         info!("{:?}", params);

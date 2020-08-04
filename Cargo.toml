@@ -7,17 +7,14 @@ edition = "2018"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-# serde_derive = "1.0.114"
-# serde = "1.0.114"
-# serde_json = "1.0.56"
 sv-parser = "0.7.0"
 trie-rs = "0.1.1"
 pretty_assertions = "0.6.1"
-notify = "5.0.0-pre.2"
 log = "0.4.11"
 tower-lsp = "0.11.0"
 flexi_logger = "0.15.10"
 ropey = "1.2.0"
 tokio = { version = "0.2.22", features = ["full"] }
+path-clean = "0.1.0"
 
 verilogls_slang_wrapper = { path = "verilogls_slang_wrapper" }

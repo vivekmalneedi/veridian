@@ -116,14 +116,18 @@ pub fn get_completion(
     bpos: usize,
 ) -> CompletionList {
     let token = get_completion_token(line, pos);
-    info!("line: {}", line);
-    info!("token: {}, char: {}", token, pos.character);
     let mut scopes: Vec<&Scope> = data
         .scopes
         .iter()
-        .filter(|x| bpos >= x.start && bpos <= x.end)
+        // .filter(|x| bpos >= x.start && bpos <= x.end)
         .collect();
     scopes.sort_by(|a, b| (a.end - a.start).cmp(&(b.end - b.start)));
+    // info!(
+    // "{}, {}, {}",
+    // data.scopes.get(0).unwrap().start,
+    // data.scopes.get(0).unwrap().end,
+    // bpos
+    // );
     let scope = *scopes.get(0).unwrap();
     let results = scope.trie.predictive_search(&token);
     let results_in_str: Vec<&str> = results
@@ -156,7 +160,6 @@ pub fn get_completion(
 }
 
 fn get_completion_token(line: RopeSlice, pos: Position) -> String {
-    info!("line: {}", line);
     let mut token = String::new();
     let mut line_iter = line.chars();
     for _ in 0..(line.utf16_cu_to_char(pos.character as usize)) {
@@ -202,5 +205,109 @@ mod tests {
             },
         );
         assert_eq!(&result, "defg");
+    }
+
+    #[test]
+    fn test_completion() {
+        let mut server = LSPServer::new();
+        let uri = Url::parse("file:///test.sv").unwrap();
+        let text = r#"module test;
+    logic abc;
+    logic abcd;
+
+endmodule
+"#;
+        let open_params = DidOpenTextDocumentParams {
+            text_document: TextDocumentItem {
+                uri: uri.clone(),
+                language_id: "systemverilog".to_owned(),
+                version: 0,
+                text: text.to_owned(),
+            },
+        };
+        server.did_open(open_params);
+
+        let change_params = DidChangeTextDocumentParams {
+            text_document: VersionedTextDocumentIdentifier {
+                uri: uri.clone(),
+                version: Some(3),
+            },
+            content_changes: vec![
+                TextDocumentContentChangeEvent {
+                    range: Some(Range {
+                        start: Position {
+                            line: 3,
+                            character: 0,
+                        },
+                        end: Position {
+                            line: 3,
+                            character: 0,
+                        },
+                    }),
+                    range_length: None,
+                    text: "\n".to_owned(),
+                },
+                TextDocumentContentChangeEvent {
+                    range: Some(Range {
+                        start: Position {
+                            line: 4,
+                            character: 0,
+                        },
+                        end: Position {
+                            line: 4,
+                            character: 0,
+                        },
+                    }),
+                    range_length: None,
+                    text: "  ".to_owned(),
+                },
+                TextDocumentContentChangeEvent {
+                    range: Some(Range {
+                        start: Position {
+                            line: 4,
+                            character: 2,
+                        },
+                        end: Position {
+                            line: 4,
+                            character: 2,
+                        },
+                    }),
+                    range_length: None,
+                    text: "a".to_owned(),
+                },
+            ],
+        };
+        server.did_change(change_params);
+
+        let completion_params = CompletionParams {
+            text_document_position: TextDocumentPositionParams {
+                text_document: TextDocumentIdentifier { uri: uri.clone() },
+                position: Position {
+                    line: 4,
+                    character: 3,
+                },
+            },
+            work_done_progress_params: WorkDoneProgressParams::default(),
+            partial_result_params: PartialResultParams::default(),
+            context: Some(CompletionContext {
+                trigger_kind: CompletionTriggerKind::Invoked,
+                trigger_character: None,
+            }),
+        };
+        let response: CompletionResponse = server.completion(completion_params).unwrap();
+        let item1 = CompletionItem {
+            label: "abc".to_owned(),
+            ..CompletionItem::default()
+        };
+        let item2 = CompletionItem {
+            label: "abcd".to_owned(),
+            ..CompletionItem::default()
+        };
+        if let CompletionResponse::List(item) = response {
+            assert!(item.items.contains(&item1));
+            assert!(item.items.contains(&item2));
+        } else {
+            assert!(false);
+        }
     }
 }
