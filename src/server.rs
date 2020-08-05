@@ -1,11 +1,10 @@
 use crate::sources::*;
 
-use tower_lsp::lsp_types::*;
-use tower_lsp::{Client, LanguageServer};
-// use tower_lsp::{Client, LanguageServer, LspService, Server};
+use log::info;
 use tokio::sync::Mutex;
 use tower_lsp::jsonrpc::Result;
-use log::info;
+use tower_lsp::lsp_types::*;
+use tower_lsp::{Client, LanguageServer};
 
 pub struct LSPServer {
     pub srcs: Sources,
@@ -29,11 +28,7 @@ impl Backend {
 
 #[tower_lsp::async_trait]
 impl LanguageServer for Backend {
-    async fn initialize(
-        &self,
-        _: &Client,
-        _: InitializeParams,
-    ) -> Result<InitializeResult> {
+    async fn initialize(&self, _: &Client, _: InitializeParams) -> Result<InitializeResult> {
         Ok(InitializeResult {
             server_info: None,
             capabilities: ServerCapabilities {
@@ -43,11 +38,9 @@ impl LanguageServer for Backend {
                         change: Some(TextDocumentSyncKind::Incremental),
                         will_save: None,
                         will_save_wait_until: None,
-                        save: None,
+                        save: Some(SaveOptions { include_text: None }),
                     },
                 )),
-                selection_range_provider: None,
-                hover_provider: None,
                 completion_provider: Some(CompletionOptions {
                     resolve_provider: Some(false),
                     trigger_characters: None,
@@ -67,11 +60,25 @@ impl LanguageServer for Backend {
     }
     async fn did_open(&self, client: &Client, params: DidOpenTextDocumentParams) {
         let diagnostics = self.0.lock().await.did_open(params);
-        client.publish_diagnostics(diagnostics.uri, diagnostics.diagnostics, diagnostics.version);
+        client.publish_diagnostics(
+            diagnostics.uri,
+            diagnostics.diagnostics,
+            diagnostics.version,
+        );
+    }
+    async fn did_close(&self, client: &Client, params: DidCloseTextDocumentParams) {
+        self.0.lock().await.did_close(params);
     }
     async fn did_change(&self, client: &Client, params: DidChangeTextDocumentParams) {
-        let diagnostics = self.0.lock().await.did_change(params);
-        client.publish_diagnostics(diagnostics.uri, diagnostics.diagnostics, diagnostics.version);
+        self.0.lock().await.did_change(params);
+    }
+    async fn did_save(&self, client: &Client, params: DidSaveTextDocumentParams) {
+        let diagnostics = self.0.lock().await.did_save(params);
+        client.publish_diagnostics(
+            diagnostics.uri,
+            diagnostics.diagnostics,
+            diagnostics.version,
+        );
     }
     async fn completion(&self, params: CompletionParams) -> Result<Option<CompletionResponse>> {
         info!("{:?}", params);

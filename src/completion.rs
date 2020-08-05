@@ -45,11 +45,7 @@ pub fn get_scopes(syntax_tree: &SyntaxTree) -> Vec<Scope> {
     let mut scopes: Vec<Scope> = Vec::new();
     let identifiers = get_identifiers(&syntax_tree);
 
-    fn build_trie(
-        start: usize,
-        end: usize,
-        identifiers: &Vec<(String, usize)>,
-    ) -> Trie<u8> {
+    fn build_trie(start: usize, end: usize, identifiers: &Vec<(String, usize)>) -> Trie<u8> {
         let mut builder = TrieBuilder::new();
         for id in identifiers {
             if id.1 >= start && id.1 <= end {
@@ -119,15 +115,9 @@ pub fn get_completion(
     let mut scopes: Vec<&Scope> = data
         .scopes
         .iter()
-        // .filter(|x| bpos >= x.start && bpos <= x.end)
+        .filter(|x| bpos >= x.start && bpos <= x.end)
         .collect();
     scopes.sort_by(|a, b| (a.end - a.start).cmp(&(b.end - b.start)));
-    // info!(
-    // "{}, {}, {}",
-    // data.scopes.get(0).unwrap().start,
-    // data.scopes.get(0).unwrap().end,
-    // bpos
-    // );
     let scope = *scopes.get(0).unwrap();
     let results = scope.trie.predictive_search(&token);
     let results_in_str: Vec<&str> = results

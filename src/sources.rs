@@ -11,20 +11,19 @@ use tower_lsp::lsp_types::*;
 use trie_rs::Trie;
 
 impl LSPServer {
-    pub fn did_open(
-        &mut self,
-        params: DidOpenTextDocumentParams,
-    ) -> PublishDiagnosticsParams {
+    pub fn did_open(&mut self, params: DidOpenTextDocumentParams) -> PublishDiagnosticsParams {
         let document: TextDocumentItem = params.text_document;
         let diagnostics = get_diagnostics(document.uri.clone());
         self.srcs.add(document);
         diagnostics
     }
 
-    pub fn did_change(
-        &mut self,
-        params: DidChangeTextDocumentParams,
-    ) -> PublishDiagnosticsParams {
+    pub fn did_close(&mut self, params: DidCloseTextDocumentParams) {
+        let document: TextDocumentIdentifier = params.text_document;
+        self.srcs.remove(document);
+    }
+
+    pub fn did_change(&mut self, params: DidChangeTextDocumentParams) {
         let file_id = self.srcs.get_id(params.text_document.uri);
         let mut file = self.srcs.get_file_mut(file_id).unwrap();
         for change in params.content_changes {
@@ -37,7 +36,11 @@ impl LSPServer {
         if let Some(version) = params.text_document.version {
             file.version = version;
         }
-        get_diagnostics(file.uri.clone())
+        self.srcs.update_parse_data(file_id);
+    }
+
+    pub fn did_save(&self, params: DidSaveTextDocumentParams) -> PublishDiagnosticsParams {
+        get_diagnostics(params.text_document.uri)
     }
 }
 
@@ -73,14 +76,20 @@ impl Sources {
         let fid = self.files.len() - 1;
         self.names.insert(doc.uri, fid);
 
-        match parse(&doc.text) {
-            Ok(syntax_tree) => self.parse_data.push(ParseData {
+        match parse(self.files.last().unwrap().text.clone()) {
+            Some(syntax_tree) => self.parse_data.push(ParseData {
                 id: fid,
                 scopes: get_scopes(&syntax_tree),
                 syntax_tree,
             }),
-            Err(_) => (),
+            None => (),
         };
+    }
+
+    pub fn remove(&mut self, doc: TextDocumentIdentifier) {
+        let fid = self.get_id(doc.uri);
+        self.files.retain(|x| x.id != fid);
+        self.parse_data.retain(|x| x.id != fid);
     }
 
     pub fn get_file(&self, id: usize) -> Option<&Source> {
@@ -113,6 +122,27 @@ impl Sources {
         }
         None
     }
+
+    pub fn get_parse_data_mut(&mut self, id: usize) -> Option<&mut ParseData> {
+        for data in self.parse_data.iter_mut() {
+            if data.id == id {
+                return Some(data);
+            }
+        }
+        None
+    }
+
+    pub fn update_parse_data(&mut self, id: usize) {
+        let file = self.get_file(id).unwrap();
+        match parse(file.text.clone()) {
+            Some(syntax_tree) => {
+                let parse_data = self.get_parse_data_mut(id).unwrap();
+                parse_data.scopes = get_scopes(&syntax_tree);
+                parse_data.syntax_tree = syntax_tree;
+            }
+            None => (),
+        };
+    }
 }
 
 pub struct ParseData {
@@ -128,14 +158,35 @@ pub struct Scope {
     pub trie: Trie<u8>,
 }
 
-fn parse(doc: &str) -> Result<SyntaxTree, sv_parser::Error> {
-    match parse_sv_str(doc, PathBuf::from(""), &HashMap::new(), &[""], false) {
-        Ok((syntax_tree, _)) => Ok(syntax_tree),
-        Err(err) => {
-            eprintln!("{}", err);
-            Err(err)
+fn parse(mut doc: Rope) -> Option<SyntaxTree> {
+    for _ in 0..1000000 {
+        match parse_sv_str(
+            &doc.to_string(),
+            PathBuf::from(""),
+            &HashMap::new(),
+            &[""],
+            false,
+        ) {
+            Ok((syntax_tree, _)) => return Some(syntax_tree),
+            Err(err) => {
+                match err {
+                    sv_parser::Error::Parse(trace) => match trace {
+                        Some((_, bpos)) => {
+                            let line_idx = doc.byte_to_line(bpos);
+                            let line = doc.line(line_idx);
+                            let start_char = doc.line_to_char(line_idx);
+                            let line_length = line.len_chars();
+                            doc.remove(start_char..(start_char + line_length));
+                            doc.insert(start_char, &" ".to_owned().repeat(line_length));
+                        }
+                        None => return None,
+                    },
+                    _ => return None,
+                };
+            }
         }
     }
+    None
 }
 
 //TODO: add bounds checking for utf8<->utf16 conversions
@@ -155,8 +206,7 @@ impl LSPSupport for Rope {
     }
     fn pos_to_char(&self, pos: Position) -> usize {
         let line_slice = self.line(pos.line as usize);
-        self.line_to_char(pos.line as usize)
-            + line_slice.utf16_cu_to_char(pos.character as usize)
+        self.line_to_char(pos.line as usize) + line_slice.utf16_cu_to_char(pos.character as usize)
     }
     fn byte_to_pos(&self, byte_idx: usize) -> Position {
         self.char_to_pos(self.byte_to_char(byte_idx))
@@ -166,8 +216,7 @@ impl LSPSupport for Rope {
         let line_slice = self.line(line);
         Position {
             line: line as u64,
-            character: line_slice.char_to_utf16_cu(char_idx - self.line_to_char(line))
-                as u64,
+            character: line_slice.char_to_utf16_cu(char_idx - self.line_to_char(line)) as u64,
         }
     }
     fn range_to_char_range(&self, range: Range) -> StdRange<usize> {
@@ -196,8 +245,7 @@ impl<'a> LSPSupport for RopeSlice<'a> {
     }
     fn pos_to_char(&self, pos: Position) -> usize {
         let line_slice = self.line(pos.line as usize);
-        self.line_to_char(pos.line as usize)
-            + line_slice.utf16_cu_to_char(pos.character as usize)
+        self.line_to_char(pos.line as usize) + line_slice.utf16_cu_to_char(pos.character as usize)
     }
     fn byte_to_pos(&self, byte_idx: usize) -> Position {
         self.char_to_pos(self.byte_to_char(byte_idx))
@@ -207,8 +255,7 @@ impl<'a> LSPSupport for RopeSlice<'a> {
         let line_slice = self.line(line);
         Position {
             line: line as u64,
-            character: line_slice.char_to_utf16_cu(char_idx - self.line_to_char(line))
-                as u64,
+            character: line_slice.char_to_utf16_cu(char_idx - self.line_to_char(line)) as u64,
         }
     }
     fn range_to_char_range(&self, range: Range) -> StdRange<usize> {
@@ -279,5 +326,36 @@ endmodule"#
                 .to_owned()
         );
         assert_eq!(file.version, 1);
+    }
+
+    #[test]
+    fn test_fault_tolerance() {
+        let mut server = LSPServer::new();
+        let uri = Url::parse("file:///test.sv").unwrap();
+        let text = r#"module test;
+  logic abc
+endmodule"#;
+        let open_params = DidOpenTextDocumentParams {
+            text_document: TextDocumentItem {
+                uri: uri.clone(),
+                language_id: "systemverilog".to_owned(),
+                version: 0,
+                text: text.to_owned(),
+            },
+        };
+        server.did_open(open_params);
+        let fid = server.srcs.get_id(uri.clone());
+        let file = server.srcs.get_file(fid).unwrap();
+        assert_eq!(
+            server
+                .srcs
+                .get_parse_data(fid)
+                .unwrap()
+                .scopes
+                .get(0)
+                .unwrap()
+                .name,
+            "test"
+        );
     }
 }
