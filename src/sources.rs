@@ -8,7 +8,6 @@ use std::ops::Range as StdRange;
 use std::path::PathBuf;
 use sv_parser::*;
 use tower_lsp::lsp_types::*;
-use trie_rs::Trie;
 
 impl LSPServer {
     pub fn did_open(&mut self, params: DidOpenTextDocumentParams) -> PublishDiagnosticsParams {
@@ -154,7 +153,7 @@ pub struct Scope {
     pub name: String,
     pub start: usize,
     pub end: usize,
-    pub trie: Trie<u8>,
+    pub idents: Vec<String>,
 }
 
 fn parse(mut doc: Rope) -> Option<SyntaxTree> {

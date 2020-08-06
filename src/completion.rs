@@ -5,7 +5,6 @@ use ropey::RopeSlice;
 use std::str;
 use sv_parser::*;
 use tower_lsp::lsp_types::*;
-use trie_rs::{Trie, TrieBuilder};
 
 impl LSPServer {
     pub fn completion(&mut self, params: CompletionParams) -> Option<CompletionResponse> {
@@ -42,19 +41,17 @@ fn get_identifiers(syntax_tree: &SyntaxTree) -> Vec<(String, usize)> {
     idents
 }
 
+fn filter_idents(start: usize, end: usize, idents: &Vec<(String, usize)>) -> Vec<String> {
+    idents
+        .iter()
+        .filter(|x| (x.1 >= start) && (x.1 <= end))
+        .map(|x| x.0.to_owned())
+        .collect()
+}
+
 pub fn get_scopes(syntax_tree: &SyntaxTree) -> Vec<Scope> {
     let mut scopes: Vec<Scope> = Vec::new();
     let identifiers = get_identifiers(&syntax_tree);
-
-    fn build_trie(start: usize, end: usize, identifiers: &Vec<(String, usize)>) -> Trie<u8> {
-        let mut builder = TrieBuilder::new();
-        for id in identifiers {
-            if id.1 >= start && id.1 <= end {
-                builder.push(&id.0);
-            }
-        }
-        builder.build()
-    }
 
     for node in syntax_tree {
         match node {
@@ -76,7 +73,7 @@ pub fn get_scopes(syntax_tree: &SyntaxTree) -> Vec<Scope> {
                     name: name.to_owned(),
                     start,
                     end,
-                    trie: build_trie(start, end, &identifiers),
+                    idents: filter_idents(start, end, &identifiers),
                 });
             }
             RefNode::ModuleDeclarationNonansi(x) => {
@@ -97,7 +94,7 @@ pub fn get_scopes(syntax_tree: &SyntaxTree) -> Vec<Scope> {
                     name: name.to_owned(),
                     start,
                     end,
-                    trie: build_trie(start, end, &identifiers),
+                    idents: filter_idents(start, end, &identifiers),
                 });
             }
             _ => (),
@@ -120,31 +117,19 @@ pub fn get_completion(
         .collect();
     scopes.sort_by(|a, b| (a.end - a.start).cmp(&(b.end - b.start)));
     let scope = *scopes.get(0).unwrap();
-    let results = scope.trie.predictive_search(&token);
-    let results_in_str: Vec<&str> = results
+    let results: Vec<String> = scope
+        .idents
         .iter()
-        .map(|u8s| str::from_utf8(u8s).unwrap())
+        .filter(|x| x.starts_with(&token))
+        .map(|x| x.to_owned())
         .collect();
     CompletionList {
         is_incomplete: false,
-        items: results_in_str
+        items: results
             .iter()
             .map(|x| CompletionItem {
                 label: (*x).to_owned(),
-                kind: None,
-                detail: None,
-                documentation: None,
-                deprecated: None,
-                preselect: None,
-                sort_text: None,
-                filter_text: None,
-                insert_text: None,
-                insert_text_format: None,
-                text_edit: None,
-                additional_text_edits: None,
-                command: None,
-                data: None,
-                tags: None,
+                ..CompletionItem::default()
             })
             .collect(),
     }
