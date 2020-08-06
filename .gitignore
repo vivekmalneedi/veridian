@@ -3,6 +3,7 @@ verilogls_slang_wrapper/*
 !Cargo.lock
 !Cargo.toml
 !src/
+!extensions/
 !build.rs
 !rustfmt.toml
 !tests

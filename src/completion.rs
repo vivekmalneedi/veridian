@@ -8,9 +8,10 @@ use tower_lsp::lsp_types::*;
 use trie_rs::{Trie, TrieBuilder};
 
 impl LSPServer {
-    pub fn completion(&self, params: CompletionParams) -> Option<CompletionResponse> {
+    pub fn completion(&mut self, params: CompletionParams) -> Option<CompletionResponse> {
         let doc = params.text_document_position;
         let file_id = self.srcs.get_id(doc.text_document.uri).to_owned();
+        self.srcs.update_parse_data(file_id);
         let data = self.srcs.get_parse_data(file_id).unwrap();
         let file = self.srcs.get_file(file_id).unwrap();
         Some(CompletionResponse::List(get_completion(
@@ -125,7 +126,7 @@ pub fn get_completion(
         .map(|u8s| str::from_utf8(u8s).unwrap())
         .collect();
     CompletionList {
-        is_incomplete: results_in_str.contains(&token.as_str()),
+        is_incomplete: false,
         items: results_in_str
             .iter()
             .map(|x| CompletionItem {

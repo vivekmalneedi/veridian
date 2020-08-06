@@ -36,7 +36,6 @@ impl LSPServer {
         if let Some(version) = params.text_document.version {
             file.version = version;
         }
-        self.srcs.update_parse_data(file_id);
     }
 
     pub fn did_save(&self, params: DidSaveTextDocumentParams) -> PublishDiagnosticsParams {
@@ -159,7 +158,7 @@ pub struct Scope {
 }
 
 fn parse(mut doc: Rope) -> Option<SyntaxTree> {
-    for _ in 0..1000000 {
+    for _ in 0..doc.len_lines() {
         match parse_sv_str(
             &doc.to_string(),
             PathBuf::from(""),
