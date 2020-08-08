@@ -2,8 +2,11 @@ use crate::completion::get_scopes;
 use crate::diagnostics::get_diagnostics;
 use crate::server::LSPServer;
 use log::info;
+use pathdiff::diff_paths;
 use ropey::{Rope, RopeSlice};
 use std::collections::HashMap;
+use std::env::current_dir;
+use std::io;
 use std::ops::Range as StdRange;
 use std::path::PathBuf;
 use sv_parser::*;
@@ -75,9 +78,9 @@ impl Sources {
             valid_parse: true,
         });
         let fid = self.files.len() - 1;
-        self.names.insert(doc.uri, fid);
+        self.names.insert(doc.uri.clone(), fid);
 
-        match parse(self.files.last().unwrap().text.clone()) {
+        match parse(self.files.last().unwrap().text.clone(), &doc.uri) {
             Some(syntax_tree) => self.parse_data.push(ParseData {
                 id: fid,
                 scopes: get_scopes(&syntax_tree),
@@ -148,7 +151,7 @@ impl Sources {
     pub fn update_parse_data(&mut self, id: usize) {
         let mut file = self.get_file_mut(id).unwrap();
         if !file.valid_parse {
-            match parse(file.text.clone()) {
+            match parse(file.text.clone(), &file.uri) {
                 Some(syntax_tree) => {
                     file.valid_parse = true;
                     let parse_data = self.get_parse_data_mut(id).unwrap();
@@ -175,13 +178,18 @@ pub struct Scope {
     pub defs: Vec<(String, usize)>,
 }
 
-pub fn parse(mut doc: Rope) -> Option<SyntaxTree> {
-    for _ in 0..doc.len_lines() {
+//TODO: show all unrecoverable parse errors to user
+pub fn parse(mut doc: Rope, uri: &Url) -> Option<SyntaxTree> {
+    let mut parse_iterations = 1;
+    let mut i = 0;
+    let mut includes: Vec<PathBuf> = Vec::new();
+    while i < parse_iterations {
+        i += 1;
         match parse_sv_str(
             &doc.to_string(),
             PathBuf::from(""),
             &HashMap::new(),
-            &[""],
+            &includes,
             false,
         ) {
             Ok((syntax_tree, _)) => return Some(syntax_tree),
@@ -195,10 +203,32 @@ pub fn parse(mut doc: Rope) -> Option<SyntaxTree> {
                             let line_length = line.len_chars();
                             doc.remove(start_char..(start_char + line_length));
                             doc.insert(start_char, &" ".to_owned().repeat(line_length));
+                            parse_iterations += 1;
                         }
                         None => return None,
                     },
-                    _ => return None,
+                    sv_parser::Error::Include { source: x } => {
+                        match *x {
+                            sv_parser::Error::File { source: y, path: z } => {
+                                let mut inc_path_given = z.clone();
+                                let mut uri_path = uri.to_file_path().unwrap();
+                                uri_path.pop();
+                                let rel_path =
+                                    diff_paths(uri_path, current_dir().unwrap()).unwrap();
+                                inc_path_given.pop();
+                                let inc_path = rel_path.join(inc_path_given);
+                                if !includes.contains(&inc_path) {
+                                    includes.push(inc_path);
+                                } else {
+                                    eprintln!("File Not Found: {:?}", z);
+                                    break;
+                                }
+                                parse_iterations += 1;
+                            }
+                            _ => (),
+                        };
+                    }
+                    _ => eprintln!("parse, {:?}", err),
                 };
             }
         }
@@ -292,6 +322,7 @@ impl<'a> LSPSupport for RopeSlice<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::fs::read_to_string;
 
     #[test]
     fn test_open_and_change() {
@@ -374,5 +405,15 @@ endmodule"#;
                 .name,
             "test"
         );
+    }
+
+    #[test]
+    fn test_header() {
+        let mut d = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        d.push("tests_rtl/lab6/src/fp_add.sv");
+        let text = read_to_string(&d).unwrap();
+        let doc = Rope::from_str(&text);
+        assert!(parse(doc.clone(), &Url::from_file_path(d).unwrap()).is_some());
+        // TODO: add missing header test
     }
 }

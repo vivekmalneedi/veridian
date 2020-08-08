@@ -14,5 +14,6 @@ flexi_logger = "0.15.10"
 ropey = "1.2.0"
 tokio = { version = "0.2.22", features = ["full"] }
 path-clean = "0.1.0"
+pathdiff = "0.2.0"
 
 verilogls_slang_wrapper = { path = "verilogls_slang_wrapper" }

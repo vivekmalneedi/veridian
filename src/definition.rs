@@ -209,7 +209,7 @@ mod tests {
         // d.push("tests_rtl/FIR_filter.sv");
         // let text = read_to_string(d).unwrap();
         let doc = Rope::from_str(&text);
-        let syntax_tree = parse(doc.clone()).unwrap();
+        let syntax_tree = parse(doc.clone(), &Url::parse("file:///test.sv").unwrap()).unwrap();
         let scope_idents = get_scope_idents(&syntax_tree);
         let defs = get_definitions(&syntax_tree, &scope_idents);
         for def in defs {
