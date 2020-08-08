@@ -1,6 +1,6 @@
 use crate::server::LSPServer;
 use crate::sources::LSPSupport;
-use ropey::RopeSlice;
+use ropey::{Rope, RopeSlice};
 use sv_parser::*;
 use tower_lsp::lsp_types::*;
 
@@ -23,6 +23,29 @@ impl LSPServer {
                     doc,
                     Range::new(def_pos, def_pos),
                 )));
+            }
+        }
+        None
+    }
+
+    pub fn hover(&mut self, params: HoverParams) -> Option<Hover> {
+        let doc = params.text_document_position_params.text_document.uri;
+        let pos = params.text_document_position_params.position;
+        let file_id = self.srcs.get_id(&doc).to_owned();
+        self.srcs.update_parse_data(file_id);
+        let scope = self.srcs.get_scope(file_id, &pos).unwrap();
+        let file = self.srcs.get_file(file_id).unwrap();
+        let token = get_definition_token(file.text.line(pos.line as usize), pos);
+        for def in &scope.defs {
+            if def.0 == token {
+                let def_line = file.text.byte_to_line(def.1);
+                return Some(Hover {
+                    contents: HoverContents::Scalar(MarkedString::LanguageString(LanguageString {
+                        language: "systemverilog".to_owned(),
+                        value: get_hover(&file.text, def_line),
+                    })),
+                    range: None,
+                });
             }
         }
         None
@@ -112,6 +135,53 @@ pub fn get_definitions(
     definitions
 }
 
+fn get_hover(doc: &Rope, line: usize) -> String {
+    if line == 0 {
+        return doc.line(line).to_string();
+    }
+    let mut hover: Vec<String> = Vec::new();
+    let mut multiline: bool = false;
+    let mut valid: bool = true;
+    let mut current: String = doc.line(line).to_string();
+    let ltrim: String = " ".repeat(current.len() - current.trim_start().len());
+    let mut line_idx = line;
+    while valid {
+        hover.push(current.clone());
+        line_idx -= 1;
+        valid = false;
+        if line_idx > 0 {
+            current = doc.line(line_idx).to_string();
+            let currentl = current.clone().trim_start().to_owned();
+            let currentr = current.clone().trim_end().to_owned();
+            if currentl.starts_with("/*") && currentr.ends_with("*/") {
+                valid = true;
+            } else if currentr.ends_with("*/") {
+                multiline = true;
+                valid = true;
+            } else if currentl.starts_with("/*") {
+                multiline = false;
+                valid = true;
+            } else if currentl.starts_with("//") {
+                valid = true;
+            } else if multiline {
+                valid = true;
+            } else {
+                valid = false;
+            }
+        }
+    }
+    hover.reverse();
+    let mut result: Vec<String> = Vec::new();
+    for i in hover {
+        if let Some(stripped) = i.strip_prefix(&ltrim) {
+            result.push(stripped.to_owned());
+        } else {
+            result.push(i);
+        }
+    }
+    result.join("").trim_end().to_owned()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -147,5 +217,37 @@ mod tests {
                 assert_eq!(doc.byte_to_pos(def.1), Position::new(1, 8));
             }
         }
+    }
+
+    #[test]
+    fn test_hover() {
+        let text = r#"
+// module test
+// test module
+module test;
+  /* a */
+  logic a;
+  /**
+    * b
+  */
+  logic b;
+  endmodule"#;
+        let doc = Rope::from_str(text);
+        eprintln!("{}", get_hover(&doc, 2));
+        assert_eq!(
+            get_hover(&doc, 3),
+            r#"// module test
+// test module
+module test;"#
+                .to_owned()
+        );
+        assert_eq!(
+            get_hover(&doc, 9),
+            r#"/**
+  * b
+*/
+logic b;"#
+                .to_owned()
+        );
     }
 }

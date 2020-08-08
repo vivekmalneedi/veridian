@@ -49,6 +49,7 @@ impl LanguageServer for Backend {
                     },
                 }),
                 definition_provider: Some(true),
+                hover_provider: Some(true),
                 ..ServerCapabilities::default()
             },
         })
@@ -91,5 +92,9 @@ impl LanguageServer for Backend {
     ) -> Result<Option<GotoDefinitionResponse>> {
         let definition = self.0.lock().await.goto_definition(params);
         Ok(definition)
+    }
+    async fn hover(&self, params: HoverParams) -> Result<Option<Hover>> {
+        let hover = self.0.lock().await.hover(params);
+        Ok(hover)
     }
 }
