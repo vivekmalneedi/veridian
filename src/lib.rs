@@ -3,6 +3,7 @@
 #![allow(unused_variables)]
 
 pub mod completion;
+pub mod definition;
 pub mod diagnostics;
 pub mod server;
 pub mod sources;

@@ -23,7 +23,7 @@ impl LSPServer {
     }
 
     pub fn did_change(&mut self, params: DidChangeTextDocumentParams) {
-        let file_id = self.srcs.get_id(params.text_document.uri);
+        let file_id = self.srcs.get_id(&params.text_document.uri);
         let mut file = self.srcs.get_file_mut(file_id).unwrap();
         for change in params.content_changes {
             if change.range.is_none() {
@@ -35,6 +35,7 @@ impl LSPServer {
         if let Some(version) = params.text_document.version {
             file.version = version;
         }
+        file.valid_parse = false;
     }
 
     pub fn did_save(&self, params: DidSaveTextDocumentParams) -> PublishDiagnosticsParams {
@@ -47,6 +48,7 @@ pub struct Source {
     pub uri: Url,
     pub text: Rope,
     pub version: i64,
+    pub valid_parse: bool,
 }
 
 pub struct Sources {
@@ -70,6 +72,7 @@ impl Sources {
             uri: doc.uri.clone(),
             text: Rope::from_str(&doc.text),
             version: doc.version,
+            valid_parse: true,
         });
         let fid = self.files.len() - 1;
         self.names.insert(doc.uri, fid);
@@ -85,7 +88,7 @@ impl Sources {
     }
 
     pub fn remove(&mut self, doc: TextDocumentIdentifier) {
-        let fid = self.get_id(doc.uri);
+        let fid = self.get_id(&doc.uri);
         self.files.retain(|x| x.id != fid);
         self.parse_data.retain(|x| x.id != fid);
     }
@@ -108,14 +111,26 @@ impl Sources {
         None
     }
 
-    pub fn get_id(&self, uri: Url) -> usize {
-        self.names.get(&uri).unwrap().clone()
+    pub fn get_id(&self, uri: &Url) -> usize {
+        self.names.get(uri).unwrap().clone()
     }
 
     pub fn get_parse_data(&self, id: usize) -> Option<&ParseData> {
         for data in self.parse_data.iter() {
             if data.id == id {
                 return Some(data);
+            }
+        }
+        None
+    }
+
+    pub fn get_scope(&self, id: usize, pos: &Position) -> Option<&Scope> {
+        let data = self.get_parse_data(id);
+        let file = self.get_file(id)?;
+        let byte_idx = file.text.pos_to_byte(pos);
+        for scope in &data?.scopes {
+            if scope.start <= byte_idx && byte_idx <= scope.end {
+                return Some(&scope);
             }
         }
         None
@@ -131,15 +146,18 @@ impl Sources {
     }
 
     pub fn update_parse_data(&mut self, id: usize) {
-        let file = self.get_file(id).unwrap();
-        match parse(file.text.clone()) {
-            Some(syntax_tree) => {
-                let parse_data = self.get_parse_data_mut(id).unwrap();
-                parse_data.scopes = get_scopes(&syntax_tree);
-                parse_data.syntax_tree = syntax_tree;
-            }
-            None => (),
-        };
+        let mut file = self.get_file_mut(id).unwrap();
+        if !file.valid_parse {
+            match parse(file.text.clone()) {
+                Some(syntax_tree) => {
+                    file.valid_parse = true;
+                    let parse_data = self.get_parse_data_mut(id).unwrap();
+                    parse_data.scopes = get_scopes(&syntax_tree);
+                    parse_data.syntax_tree = syntax_tree;
+                }
+                None => (),
+            };
+        }
     }
 }
 
@@ -154,9 +172,10 @@ pub struct Scope {
     pub start: usize,
     pub end: usize,
     pub idents: Vec<String>,
+    pub defs: Vec<(String, usize)>,
 }
 
-fn parse(mut doc: Rope) -> Option<SyntaxTree> {
+pub fn parse(mut doc: Rope) -> Option<SyntaxTree> {
     for _ in 0..doc.len_lines() {
         match parse_sv_str(
             &doc.to_string(),
@@ -189,20 +208,20 @@ fn parse(mut doc: Rope) -> Option<SyntaxTree> {
 
 //TODO: add bounds checking for utf8<->utf16 conversions
 pub trait LSPSupport {
-    fn pos_to_byte(&self, pos: Position) -> usize;
-    fn pos_to_char(&self, pos: Position) -> usize;
+    fn pos_to_byte(&self, pos: &Position) -> usize;
+    fn pos_to_char(&self, pos: &Position) -> usize;
     fn byte_to_pos(&self, byte_idx: usize) -> Position;
     fn char_to_pos(&self, char_idx: usize) -> Position;
-    fn range_to_char_range(&self, range: Range) -> StdRange<usize>;
+    fn range_to_char_range(&self, range: &Range) -> StdRange<usize>;
     fn char_range_to_range(&self, range: StdRange<usize>) -> Range;
     fn apply_change(&mut self, change: TextDocumentContentChangeEvent);
 }
 
 impl LSPSupport for Rope {
-    fn pos_to_byte(&self, pos: Position) -> usize {
+    fn pos_to_byte(&self, pos: &Position) -> usize {
         self.char_to_byte(self.pos_to_char(pos))
     }
-    fn pos_to_char(&self, pos: Position) -> usize {
+    fn pos_to_char(&self, pos: &Position) -> usize {
         let line_slice = self.line(pos.line as usize);
         self.line_to_char(pos.line as usize) + line_slice.utf16_cu_to_char(pos.character as usize)
     }
@@ -217,8 +236,8 @@ impl LSPSupport for Rope {
             character: line_slice.char_to_utf16_cu(char_idx - self.line_to_char(line)) as u64,
         }
     }
-    fn range_to_char_range(&self, range: Range) -> StdRange<usize> {
-        self.pos_to_char(range.start)..self.pos_to_char(range.end)
+    fn range_to_char_range(&self, range: &Range) -> StdRange<usize> {
+        self.pos_to_char(&range.start)..self.pos_to_char(&range.end)
     }
     fn char_range_to_range(&self, range: StdRange<usize>) -> Range {
         Range {
@@ -228,7 +247,7 @@ impl LSPSupport for Rope {
     }
     fn apply_change(&mut self, change: TextDocumentContentChangeEvent) {
         if let Some(range) = change.range {
-            let char_range = self.range_to_char_range(range);
+            let char_range = self.range_to_char_range(&range);
             self.remove(char_range.clone());
             if !change.text.is_empty() {
                 self.insert(char_range.start, &change.text);
@@ -238,10 +257,10 @@ impl LSPSupport for Rope {
 }
 
 impl<'a> LSPSupport for RopeSlice<'a> {
-    fn pos_to_byte(&self, pos: Position) -> usize {
+    fn pos_to_byte(&self, pos: &Position) -> usize {
         self.char_to_byte(self.pos_to_char(pos))
     }
-    fn pos_to_char(&self, pos: Position) -> usize {
+    fn pos_to_char(&self, pos: &Position) -> usize {
         let line_slice = self.line(pos.line as usize);
         self.line_to_char(pos.line as usize) + line_slice.utf16_cu_to_char(pos.character as usize)
     }
@@ -256,8 +275,8 @@ impl<'a> LSPSupport for RopeSlice<'a> {
             character: line_slice.char_to_utf16_cu(char_idx - self.line_to_char(line)) as u64,
         }
     }
-    fn range_to_char_range(&self, range: Range) -> StdRange<usize> {
-        self.pos_to_char(range.start)..self.pos_to_char(range.end)
+    fn range_to_char_range(&self, range: &Range) -> StdRange<usize> {
+        self.pos_to_char(&range.start)..self.pos_to_char(&range.end)
     }
     fn char_range_to_range(&self, range: StdRange<usize>) -> Range {
         Range {
@@ -290,7 +309,7 @@ endmodule"#;
             },
         };
         server.did_open(open_params);
-        let fid = server.srcs.get_id(uri.clone());
+        let fid = server.srcs.get_id(&uri);
         let file = server.srcs.get_file(fid).unwrap();
         assert_eq!(file.text.to_string(), text.to_owned());
 
@@ -342,7 +361,7 @@ endmodule"#;
             },
         };
         server.did_open(open_params);
-        let fid = server.srcs.get_id(uri.clone());
+        let fid = server.srcs.get_id(&uri);
         let file = server.srcs.get_file(fid).unwrap();
         assert_eq!(
             server

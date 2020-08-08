@@ -48,6 +48,7 @@ impl LanguageServer for Backend {
                         work_done_progress: None,
                     },
                 }),
+                definition_provider: Some(true),
                 ..ServerCapabilities::default()
             },
         })
@@ -83,5 +84,12 @@ impl LanguageServer for Backend {
     async fn completion(&self, params: CompletionParams) -> Result<Option<CompletionResponse>> {
         info!("{:?}", params);
         Ok(self.0.lock().await.completion(params))
+    }
+    async fn goto_definition(
+        &self,
+        params: GotoDefinitionParams,
+    ) -> Result<Option<GotoDefinitionResponse>> {
+        let definition = self.0.lock().await.goto_definition(params);
+        Ok(definition)
     }
 }

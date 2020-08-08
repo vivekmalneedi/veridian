@@ -1,3 +1,4 @@
+use crate::definition::get_definitions;
 use crate::server::LSPServer;
 use crate::sources::{LSPSupport, ParseData, Scope};
 use log::info;
@@ -9,7 +10,7 @@ use tower_lsp::lsp_types::*;
 impl LSPServer {
     pub fn completion(&mut self, params: CompletionParams) -> Option<CompletionResponse> {
         let doc = params.text_document_position;
-        let file_id = self.srcs.get_id(doc.text_document.uri).to_owned();
+        let file_id = self.srcs.get_id(&doc.text_document.uri).to_owned();
         self.srcs.update_parse_data(file_id);
         let data = self.srcs.get_parse_data(file_id).unwrap();
         let file = self.srcs.get_file(file_id).unwrap();
@@ -17,7 +18,7 @@ impl LSPServer {
             file.text.line(doc.position.line as usize),
             data,
             doc.position,
-            file.text.pos_to_byte(doc.position),
+            file.text.pos_to_byte(&doc.position),
         )))
     }
 }
@@ -41,18 +42,16 @@ fn get_identifiers(syntax_tree: &SyntaxTree) -> Vec<(String, usize)> {
     idents
 }
 
-fn filter_idents(start: usize, end: usize, idents: &Vec<(String, usize)>) -> Vec<String> {
+fn filter_idents(start: usize, end: usize, idents: &Vec<(String, usize)>) -> Vec<(String, usize)> {
     idents
         .iter()
         .filter(|x| (x.1 >= start) && (x.1 <= end))
-        .map(|x| x.0.to_owned())
+        .map(|x| (x.0.to_owned(), x.1))
         .collect()
 }
 
-pub fn get_scopes(syntax_tree: &SyntaxTree) -> Vec<Scope> {
-    let mut scopes: Vec<Scope> = Vec::new();
-    let identifiers = get_identifiers(&syntax_tree);
-
+pub fn get_scope_idents(syntax_tree: &SyntaxTree) -> Vec<(String, usize, usize)> {
+    let mut scope_idents: Vec<(String, usize, usize)> = Vec::new();
     for node in syntax_tree {
         match node {
             RefNode::ModuleDeclarationAnsi(x) => {
@@ -69,12 +68,7 @@ pub fn get_scopes(syntax_tree: &SyntaxTree) -> Vec<Scope> {
                     Identifier::EscapedIdentifier(x) => x.nodes.0,
                 };
                 let name = syntax_tree.get_str(&name).unwrap();
-                scopes.push(Scope {
-                    name: name.to_owned(),
-                    start,
-                    end,
-                    idents: filter_idents(start, end, &identifiers),
-                });
+                scope_idents.push((name.to_owned(), start, end));
             }
             RefNode::ModuleDeclarationNonansi(x) => {
                 // Declaration -> Keyword -> Locate
@@ -90,15 +84,30 @@ pub fn get_scopes(syntax_tree: &SyntaxTree) -> Vec<Scope> {
                     Identifier::EscapedIdentifier(x) => x.nodes.0,
                 };
                 let name = syntax_tree.get_str(&name).unwrap();
-                scopes.push(Scope {
-                    name: name.to_owned(),
-                    start,
-                    end,
-                    idents: filter_idents(start, end, &identifiers),
-                });
+                scope_idents.push((name.to_owned(), start, end));
             }
             _ => (),
         }
+    }
+    scope_idents
+}
+
+pub fn get_scopes(syntax_tree: &SyntaxTree) -> Vec<Scope> {
+    let mut scopes: Vec<Scope> = Vec::new();
+    let identifiers = get_identifiers(&syntax_tree);
+    let scope_idents = get_scope_idents(&syntax_tree);
+    let defs = get_definitions(&syntax_tree, &scope_idents);
+    for scope in scope_idents {
+        scopes.push(Scope {
+            name: scope.0,
+            start: scope.1,
+            end: scope.2,
+            idents: filter_idents(scope.1, scope.2, &identifiers)
+                .iter()
+                .map(|x| x.0.clone())
+                .collect(),
+            defs: filter_idents(scope.1, scope.2, &defs),
+        });
     }
     scopes
 }

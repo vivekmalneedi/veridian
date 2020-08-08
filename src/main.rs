@@ -6,9 +6,10 @@ use log::info;
 use tower_lsp::{LspService, Server};
 
 mod completion;
+mod definition;
+mod diagnostics;
 mod server;
 mod sources;
-mod diagnostics;
 use server::Backend;
 
 #[tokio::main]
