@@ -188,7 +188,7 @@ pub fn parse(mut doc: Rope, uri: &Url) -> Option<SyntaxTree> {
         i += 1;
         match parse_sv_str(
             &doc.to_string(),
-            PathBuf::from(""),
+            uri.to_file_path().unwrap(),
             &HashMap::new(),
             &includes,
             false,
