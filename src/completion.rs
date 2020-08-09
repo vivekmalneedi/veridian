@@ -3,6 +3,7 @@ use crate::server::LSPServer;
 use crate::sources::{LSPSupport, ParseData, Scope};
 use log::info;
 use ropey::RopeSlice;
+use std::collections::HashSet;
 use std::str;
 use sv_parser::*;
 use tower_lsp::lsp_types::*;
@@ -21,6 +22,89 @@ impl LSPServer {
             file.text.pos_to_byte(&doc.position),
         )))
     }
+}
+
+macro_rules! scope_declaration {
+    ($tree:ident, $dec:ident, $scopes:ident, ($($a:tt),*), $b:tt, ($($c:tt),*)) => {
+        let start = $tree.get_origin(&$dec$(.nodes.$a)*.nodes.0).unwrap().1;
+        let end = $tree.get_origin(&$dec.nodes.$b.nodes.0).unwrap().1;
+        let name = match &$dec$(.nodes.$c)*.nodes.0 {
+            Identifier::EscapedIdentifier(id) => $tree.get_str(&id.nodes.0).unwrap().to_owned(),
+            Identifier::SimpleIdentifier(id) => $tree.get_str(&id.nodes.0).unwrap().to_owned(),
+        };
+        $scopes.push((name, start, end));
+    };
+}
+
+// same as scope_declaration but handles Module/Macromodule keyword
+macro_rules! scope_declaration_module {
+    ($tree:ident, $dec:ident, $scopes:ident, ($($a:tt),*), $b:tt, ($($c:tt),*)) => {
+        let start = match &$dec$(.nodes.$a)* {
+            ModuleKeyword::Module(x) | ModuleKeyword::Macromodule(x) => x.nodes.0,
+        };
+        let start = $tree.get_origin(&start).unwrap().1;
+        let end = $tree.get_origin(&$dec.nodes.$b.nodes.0).unwrap().1;
+        let name = match &$dec$(.nodes.$c)*.nodes.0 {
+            Identifier::EscapedIdentifier(id) => $tree.get_str(&id.nodes.0).unwrap().to_owned(),
+            Identifier::SimpleIdentifier(id) => $tree.get_str(&id.nodes.0).unwrap().to_owned(),
+        };
+        $scopes.push((name, start, end));
+    };
+}
+
+pub fn get_scope_idents(syntax_tree: &SyntaxTree) -> Vec<(String, usize, usize)> {
+    let mut scope_idents: Vec<(String, usize, usize)> = Vec::new();
+    for node in syntax_tree {
+        match node {
+            RefNode::ModuleDeclarationAnsi(x) => {
+                scope_declaration_module!(syntax_tree, x, scope_idents, (0, 1), 3, (0, 3));
+            }
+            RefNode::ModuleDeclarationNonansi(x) => {
+                scope_declaration_module!(syntax_tree, x, scope_idents, (0, 1), 3, (0, 3));
+            }
+            RefNode::ModuleDeclarationWildcard(x) => {
+                scope_declaration_module!(syntax_tree, x, scope_idents, (1), 8, (3));
+            }
+            RefNode::UdpDeclarationAnsi(x) => {
+                scope_declaration!(syntax_tree, x, scope_idents, (0, 1), 2, (0, 2));
+            }
+            RefNode::UdpDeclarationNonansi(x) => {
+                scope_declaration!(syntax_tree, x, scope_idents, (0, 1), 4, (0, 2));
+            }
+            RefNode::UdpDeclarationWildcard(x) => {
+                scope_declaration!(syntax_tree, x, scope_idents, (1), 7, (2));
+            }
+            RefNode::InterfaceDeclarationNonansi(x) => {
+                scope_declaration!(syntax_tree, x, scope_idents, (0, 1), 3, (0, 3));
+            }
+            RefNode::InterfaceDeclarationAnsi(x) => {
+                scope_declaration!(syntax_tree, x, scope_idents, (0, 1), 3, (0, 3));
+            }
+            RefNode::InterfaceDeclarationWildcard(x) => {
+                scope_declaration!(syntax_tree, x, scope_idents, (1), 8, (3));
+            }
+            RefNode::ProgramDeclarationNonansi(x) => {
+                scope_declaration!(syntax_tree, x, scope_idents, (0, 1), 3, (0, 3));
+            }
+            RefNode::ProgramDeclarationAnsi(x) => {
+                scope_declaration!(syntax_tree, x, scope_idents, (0, 1), 3, (0, 3));
+            }
+            RefNode::ProgramDeclarationWildcard(x) => {
+                scope_declaration!(syntax_tree, x, scope_idents, (1), 7, (2));
+            }
+            RefNode::PackageDeclaration(x) => {
+                scope_declaration!(syntax_tree, x, scope_idents, (1), 7, (3));
+            }
+            RefNode::ConfigDeclaration(x) => {
+                scope_declaration!(syntax_tree, x, scope_idents, (0), 6, (1));
+            }
+            RefNode::ClassDeclaration(x) => {
+                scope_declaration!(syntax_tree, x, scope_idents, (1), 9, (3));
+            }
+            _ => (),
+        }
+    }
+    scope_idents
 }
 
 fn get_identifiers(syntax_tree: &SyntaxTree) -> Vec<(String, usize)> {
@@ -50,62 +134,23 @@ fn filter_idents(start: usize, end: usize, idents: &Vec<(String, usize)>) -> Vec
         .collect()
 }
 
-pub fn get_scope_idents(syntax_tree: &SyntaxTree) -> Vec<(String, usize, usize)> {
-    let mut scope_idents: Vec<(String, usize, usize)> = Vec::new();
-    for node in syntax_tree {
-        match node {
-            RefNode::ModuleDeclarationAnsi(x) => {
-                // Declaration -> Keyword -> Locate
-                let end = syntax_tree.get_origin(&x.nodes.3.nodes.0).unwrap().1;
-                // Declaration -> Header -> ModuleKeyword
-                let start = match &x.nodes.0.nodes.1 {
-                    ModuleKeyword::Module(x) | ModuleKeyword::Macromodule(x) => x.nodes.0,
-                };
-                let start = syntax_tree.get_origin(&start).unwrap().1;
-                // Declaration -> Header -> ModuleIdentifier -> Identifier
-                let name = match &x.nodes.0.nodes.3.nodes.0 {
-                    Identifier::SimpleIdentifier(x) => x.nodes.0,
-                    Identifier::EscapedIdentifier(x) => x.nodes.0,
-                };
-                let name = syntax_tree.get_str(&name).unwrap();
-                scope_idents.push((name.to_owned(), start, end));
-            }
-            RefNode::ModuleDeclarationNonansi(x) => {
-                // Declaration -> Keyword -> Locate
-                let end = syntax_tree.get_origin(&x.nodes.3.nodes.0).unwrap().1;
-                // Declaration -> Header -> ModuleKeyword
-                let start = match &x.nodes.0.nodes.1 {
-                    ModuleKeyword::Module(x) | ModuleKeyword::Macromodule(x) => x.nodes.0,
-                };
-                let start = syntax_tree.get_origin(&start).unwrap().1;
-                // Declaration -> Header -> ModuleIdentifier -> Identifier
-                let name = match &x.nodes.0.nodes.3.nodes.0 {
-                    Identifier::SimpleIdentifier(x) => x.nodes.0,
-                    Identifier::EscapedIdentifier(x) => x.nodes.0,
-                };
-                let name = syntax_tree.get_str(&name).unwrap();
-                scope_idents.push((name.to_owned(), start, end));
-            }
-            _ => (),
-        }
-    }
-    scope_idents
-}
-
 pub fn get_scopes(syntax_tree: &SyntaxTree) -> Vec<Scope> {
     let mut scopes: Vec<Scope> = Vec::new();
     let identifiers = get_identifiers(&syntax_tree);
     let scope_idents = get_scope_idents(&syntax_tree);
     let defs = get_definitions(&syntax_tree, &scope_idents);
     for scope in scope_idents {
+        let mut idents: HashSet<String> = HashSet::new();
+        filter_idents(scope.1, scope.2, &identifiers)
+            .iter()
+            .for_each(|x| {
+                idents.insert(x.0.clone());
+            });
         scopes.push(Scope {
             name: scope.0,
             start: scope.1,
             end: scope.2,
-            idents: filter_idents(scope.1, scope.2, &identifiers)
-                .iter()
-                .map(|x| x.0.clone())
-                .collect(),
+            idents,
             defs: filter_idents(scope.1, scope.2, &defs),
         });
     }

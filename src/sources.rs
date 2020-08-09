@@ -5,6 +5,7 @@ use log::info;
 use pathdiff::diff_paths;
 use ropey::{Rope, RopeSlice};
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::env::current_dir;
 use std::io;
 use std::ops::Range as StdRange;
@@ -174,7 +175,7 @@ pub struct Scope {
     pub name: String,
     pub start: usize,
     pub end: usize,
-    pub idents: Vec<String>,
+    pub idents: HashSet<String>,
     pub defs: Vec<(String, usize)>,
 }
 
