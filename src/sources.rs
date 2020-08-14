@@ -1,4 +1,5 @@
 use crate::completion::get_scopes;
+use crate::definition::Definition;
 use crate::diagnostics::get_diagnostics;
 use crate::server::LSPServer;
 use log::info;
@@ -176,7 +177,7 @@ pub struct Scope {
     pub start: usize,
     pub end: usize,
     pub idents: HashSet<String>,
-    pub defs: Vec<(String, usize)>,
+    pub defs: Vec<Definition>,
 }
 
 //TODO: show all unrecoverable parse errors to user

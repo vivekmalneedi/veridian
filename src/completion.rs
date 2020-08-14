@@ -1,4 +1,4 @@
-use crate::definition::get_definitions;
+use crate::definition::{get_definitions, Definition};
 use crate::server::LSPServer;
 use crate::sources::{LSPSupport, ParseData, Scope};
 use log::info;
@@ -134,6 +134,13 @@ fn filter_idents(start: usize, end: usize, idents: &Vec<(String, usize)>) -> Vec
         .collect()
 }
 
+fn filter_defs(start: usize, end: usize, defs: &Vec<Definition>) -> Vec<Definition> {
+    defs.iter()
+        .filter(|x| (x.byte_idx >= start) && (x.byte_idx <= end))
+        .map(|x| x.clone())
+        .collect()
+}
+
 pub fn get_scopes(syntax_tree: &SyntaxTree) -> Vec<Scope> {
     let mut scopes: Vec<Scope> = Vec::new();
     let identifiers = get_identifiers(&syntax_tree);
@@ -151,7 +158,7 @@ pub fn get_scopes(syntax_tree: &SyntaxTree) -> Vec<Scope> {
             start: scope.1,
             end: scope.2,
             idents,
-            defs: filter_idents(scope.1, scope.2, &defs),
+            defs: filter_defs(scope.1, scope.2, &defs),
         });
     }
     scopes
@@ -171,21 +178,31 @@ pub fn get_completion(
         .collect();
     scopes.sort_by(|a, b| (a.end - a.start).cmp(&(b.end - b.start)));
     let scope = *scopes.get(0).unwrap();
-    let results: Vec<String> = scope
+    let mut results: Vec<CompletionItem> = scope
+        .defs
+        .iter()
+        .filter(|x| x.ident.starts_with(&token))
+        .map(|x| CompletionItem {
+            label: x.ident.to_string(),
+            kind: Some(x.kind),
+            detail: Some(x.type_str.to_string()),
+            ..CompletionItem::default()
+        })
+        .collect();
+    let def_idents: Vec<&String> = results.iter().map(|x| &x.label).collect();
+    let mut results_idents: Vec<CompletionItem> = scope
         .idents
         .iter()
-        .filter(|x| x.starts_with(&token))
-        .map(|x| x.to_owned())
+        .filter(|x| def_idents.contains(x))
+        .map(|x| CompletionItem {
+            label: x.to_owned(),
+            ..CompletionItem::default()
+        })
         .collect();
+    results.append(&mut results_idents);
     CompletionList {
         is_incomplete: false,
-        items: results
-            .iter()
-            .map(|x| CompletionItem {
-                label: (*x).to_owned(),
-                ..CompletionItem::default()
-            })
-            .collect(),
+        items: results,
     }
 }
 

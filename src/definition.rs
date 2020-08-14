@@ -1,8 +1,10 @@
 use crate::server::LSPServer;
 use crate::sources::LSPSupport;
 use ropey::{Rope, RopeSlice};
+use std::fmt::Display;
 use sv_parser::*;
 use tower_lsp::lsp_types::*;
+use CaptureMode::{Post, Pre};
 
 impl LSPServer {
     pub fn goto_definition(
@@ -17,8 +19,8 @@ impl LSPServer {
         let file = self.srcs.get_file(file_id).unwrap();
         let token = get_definition_token(file.text.line(pos.line as usize), pos);
         for def in &scope.defs {
-            if def.0 == token {
-                let def_pos = file.text.byte_to_pos(def.1);
+            if def.ident == token {
+                let def_pos = file.text.byte_to_pos(def.byte_idx);
                 return Some(GotoDefinitionResponse::Scalar(Location::new(
                     doc,
                     Range::new(def_pos, def_pos),
@@ -37,8 +39,8 @@ impl LSPServer {
         let file = self.srcs.get_file(file_id).unwrap();
         let token = get_definition_token(file.text.line(pos.line as usize), pos);
         for def in &scope.defs {
-            if def.0 == token {
-                let def_line = file.text.byte_to_line(def.1);
+            if def.ident == token {
+                let def_line = file.text.byte_to_line(def.byte_idx);
                 return Some(Hover {
                     contents: HoverContents::Scalar(MarkedString::LanguageString(LanguageString {
                         language: "systemverilog".to_owned(),
@@ -76,63 +78,282 @@ fn get_definition_token(line: RopeSlice, pos: Position) -> String {
     token
 }
 
-fn get_identifer_data(syntax_tree: &SyntaxTree, ident: &Identifier) -> (String, usize) {
-    let id = match ident {
-        Identifier::SimpleIdentifier(x) => x.nodes.0,
-        Identifier::EscapedIdentifier(x) => x.nodes.0,
+#[derive(Eq, PartialEq, Debug)]
+enum CaptureMode {
+    Pre,
+    Post,
+    Full,
+    No,
+}
+
+#[derive(Debug, Clone)]
+pub struct Definition {
+    pub ident: String,
+    pub byte_idx: usize,
+    pub type_str: String,
+    pub kind: CompletionItemKind,
+}
+
+macro_rules! dec_list {
+    ($loop:tt, $cap_args:ident, $event:ident, $start:path, ($($end:path),*), ($($mid:path),*), $kind:expr) => {
+        match &$event {
+            NodeEvent::Enter(node) => match node {
+                $start(_) => {
+                    $cap_args.capture = CaptureMode::Pre;
+                    $cap_args.kind = $kind;
+                    eprintln!("startlst");
+                }
+                $($mid(ident_node) => match $cap_args.capture {
+                    CaptureMode::Pre | CaptureMode::Post => {
+                            if !$cap_args.post_dec.is_empty() {
+                                let result = Definition{
+                                    ident: $cap_args.ident.clone(),
+                                    byte_idx: $cap_args.byte_idx,
+                                    type_str: format!(
+                                        "{} {}{}",
+                                        $cap_args.pre_dec.trim_end(),
+                                        $cap_args.ident,
+                                        $cap_args.post_dec.trim_end().trim_end_matches($cap_args.endings),
+                                    ),
+                                    kind: $kind,
+                                };
+                                eprintln!("midlst: {:?}", result);
+                                $cap_args.defs.push(result);
+                                $cap_args.post_dec.clear();
+                            }
+                            $cap_args.capture = CaptureMode::Post;
+                            $cap_args.skip = true;
+                            let loc = unwrap_locate!(*ident_node).unwrap();
+                            $cap_args.ident =
+                                $cap_args.tree.get_str(loc).unwrap().trim_end().to_string();
+                            $cap_args.byte_idx = $cap_args.tree.get_origin(loc).unwrap().1;
+                            continue $loop;
+                    }
+                    _ => (),
+                },)*
+                _ => (),
+            },
+            NodeEvent::Leave(node) => match node {
+                $($end(_) => {
+                    if !$cap_args.pre_dec.trim_start().is_empty(){
+                        let result = Definition{
+                            ident: $cap_args.ident.clone(),
+                            byte_idx: $cap_args.byte_idx,
+                            type_str: format!(
+                                "{} {}{}",
+                                $cap_args.pre_dec.trim_end(),
+                                $cap_args.ident,
+                                $cap_args.post_dec.trim_end().trim_end_matches($cap_args.endings)),
+                            kind: $kind,
+                        };
+                        eprintln!("endlst: {:?}", result);
+                        $cap_args.defs.push(result);
+                    }
+                    $cap_args.post_dec.clear();
+                    $cap_args.pre_dec.clear();
+                    $cap_args.ident.clear();
+                    $cap_args.capture = CaptureMode::No;
+                },)*
+                _ => (),
+            },
+        };
     };
-    let id_str = syntax_tree.get_str(&id).unwrap();
-    let idb = syntax_tree.get_origin(&id).unwrap().1;
-    (id_str.to_owned(), idb)
+}
+
+macro_rules! dec_full {
+	($loop:tt, $cap_args:ident, $event:ident, $start:path, ($($mid:path),*), $kind:expr) => {
+        match &$event {
+            NodeEvent::Enter(node) => match node {
+                $start(_) => {
+                    $cap_args.capture = CaptureMode::Full;
+                    $cap_args.kind = $kind;
+                    eprintln!("startfull");
+                }
+                $($mid(ident_node) => match $cap_args.capture {
+                    CaptureMode::Full => {
+                            let loc = unwrap_locate!(*ident_node).unwrap();
+                            $cap_args.ident =
+                                $cap_args.tree.get_str(loc).unwrap().trim_end().to_string();
+                            eprintln!("ident:{}", $cap_args.ident);
+                            $cap_args.byte_idx = $cap_args.tree.get_origin(loc).unwrap().1;
+                            continue $loop;
+                    }
+                    _ => (),
+                },)*
+                _ => (),
+            },
+            _ => (),
+        };
+	};
 }
 
 pub fn get_definitions(
     syntax_tree: &SyntaxTree,
     scope_idents: &Vec<(String, usize, usize)>,
-) -> Vec<(String, usize)> {
-    let mut definitions: Vec<(String, usize)> = Vec::new();
-    'outer: for node in syntax_tree {
-        match node {
-            RefNode::VariableIdentifier(x) => {
-                definitions.push(get_identifer_data(syntax_tree, &x.nodes.0));
-            }
-            RefNode::NetIdentifier(x) => {
-                let defn = get_identifer_data(syntax_tree, &x.nodes.0);
-                let mut scope_idents_def: Vec<(String, usize, usize)> = scope_idents
-                    .iter()
-                    .filter(|x| defn.1 >= x.1 && defn.1 <= x.2)
-                    .map(|x| x.clone())
-                    .collect();
-                scope_idents_def.sort_by(|a, b| (a.2 - a.1).cmp(&(b.2 - b.1)));
-                let scope_ident = scope_idents_def.get(0).unwrap();
-                for def in &definitions {
-                    if (scope_ident.1 <= def.1) && (def.1 <= scope_ident.2) && def.0 == defn.0 {
-                        continue 'outer;
-                    }
-                }
-                definitions.push(defn);
-            }
-            RefNode::PortIdentifier(x) => {
-                let defn = get_identifer_data(syntax_tree, &x.nodes.0);
-                let mut scope_idents_def: Vec<(String, usize, usize)> = scope_idents
-                    .iter()
-                    .filter(|x| defn.1 >= x.1 && defn.1 <= x.2)
-                    .map(|x| x.clone())
-                    .collect();
-                scope_idents_def.sort_by(|a, b| (a.2 - a.1).cmp(&(b.2 - b.1)));
-                let scope_ident = scope_idents_def.get(0).unwrap();
+) -> Vec<Definition> {
+    eprintln!("{}", syntax_tree);
+    let endings: &[_] = &[';', ','];
 
-                for def in &definitions {
-                    if (scope_ident.1 <= def.1) && (def.1 <= scope_ident.2) && def.0 == defn.0 {
-                        continue 'outer;
-                    }
-                }
-                definitions.push(defn);
+    struct CaptureArgs<'a> {
+        tree: &'a SyntaxTree,
+        pre_dec: String,
+        post_dec: String,
+        capture: CaptureMode,
+        skip: bool,
+        byte_idx: usize,
+        ident: String,
+        kind: CompletionItemKind,
+        defs: Vec<Definition>,
+        endings: &'a [char],
+    }
+    impl<'a> CaptureArgs<'a> {
+        fn new(tree: &SyntaxTree) -> CaptureArgs {
+            CaptureArgs {
+                tree,
+                pre_dec: String::new(),
+                post_dec: String::new(),
+                capture: CaptureMode::No,
+                skip: false,
+                byte_idx: 0,
+                ident: "".into(),
+                kind: CompletionItemKind::Field,
+                defs: Vec::new(),
+                endings: &[';', ','],
             }
+        }
+    }
+
+    let mut capture_args = CaptureArgs::new(syntax_tree);
+
+    'outer: for event in syntax_tree.into_iter().event() {
+        //TODO: handle interface port
+        dec_list!(
+            'outer,
+            capture_args,
+            event,
+            RefNode::PortDeclaration,
+            (RefNode::PortDeclaration),
+            (RefNode::PortIdentifier, RefNode::VariableIdentifier),
+             CompletionItemKind::Property
+        );
+        dec_list!(
+            'outer,
+            capture_args,
+            event,
+            RefNode::DataDeclarationVariable,
+            (RefNode::DataDeclarationVariable),
+            (RefNode::VariableIdentifier),
+            CompletionItemKind::Variable
+        );
+        dec_list!(
+            'outer,
+            capture_args,
+            event,
+            RefNode::NetDeclaration,
+            (RefNode::NetDeclaration),
+            (RefNode::NetIdentifier),
+            CompletionItemKind::Variable
+        );
+        dec_full!(
+            'outer,
+            capture_args,
+            event,
+            RefNode::FunctionDeclaration,
+            (RefNode::FunctionIdentifier),
+            CompletionItemKind::Function
+        );
+        dec_full!(
+            'outer,
+            capture_args,
+            event,
+            RefNode::TaskDeclaration,
+            (RefNode::TaskIdentifier),
+            CompletionItemKind::Function
+        );
+        match event {
+            NodeEvent::Enter(node) => match node {
+                RefNode::Locate(loc) => {
+                    // eprintln!("capture: {:?}", capture_args.capture);
+                    if !capture_args.skip {
+                        let token = capture_args.tree.get_str(loc).unwrap().trim_end();
+                        match capture_args.capture {
+                            CaptureMode::Pre => {
+                                if token.chars().count() > 1 {
+                                    if capture_args.pre_dec.len() > 0
+                                        && capture_args.pre_dec.chars().last().unwrap() != ' '
+                                    {
+                                        capture_args.pre_dec.push(' ');
+                                    }
+                                    capture_args.pre_dec.push_str(token);
+                                    capture_args.pre_dec.push(' ');
+                                } else {
+                                    capture_args.pre_dec.push_str(token);
+                                }
+                            }
+                            CaptureMode::Post => {
+                                if token.chars().count() > 1
+                                    && capture_args.post_dec.len() > 0
+                                    && capture_args.post_dec.chars().last().unwrap() != ' '
+                                {
+                                    capture_args.post_dec.push(' ');
+                                }
+                                capture_args.post_dec.push_str(token);
+                            }
+                            CaptureMode::Full => {
+                                if token == ";" {
+                                    capture_args.defs.push(Definition {
+                                        ident: capture_args.ident.clone(),
+                                        byte_idx: capture_args.byte_idx,
+                                        type_str: format!(
+                                            "{}",
+                                            capture_args
+                                                .pre_dec
+                                                .trim_end()
+                                                .trim_end_matches(capture_args.endings),
+                                        ),
+                                        kind: capture_args.kind,
+                                    });
+                                    eprintln!(
+                                        "endfull: {}",
+                                        format!(
+                                            "{}",
+                                            capture_args
+                                                .pre_dec
+                                                .trim_end()
+                                                .trim_end_matches(capture_args.endings),
+                                        )
+                                    );
+                                    capture_args.capture = CaptureMode::No;
+                                    capture_args.ident.clear();
+                                    capture_args.pre_dec.clear();
+                                    capture_args.post_dec.clear();
+                                } else {
+                                    if token.chars().count() > 1 {
+                                        if capture_args.pre_dec.len() > 0
+                                            && capture_args.pre_dec.chars().last().unwrap() != ' '
+                                        {
+                                            capture_args.pre_dec.push(' ');
+                                        }
+                                        capture_args.pre_dec.push_str(token);
+                                        capture_args.pre_dec.push(' ');
+                                    } else {
+                                        capture_args.pre_dec.push_str(token);
+                                    }
+                                }
+                            }
+                            CaptureMode::No => (),
+                        }
+                        /*
+                         */
+                    }
+                    capture_args.skip = false;
+                }
+                _ => (),
+            },
             _ => (),
         }
     }
-    definitions
+    capture_args.defs
 }
 
 fn get_hover(doc: &Rope, line: usize) -> String {
@@ -201,22 +422,21 @@ mod tests {
 
     #[test]
     fn test_get_definition() {
-        let text = r#"module test;
-  logic abc;
-  assign abc = 1'b1;
-  endmodule"#;
-        // let mut d = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-        // d.push("tests_rtl/FIR_filter.sv");
-        // let text = read_to_string(d).unwrap();
+        let mut d = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        d.push("tests_rtl/definition_test.sv");
+        let text = read_to_string(d).unwrap();
         let doc = Rope::from_str(&text);
-        let syntax_tree = parse(doc.clone(), &Url::parse("file:///test.sv").unwrap()).unwrap();
+        let syntax_tree = parse(
+            doc.clone(),
+            &Url::parse("file:///tests_rtl/definition_test.sv").unwrap(),
+        )
+        .unwrap();
         let scope_idents = get_scope_idents(&syntax_tree);
         let defs = get_definitions(&syntax_tree, &scope_idents);
         for def in defs {
-            if def.0 == "abc".to_owned() {
-                assert_eq!(doc.byte_to_pos(def.1), Position::new(1, 8));
-            }
+            println!("{:?} {:?}", def, doc.byte_to_pos(def.byte_idx));
         }
+        assert!(false);
     }
 
     #[test]
