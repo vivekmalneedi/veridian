@@ -102,6 +102,7 @@ fn clean_type_str(type_str: String, ident: &str) -> String {
         .trim_end()
         .trim_end_matches(endings)
         .trim_end_matches(ident)
+        .trim_end()
         .to_string()
 }
 
@@ -422,9 +423,9 @@ mod tests {
         let text = read_to_string(d).unwrap();
         let doc = Rope::from_str(&text);
         let syntax_tree = parse(
-            doc.clone(),
+            &doc.clone(),
             &Url::parse("file:///tests_rtl/definition_test.sv").unwrap(),
-            None,
+            &None,
         )
         .unwrap();
         let scope_idents = get_scope_idents(&syntax_tree);

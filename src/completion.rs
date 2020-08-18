@@ -16,7 +16,7 @@ impl LSPServer {
         let file = self.srcs.get_file(file_id)?;
         eprintln!("comp: getting file");
         let file = file.read().ok()?;
-        eprintln!("comp: read unlocked file");
+        eprintln!("comp: read locked file");
         Some(CompletionResponse::List(get_completion(
             file.text.line(doc.position.line as usize),
             &file.scopes,
@@ -276,6 +276,7 @@ fn get_completion_token(line: RopeSlice, pos: Position) -> String {
 mod tests {
     use super::*;
     use ropey::Rope;
+    use std::{thread, time};
 
     #[test]
     fn test_get_completion_token() {
@@ -308,7 +309,7 @@ mod tests {
 
     #[test]
     fn test_completion() {
-        let mut server = LSPServer::new();
+        let server = LSPServer::new();
         let uri = Url::parse("file:///test.sv").unwrap();
         let text = r#"module test;
     logic abc;
@@ -377,6 +378,8 @@ endmodule
             ],
         };
         server.did_change(change_params);
+        let sleep_time = time::Duration::from_secs(3);
+        thread::sleep(sleep_time);
 
         let completion_params = CompletionParams {
             text_document_position: TextDocumentPositionParams {
@@ -396,10 +399,14 @@ endmodule
         let response: CompletionResponse = server.completion(completion_params).unwrap();
         let item1 = CompletionItem {
             label: "abc".to_owned(),
+            kind: Some(CompletionItemKind::Variable),
+            detail: Some("logic".to_string()),
             ..CompletionItem::default()
         };
         let item2 = CompletionItem {
             label: "abcd".to_owned(),
+            kind: Some(CompletionItemKind::Variable),
+            detail: Some("logic".to_string()),
             ..CompletionItem::default()
         };
         if let CompletionResponse::List(item) = response {

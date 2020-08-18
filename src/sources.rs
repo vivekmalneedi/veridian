@@ -20,9 +20,15 @@ use tower_lsp::lsp_types::*;
 impl LSPServer {
     pub fn did_open(&self, params: DidOpenTextDocumentParams) -> PublishDiagnosticsParams {
         let document: TextDocumentItem = params.text_document;
-        let diagnostics = get_diagnostics(document.uri.clone());
+        // let diagnostics = get_diagnostics(document.uri.clone());
+        let uri = document.uri.clone();
         self.srcs.add(document);
-        diagnostics
+        // diagnostics
+        PublishDiagnosticsParams {
+            uri,
+            diagnostics: Vec::new(),
+            version: Some(1),
+        }
     }
 
     pub fn did_close(&self, params: DidCloseTextDocumentParams) {
@@ -105,6 +111,7 @@ impl Sources {
         }
     }
     pub fn add(&self, doc: TextDocumentItem) {
+        eprintln!("start add");
         let valid_parse = Arc::new((Mutex::new(false), Condvar::new()));
         let valid_parse2 = valid_parse.clone();
         let mut files = self.files.write().unwrap();
@@ -149,6 +156,7 @@ impl Sources {
                 }
             }
         });
+        eprintln!("complete thread spawn");
         files.push(source);
         let fid = files.len() - 1;
         self.parse_handles
@@ -156,6 +164,7 @@ impl Sources {
             .unwrap()
             .insert(fid, parse_handle);
         self.names.write().unwrap().insert(doc.uri.clone(), fid);
+        eprintln!("complete add");
     }
 
     pub fn remove(&self, doc: TextDocumentIdentifier) {
@@ -360,10 +369,11 @@ impl<'a> LSPSupport for RopeSlice<'a> {
 mod tests {
     use super::*;
     use std::fs::read_to_string;
+    use std::{thread, time};
 
     #[test]
     fn test_open_and_change() {
-        let mut server = LSPServer::new();
+        let server = LSPServer::new();
         let uri = Url::parse("file:///test.sv").unwrap();
         let text = r#"module test;
   logic abc;
@@ -378,9 +388,14 @@ endmodule"#;
             },
         };
         server.did_open(open_params);
+        eprintln!("open complete");
         let fid = server.srcs.get_id(&uri);
         let file = server.srcs.get_file(fid).unwrap();
+        eprintln!("attempting to read");
+        let file = file.read().unwrap();
         assert_eq!(file.text.to_string(), text.to_owned());
+        drop(file);
+        eprintln!("open");
 
         let change_params = DidChangeTextDocumentParams {
             text_document: VersionedTextDocumentIdentifier {
@@ -404,6 +419,7 @@ endmodule"#;
         };
         server.did_change(change_params);
         let file = server.srcs.get_file(fid).unwrap();
+        let file = file.read().unwrap();
         assert_eq!(
             file.text.to_string(),
             r#"module test;
@@ -416,7 +432,7 @@ endmodule"#
 
     #[test]
     fn test_fault_tolerance() {
-        let mut server = LSPServer::new();
+        let server = LSPServer::new();
         let uri = Url::parse("file:///test.sv").unwrap();
         let text = r#"module test;
   logic abc
@@ -432,17 +448,12 @@ endmodule"#;
         server.did_open(open_params);
         let fid = server.srcs.get_id(&uri);
         let file = server.srcs.get_file(fid).unwrap();
-        assert_eq!(
-            server
-                .srcs
-                .get_parse_data(fid)
-                .unwrap()
-                .scopes
-                .get(0)
-                .unwrap()
-                .name,
-            "test"
-        );
+
+        let sleep_time = time::Duration::from_secs(2);
+        thread::sleep(sleep_time);
+
+        let file = file.read().unwrap();
+        assert_eq!(file.scopes.get(0).unwrap().name, "test");
     }
 
     #[test]
@@ -451,7 +462,7 @@ endmodule"#;
         d.push("tests_rtl/lab6/src/fp_add.sv");
         let text = read_to_string(&d).unwrap();
         let doc = Rope::from_str(&text);
-        assert!(parse(doc.clone(), &Url::from_file_path(d).unwrap(), None).is_some());
+        assert!(parse(&doc.clone(), &Url::from_file_path(d).unwrap(), &None).is_some());
         // TODO: add missing header test
     }
 }

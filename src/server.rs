@@ -91,8 +91,6 @@ impl LanguageServer for Backend {
         );
     }
     async fn completion(&self, params: CompletionParams) -> Result<Option<CompletionResponse>> {
-        eprintln!("completion request recieved");
-        info!("{:?}", params);
         Ok(self.server.completion(params))
     }
     async fn goto_definition(
