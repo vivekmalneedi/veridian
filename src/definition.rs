@@ -7,16 +7,14 @@ use tower_lsp::lsp_types::*;
 use CaptureMode::{Post, Pre};
 
 impl LSPServer {
-    pub fn goto_definition(
-        &mut self,
-        params: GotoDefinitionParams,
-    ) -> Option<GotoDefinitionResponse> {
+    pub fn goto_definition(&self, params: GotoDefinitionParams) -> Option<GotoDefinitionResponse> {
         let doc = params.text_document_position_params.text_document.uri;
         let pos = params.text_document_position_params.position;
         let file_id = self.srcs.get_id(&doc).to_owned();
-        self.srcs.update_parse_data(file_id);
-        let scope = self.srcs.get_scope(file_id, &pos).unwrap();
-        let file = self.srcs.get_file(file_id).unwrap();
+        let file = self.srcs.get_file(file_id)?;
+        let file = file.read().ok()?;
+        eprintln!("def: read locked file");
+        let scope = file.get_scope(&pos)?;
         let token = get_definition_token(file.text.line(pos.line as usize), pos);
         for def in &scope.defs {
             if def.ident == token {
@@ -30,13 +28,14 @@ impl LSPServer {
         None
     }
 
-    pub fn hover(&mut self, params: HoverParams) -> Option<Hover> {
+    pub fn hover(&self, params: HoverParams) -> Option<Hover> {
         let doc = params.text_document_position_params.text_document.uri;
         let pos = params.text_document_position_params.position;
         let file_id = self.srcs.get_id(&doc).to_owned();
-        self.srcs.update_parse_data(file_id);
-        let scope = self.srcs.get_scope(file_id, &pos).unwrap();
-        let file = self.srcs.get_file(file_id).unwrap();
+        let file = self.srcs.get_file(file_id)?;
+        let file = file.read().ok()?;
+        eprintln!("hover: read locked file");
+        let scope = file.get_scope(&pos)?;
         let token = get_definition_token(file.text.line(pos.line as usize), pos);
         for def in &scope.defs {
             if def.ident == token {
@@ -61,7 +60,7 @@ fn get_definition_token(line: RopeSlice, pos: Position) -> String {
         line_iter.next();
     }
     let mut c = line_iter.prev();
-    while !c.is_none() && c.unwrap().is_alphanumeric() {
+    while !c.is_none() && (c.unwrap().is_alphanumeric() || c.unwrap() == '_') {
         token.push(c.unwrap());
         c = line_iter.prev();
     }
@@ -71,7 +70,7 @@ fn get_definition_token(line: RopeSlice, pos: Position) -> String {
         line_iter.next();
     }
     let mut c = line_iter.next();
-    while !c.is_none() && c.unwrap().is_alphanumeric() {
+    while !c.is_none() && (c.unwrap().is_alphanumeric() || c.unwrap() == '_') {
         token.push(c.unwrap());
         c = line_iter.next();
     }
@@ -94,6 +93,18 @@ pub struct Definition {
     pub kind: CompletionItemKind,
 }
 
+fn clean_type_str(type_str: String, ident: &str) -> String {
+    let endings: &[_] = &[';', ','];
+    let eq_offset = type_str.find('=').unwrap_or(type_str.len());
+    let mut result = type_str.clone();
+    result.replace_range(eq_offset.., "");
+    result
+        .trim_end()
+        .trim_end_matches(endings)
+        .trim_end_matches(ident)
+        .to_string()
+}
+
 macro_rules! dec_list {
     ($loop:tt, $cap_args:ident, $event:ident, $start:path, ($($end:path),*), ($($mid:path),*), $kind:expr) => {
         match &$event {
@@ -101,7 +112,7 @@ macro_rules! dec_list {
                 $start(_) => {
                     $cap_args.capture = CaptureMode::Pre;
                     $cap_args.kind = $kind;
-                    eprintln!("startlst");
+                    // eprintln!("startlst");
                 }
                 $($mid(ident_node) => match $cap_args.capture {
                     CaptureMode::Pre | CaptureMode::Post => {
@@ -109,15 +120,15 @@ macro_rules! dec_list {
                                 let result = Definition{
                                     ident: $cap_args.ident.clone(),
                                     byte_idx: $cap_args.byte_idx,
-                                    type_str: format!(
+                                    type_str: clean_type_str(format!(
                                         "{} {}{}",
                                         $cap_args.pre_dec.trim_end(),
                                         $cap_args.ident,
-                                        $cap_args.post_dec.trim_end().trim_end_matches($cap_args.endings),
-                                    ),
+                                        $cap_args.post_dec,
+                                    ), &$cap_args.ident),
                                     kind: $kind,
                                 };
-                                eprintln!("midlst: {:?}", result);
+                                // eprintln!("midlst: {:?}", result);
                                 $cap_args.defs.push(result);
                                 $cap_args.post_dec.clear();
                             }
@@ -139,14 +150,14 @@ macro_rules! dec_list {
                         let result = Definition{
                             ident: $cap_args.ident.clone(),
                             byte_idx: $cap_args.byte_idx,
-                            type_str: format!(
+                            type_str: clean_type_str(format!(
                                 "{} {}{}",
                                 $cap_args.pre_dec.trim_end(),
                                 $cap_args.ident,
-                                $cap_args.post_dec.trim_end().trim_end_matches($cap_args.endings)),
+                                $cap_args.post_dec), &$cap_args.ident),
                             kind: $kind,
                         };
-                        eprintln!("endlst: {:?}", result);
+                        // eprintln!("endlst: {:?}", result);
                         $cap_args.defs.push(result);
                     }
                     $cap_args.post_dec.clear();
@@ -161,20 +172,20 @@ macro_rules! dec_list {
 }
 
 macro_rules! dec_full {
-	($loop:tt, $cap_args:ident, $event:ident, $start:path, ($($mid:path),*), $kind:expr) => {
+    ($loop:tt, $cap_args:ident, $event:ident, $start:path, ($($mid:path),*), $kind:expr) => {
         match &$event {
             NodeEvent::Enter(node) => match node {
                 $start(_) => {
                     $cap_args.capture = CaptureMode::Full;
                     $cap_args.kind = $kind;
-                    eprintln!("startfull");
+                    // eprintln!("startfull");
                 }
                 $($mid(ident_node) => match $cap_args.capture {
                     CaptureMode::Full => {
                             let loc = unwrap_locate!(*ident_node).unwrap();
                             $cap_args.ident =
                                 $cap_args.tree.get_str(loc).unwrap().trim_end().to_string();
-                            eprintln!("ident:{}", $cap_args.ident);
+                            // eprintln!("ident:{}", $cap_args.ident);
                             $cap_args.byte_idx = $cap_args.tree.get_origin(loc).unwrap().1;
                             continue $loop;
                     }
@@ -184,15 +195,14 @@ macro_rules! dec_full {
             },
             _ => (),
         };
-	};
+    };
 }
 
 pub fn get_definitions(
     syntax_tree: &SyntaxTree,
     scope_idents: &Vec<(String, usize, usize)>,
 ) -> Vec<Definition> {
-    eprintln!("{}", syntax_tree);
-    let endings: &[_] = &[';', ','];
+    // eprintln!("{}", syntax_tree);
 
     struct CaptureArgs<'a> {
         tree: &'a SyntaxTree,
@@ -204,7 +214,6 @@ pub fn get_definitions(
         ident: String,
         kind: CompletionItemKind,
         defs: Vec<Definition>,
-        endings: &'a [char],
     }
     impl<'a> CaptureArgs<'a> {
         fn new(tree: &SyntaxTree) -> CaptureArgs {
@@ -218,7 +227,6 @@ pub fn get_definitions(
                 ident: "".into(),
                 kind: CompletionItemKind::Field,
                 defs: Vec::new(),
-                endings: &[';', ','],
             }
         }
     }
@@ -301,28 +309,17 @@ pub fn get_definitions(
                             }
                             CaptureMode::Full => {
                                 if token == ";" {
-                                    capture_args.defs.push(Definition {
+                                    let full_def = Definition {
                                         ident: capture_args.ident.clone(),
                                         byte_idx: capture_args.byte_idx,
-                                        type_str: format!(
-                                            "{}",
-                                            capture_args
-                                                .pre_dec
-                                                .trim_end()
-                                                .trim_end_matches(capture_args.endings),
+                                        type_str: clean_type_str(
+                                            capture_args.pre_dec.clone(),
+                                            &capture_args.ident,
                                         ),
                                         kind: capture_args.kind,
-                                    });
-                                    eprintln!(
-                                        "endfull: {}",
-                                        format!(
-                                            "{}",
-                                            capture_args
-                                                .pre_dec
-                                                .trim_end()
-                                                .trim_end_matches(capture_args.endings),
-                                        )
-                                    );
+                                    };
+                                    // eprintln!("endfull: {:?}", full_def);
+                                    capture_args.defs.push(full_def);
                                     capture_args.capture = CaptureMode::No;
                                     capture_args.ident.clear();
                                     capture_args.pre_dec.clear();
@@ -343,8 +340,6 @@ pub fn get_definitions(
                             }
                             CaptureMode::No => (),
                         }
-                        /*
-                         */
                     }
                     capture_args.skip = false;
                 }
@@ -415,9 +410,9 @@ mod tests {
 
     #[test]
     fn test_definition_token() {
-        let line = Rope::from_str("assign abc[2:0] = 3'b000;");
-        let token = get_definition_token(line.line(0), Position::new(0, 8));
-        assert_eq!(token, "abc".to_owned());
+        let line = Rope::from_str("assign ab_c[2:0] = 3'b000;");
+        let token = get_definition_token(line.line(0), Position::new(0, 10));
+        assert_eq!(token, "ab_c".to_owned());
     }
 
     #[test]
@@ -429,14 +424,21 @@ mod tests {
         let syntax_tree = parse(
             doc.clone(),
             &Url::parse("file:///tests_rtl/definition_test.sv").unwrap(),
+            None,
         )
         .unwrap();
         let scope_idents = get_scope_idents(&syntax_tree);
         let defs = get_definitions(&syntax_tree, &scope_idents);
-        for def in defs {
+        for def in &defs {
             println!("{:?} {:?}", def, doc.byte_to_pos(def.byte_idx));
         }
-        assert!(false);
+        let token = get_definition_token(doc.line(3), Position::new(3, 13));
+        for def in defs {
+            if token == def.ident {
+                assert_eq!(doc.byte_to_pos(def.byte_idx), Position::new(3, 9))
+            }
+        }
+        // assert!(false);
     }
 
     #[test]

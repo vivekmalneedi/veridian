@@ -1,7 +1,6 @@
 use crate::sources::*;
 
 use log::info;
-use tokio::sync::Mutex;
 use tower_lsp::jsonrpc::Result;
 use tower_lsp::lsp_types::*;
 use tower_lsp::{Client, LanguageServer};
@@ -20,14 +19,14 @@ impl LSPServer {
 
 pub struct Backend {
     client: Client,
-    server: Mutex<LSPServer>,
+    server: LSPServer,
 }
 
 impl Backend {
     pub fn new(client: Client) -> Backend {
         Backend {
             client,
-            server: Mutex::new(LSPServer::new()),
+            server: LSPServer::new(),
         }
     }
 }
@@ -70,7 +69,7 @@ impl LanguageServer for Backend {
         Ok(())
     }
     async fn did_open(&self, params: DidOpenTextDocumentParams) {
-        let diagnostics = self.server.lock().await.did_open(params);
+        let diagnostics = self.server.did_open(params);
         self.client.publish_diagnostics(
             diagnostics.uri,
             diagnostics.diagnostics,
@@ -78,13 +77,13 @@ impl LanguageServer for Backend {
         );
     }
     async fn did_close(&self, params: DidCloseTextDocumentParams) {
-        self.server.lock().await.did_close(params);
+        self.server.did_close(params);
     }
     async fn did_change(&self, params: DidChangeTextDocumentParams) {
-        self.server.lock().await.did_change(params);
+        self.server.did_change(params);
     }
     async fn did_save(&self, params: DidSaveTextDocumentParams) {
-        let diagnostics = self.server.lock().await.did_save(params);
+        let diagnostics = self.server.did_save(params);
         self.client.publish_diagnostics(
             diagnostics.uri,
             diagnostics.diagnostics,
@@ -92,18 +91,19 @@ impl LanguageServer for Backend {
         );
     }
     async fn completion(&self, params: CompletionParams) -> Result<Option<CompletionResponse>> {
+        eprintln!("completion request recieved");
         info!("{:?}", params);
-        Ok(self.server.lock().await.completion(params))
+        Ok(self.server.completion(params))
     }
     async fn goto_definition(
         &self,
         params: GotoDefinitionParams,
     ) -> Result<Option<GotoDefinitionResponse>> {
-        let definition = self.server.lock().await.goto_definition(params);
+        let definition = self.server.goto_definition(params);
         Ok(definition)
     }
     async fn hover(&self, params: HoverParams) -> Result<Option<Hover>> {
-        let hover = self.server.lock().await.hover(params);
+        let hover = self.server.hover(params);
         Ok(hover)
     }
 }
