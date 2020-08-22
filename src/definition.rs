@@ -13,7 +13,6 @@ impl LSPServer {
         let file_id = self.srcs.get_id(&doc).to_owned();
         let file = self.srcs.get_file(file_id)?;
         let file = file.read().ok()?;
-        eprintln!("def: read locked file");
         let scope = file.get_scope(&pos)?;
         let token = get_definition_token(file.text.line(pos.line as usize), pos);
         for def in &scope.defs {
@@ -34,7 +33,6 @@ impl LSPServer {
         let file_id = self.srcs.get_id(&doc).to_owned();
         let file = self.srcs.get_file(file_id)?;
         let file = file.read().ok()?;
-        eprintln!("hover: read locked file");
         let scope = file.get_scope(&pos)?;
         let token = get_definition_token(file.text.line(pos.line as usize), pos);
         for def in &scope.defs {

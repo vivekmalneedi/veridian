@@ -40,7 +40,6 @@ impl LSPServer {
         let file_id = self.srcs.get_id(&params.text_document.uri);
         let file = self.srcs.get_file(file_id).unwrap();
         let mut file = file.write().unwrap();
-        eprintln!("change: write locked file");
         for change in params.content_changes {
             if change.range.is_none() {
                 file.text = Rope::from_str(&change.text);
@@ -52,12 +51,14 @@ impl LSPServer {
         if let Some(version) = params.text_document.version {
             file.version = version;
         }
+        drop(file);
+
         // invalidate syntaxtree and wake parse thread
-        let (lock, cvar) = &*file.valid_parse;
+        let meta_data = self.srcs.get_meta_data(file_id).unwrap();
+        let (lock, cvar) = &*meta_data.read().unwrap().valid_parse;
         let mut valid = lock.lock().unwrap();
         *valid = false;
-        cvar.notify_one();
-        eprintln!("end change");
+        cvar.notify_all();
     }
 
     pub fn did_save(&self, params: DidSaveTextDocumentParams) -> PublishDiagnosticsParams {
@@ -65,6 +66,7 @@ impl LSPServer {
     }
 }
 
+#[derive(Debug)]
 pub struct Scope {
     pub name: String,
     pub start: usize,
@@ -80,7 +82,6 @@ pub struct Source {
     pub version: i64,
     pub scopes: Vec<Scope>,
     pub syntax_tree: Option<SyntaxTree>,
-    pub valid_parse: Arc<(Mutex<bool>, Condvar)>,
     pub last_change_range: Option<Range>,
 }
 
@@ -96,10 +97,16 @@ impl Source {
     }
 }
 
+pub struct SourceMeta {
+    pub id: usize,
+    pub valid_parse: Arc<(Mutex<bool>, Condvar)>,
+    pub parse_handle: JoinHandle<()>,
+}
+
 pub struct Sources {
     pub files: Arc<RwLock<Vec<Arc<RwLock<Source>>>>>,
     pub names: Arc<RwLock<HashMap<Url, usize>>>,
-    parse_handles: Arc<RwLock<HashMap<usize, JoinHandle<()>>>>,
+    pub meta: Arc<RwLock<Vec<Arc<RwLock<SourceMeta>>>>>,
 }
 
 impl Sources {
@@ -107,11 +114,10 @@ impl Sources {
         Sources {
             files: Arc::new(RwLock::new(Vec::new())),
             names: Arc::new(RwLock::new(HashMap::new())),
-            parse_handles: Arc::new(RwLock::new(HashMap::new())),
+            meta: Arc::new(RwLock::new(Vec::new())),
         }
     }
     pub fn add(&self, doc: TextDocumentItem) {
-        eprintln!("start add");
         let valid_parse = Arc::new((Mutex::new(false), Condvar::new()));
         let valid_parse2 = valid_parse.clone();
         let mut files = self.files.write().unwrap();
@@ -122,18 +128,13 @@ impl Sources {
             version: doc.version,
             scopes: Vec::new(),
             syntax_tree: None,
-            valid_parse,
             last_change_range: None,
         }));
         let source_handle = source.clone();
-        eprintln!("spawning thread");
         let parse_handle = thread::spawn(move || {
-            eprintln!("thread spawned");
             let (lock, cvar) = &*valid_parse2;
             loop {
-                eprintln!("parsing");
                 let file = source_handle.read().unwrap();
-                eprintln!("parse: read locked file");
                 let syntax_tree = parse(&file.text, &file.uri, &file.last_change_range);
                 let scopes: Vec<Scope>;
                 if let Some(tree) = &syntax_tree {
@@ -142,29 +143,29 @@ impl Sources {
                     scopes = Vec::new();
                 }
                 drop(file);
-                eprintln!("parse complete");
                 let mut file = source_handle.write().unwrap();
-                eprintln!("parse: write locked file");
                 file.syntax_tree = syntax_tree;
                 file.scopes = scopes;
                 drop(file);
                 let mut valid = lock.lock().unwrap();
                 *valid = true;
-                eprintln!("waiting");
+                cvar.notify_all();
                 while *valid {
                     valid = cvar.wait(valid).unwrap();
                 }
             }
         });
-        eprintln!("complete thread spawn");
         files.push(source);
         let fid = files.len() - 1;
-        self.parse_handles
+        self.meta
             .write()
             .unwrap()
-            .insert(fid, parse_handle);
+            .push(Arc::new(RwLock::new(SourceMeta {
+                id: fid,
+                valid_parse,
+                parse_handle,
+            })));
         self.names.write().unwrap().insert(doc.uri.clone(), fid);
-        eprintln!("complete add");
     }
 
     pub fn remove(&self, doc: TextDocumentIdentifier) {
@@ -174,14 +175,39 @@ impl Sources {
     }
 
     pub fn get_file(&self, id: usize) -> Option<Arc<RwLock<Source>>> {
-        let files = self.files.read().unwrap();
+        let files = self.files.read().ok()?;
         for file in files.iter() {
-            let source = file.read().unwrap();
+            let source = file.read().ok()?;
             if source.id == id {
                 return Some(file.clone());
             }
         }
         None
+    }
+
+    pub fn get_meta_data(&self, id: usize) -> Option<Arc<RwLock<SourceMeta>>> {
+        let meta = self.meta.read().ok()?;
+        for data in meta.iter() {
+            let i = data.read().ok()?;
+            if i.id == id {
+                return Some(data.clone());
+            }
+        }
+        None
+    }
+
+    pub fn wait_parse_ready(&self, id: usize, wait_valid: bool) {
+        let file = self.get_file(id).unwrap();
+        let file = file.read().unwrap();
+        if file.syntax_tree.is_none() || file.scopes.len() == 0 || wait_valid {
+            drop(file);
+            let meta_data = self.get_meta_data(id).unwrap();
+            let (lock, cvar) = &*meta_data.read().unwrap().valid_parse;
+            let mut valid = lock.lock().unwrap();
+            while !*valid {
+                valid = cvar.wait(valid).unwrap();
+            }
+        }
     }
 
     pub fn get_id(&self, uri: &Url) -> usize {
@@ -208,11 +234,6 @@ pub fn parse(doc: &Rope, uri: &Url, last_change_range: &Option<Range>) -> Option
             false,
         ) {
             Ok((syntax_tree, _)) => {
-                eprintln!(
-                    "Elapsed time complete: {:.2?}, {} iterations",
-                    before.elapsed(),
-                    parse_iterations
-                );
                 return Some(syntax_tree);
             }
             Err(err) => {
@@ -223,23 +244,16 @@ pub fn parse(doc: &Rope, uri: &Url, last_change_range: &Option<Range>) -> Option
                             let mut line_end = text.byte_to_line(bpos) + 1;
                             if !reverted_change {
                                 if let Some(range) = last_change_range {
-                                    eprintln!("previous change");
                                     line_start = range.start.line as usize;
                                     line_end = range.end.line as usize + 1;
                                     reverted_change = true;
                                 }
                             }
-
-                            eprintln!(
-                                "Elapsed time parse: {:.2?}, {} iterations",
-                                before.elapsed(),
-                                parse_iterations
-                            );
                             for line_idx in line_start..line_end {
                                 let line = text.line(line_idx);
                                 let start_char = text.line_to_char(line_idx);
                                 let line_length = line.len_chars();
-                                text.remove(start_char..(start_char + line_length));
+                                text.remove(start_char..(start_char + line_length - 1));
                                 text.insert(start_char, &" ".to_owned().repeat(line_length));
                             }
                             parse_iterations += 1;
@@ -250,7 +264,6 @@ pub fn parse(doc: &Rope, uri: &Url, last_change_range: &Option<Range>) -> Option
                     sv_parser::Error::Include { source: x } => {
                         match *x {
                             sv_parser::Error::File { source: y, path: z } => {
-                                eprintln!("handle include error");
                                 let mut inc_path_given = z.clone();
                                 let mut uri_path = uri.to_file_path().unwrap();
                                 uri_path.pop();
@@ -264,11 +277,6 @@ pub fn parse(doc: &Rope, uri: &Url, last_change_range: &Option<Range>) -> Option
                                     eprintln!("File Not Found: {:?}", z);
                                     break;
                                 }
-                                eprintln!(
-                                    "Elapsed time include: {:.2?}, {} iterations",
-                                    before.elapsed(),
-                                    parse_iterations
-                                );
                                 parse_iterations += 1;
                             }
                             _ => (),
@@ -369,7 +377,6 @@ impl<'a> LSPSupport for RopeSlice<'a> {
 mod tests {
     use super::*;
     use std::fs::read_to_string;
-    use std::{thread, time};
 
     #[test]
     fn test_open_and_change() {
@@ -388,14 +395,11 @@ endmodule"#;
             },
         };
         server.did_open(open_params);
-        eprintln!("open complete");
         let fid = server.srcs.get_id(&uri);
         let file = server.srcs.get_file(fid).unwrap();
-        eprintln!("attempting to read");
         let file = file.read().unwrap();
         assert_eq!(file.text.to_string(), text.to_owned());
         drop(file);
-        eprintln!("open");
 
         let change_params = DidChangeTextDocumentParams {
             text_document: VersionedTextDocumentIdentifier {
@@ -449,8 +453,7 @@ endmodule"#;
         let fid = server.srcs.get_id(&uri);
         let file = server.srcs.get_file(fid).unwrap();
 
-        let sleep_time = time::Duration::from_secs(2);
-        thread::sleep(sleep_time);
+        server.srcs.wait_parse_ready(fid, true);
 
         let file = file.read().unwrap();
         assert_eq!(file.scopes.get(0).unwrap().name, "test");

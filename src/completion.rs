@@ -10,13 +10,11 @@ use tower_lsp::lsp_types::*;
 
 impl LSPServer {
     pub fn completion(&self, params: CompletionParams) -> Option<CompletionResponse> {
-        eprintln!("start completion");
         let doc = params.text_document_position;
         let file_id = self.srcs.get_id(&doc.text_document.uri).to_owned();
+        self.srcs.wait_parse_ready(file_id, false);
         let file = self.srcs.get_file(file_id)?;
-        eprintln!("comp: getting file");
         let file = file.read().ok()?;
-        eprintln!("comp: read locked file");
         Some(CompletionResponse::List(get_completion(
             file.text.line(doc.position.line as usize),
             &file.scopes,
@@ -195,9 +193,7 @@ pub fn get_scopes(syntax_tree: &SyntaxTree) -> Vec<Scope> {
     let mut scopes: Vec<Scope> = Vec::new();
     let identifiers = get_identifiers(&syntax_tree);
     let scope_idents = get_scope_idents(&syntax_tree);
-    eprintln!("scope idents complete");
     let defs = get_definitions(&syntax_tree, &scope_idents);
-    eprintln!("defs complete");
     for scope in scope_idents {
         let mut idents: HashSet<String> = HashSet::new();
         filter_idents(scope.1, scope.2, &identifiers)
@@ -326,6 +322,8 @@ endmodule
             },
         };
         server.did_open(open_params);
+        let fid = server.srcs.get_id(&uri);
+        server.srcs.wait_parse_ready(fid, true);
 
         let change_params = DidChangeTextDocumentParams {
             text_document: VersionedTextDocumentIdentifier {
@@ -378,8 +376,7 @@ endmodule
             ],
         };
         server.did_change(change_params);
-        let sleep_time = time::Duration::from_secs(3);
-        thread::sleep(sleep_time);
+        server.srcs.wait_parse_ready(fid, true);
 
         let completion_params = CompletionParams {
             text_document_position: TextDocumentPositionParams {
