@@ -37,9 +37,11 @@ impl LSPServer {
     }
 
     pub fn did_change(&self, params: DidChangeTextDocumentParams) {
+        let now = Instant::now();
         let file_id = self.srcs.get_id(&params.text_document.uri);
         let file = self.srcs.get_file(file_id).unwrap();
         let mut file = file.write().unwrap();
+        // eprintln!("change write: {}", now.elapsed().as_millis());
         for change in params.content_changes {
             if change.range.is_none() {
                 file.text = Rope::from_str(&change.text);
@@ -52,10 +54,11 @@ impl LSPServer {
             file.version = version;
         }
         drop(file);
-
+        // eprintln!("change apply: {}", now.elapsed().as_millis());
         // invalidate syntaxtree and wake parse thread
         let meta_data = self.srcs.get_meta_data(file_id).unwrap();
         let (lock, cvar) = &*meta_data.read().unwrap().valid_parse;
+        // eprintln!("change read: {}", now.elapsed().as_millis());
         let mut valid = lock.lock().unwrap();
         *valid = false;
         cvar.notify_all();
@@ -203,6 +206,8 @@ impl Source {
             items: self.scope_tree.as_ref()?.complete(token, byte_idx),
         })
     }
+
+    pub fn get_dot_completions(&self, token: &String, byte_idx: usize) {}
 }
 
 pub struct SourceMeta {
@@ -242,17 +247,25 @@ impl Sources {
         let parse_handle = thread::spawn(move || {
             let (lock, cvar) = &*valid_parse2;
             loop {
+                let now = Instant::now();
                 let file = source_handle.read().unwrap();
-                let syntax_tree = parse(&file.text, &file.uri, &file.last_change_range);
+                let text = file.text.clone();
+                let uri = &file.uri.clone();
+                let range = &file.last_change_range.clone();
+                drop(file);
+                // eprintln!("parse read: {}", now.elapsed().as_millis());
+                let syntax_tree = parse(&text, &uri, &range);
                 let scope_tree = match &syntax_tree {
-                    Some(tree) => Some(get_scopes(tree, file.text.len_bytes())),
+                    Some(tree) => Some(get_scopes(tree, text.len_bytes())),
                     None => None,
                 };
-                drop(file);
+                // eprintln!("parse read complete: {}", now.elapsed().as_millis());
                 let mut file = source_handle.write().unwrap();
+                // eprintln!("parse write: {}", now.elapsed().as_millis());
                 file.syntax_tree = syntax_tree;
                 file.scope_tree = scope_tree;
                 drop(file);
+                // eprintln!("parse write complete: {}", now.elapsed().as_millis());
                 let mut valid = lock.lock().unwrap();
                 *valid = true;
                 cvar.notify_all();
