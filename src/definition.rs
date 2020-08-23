@@ -13,18 +13,16 @@ impl LSPServer {
         let file_id = self.srcs.get_id(&doc).to_owned();
         let file = self.srcs.get_file(file_id)?;
         let file = file.read().ok()?;
-        let scope = file.get_scope(&pos)?;
         let token = get_definition_token(file.text.line(pos.line as usize), pos);
-        for def in &scope.defs {
-            if def.ident == token {
-                let def_pos = file.text.byte_to_pos(def.byte_idx);
-                return Some(GotoDefinitionResponse::Scalar(Location::new(
-                    doc,
-                    Range::new(def_pos, def_pos),
-                )));
-            }
-        }
-        None
+        let def = file
+            .scope_tree
+            .as_ref()?
+            .get_definition(&token, file.text.pos_to_byte(&pos))?;
+        let def_pos = file.text.byte_to_pos(def.byte_idx);
+        Some(GotoDefinitionResponse::Scalar(Location::new(
+            doc,
+            Range::new(def_pos, def_pos),
+        )))
     }
 
     pub fn hover(&self, params: HoverParams) -> Option<Hover> {
@@ -33,21 +31,19 @@ impl LSPServer {
         let file_id = self.srcs.get_id(&doc).to_owned();
         let file = self.srcs.get_file(file_id)?;
         let file = file.read().ok()?;
-        let scope = file.get_scope(&pos)?;
         let token = get_definition_token(file.text.line(pos.line as usize), pos);
-        for def in &scope.defs {
-            if def.ident == token {
-                let def_line = file.text.byte_to_line(def.byte_idx);
-                return Some(Hover {
-                    contents: HoverContents::Scalar(MarkedString::LanguageString(LanguageString {
-                        language: "systemverilog".to_owned(),
-                        value: get_hover(&file.text, def_line),
-                    })),
-                    range: None,
-                });
-            }
-        }
-        None
+        let def = file
+            .scope_tree
+            .as_ref()?
+            .get_definition(&token, file.text.pos_to_byte(&pos))?;
+        let def_line = file.text.byte_to_line(def.byte_idx);
+        Some(Hover {
+            contents: HoverContents::Scalar(MarkedString::LanguageString(LanguageString {
+                language: "systemverilog".to_owned(),
+                value: get_hover(&file.text, def_line),
+            })),
+            range: None,
+        })
     }
 }
 

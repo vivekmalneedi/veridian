@@ -15,12 +15,11 @@ impl LSPServer {
         self.srcs.wait_parse_ready(file_id, false);
         let file = self.srcs.get_file(file_id)?;
         let file = file.read().ok()?;
-        Some(CompletionResponse::List(get_completion(
-            file.text.line(doc.position.line as usize),
-            &file.scopes,
-            doc.position,
+        let token = get_completion_token(file.text.line(doc.position.line as usize), doc.position);
+        Some(CompletionResponse::List(file.get_completions(
+            &token,
             file.text.pos_to_byte(&doc.position),
-        )))
+        )?))
     }
 }
 
@@ -174,83 +173,22 @@ fn get_identifiers(syntax_tree: &SyntaxTree) -> Vec<(String, usize)> {
     idents
 }
 
-fn filter_idents(start: usize, end: usize, idents: &Vec<(String, usize)>) -> Vec<(String, usize)> {
-    idents
-        .iter()
-        .filter(|x| (x.1 >= start) && (x.1 <= end))
-        .map(|x| (x.0.to_owned(), x.1))
-        .collect()
-}
-
-fn filter_defs(start: usize, end: usize, defs: &Vec<Definition>) -> Vec<Definition> {
-    defs.iter()
-        .filter(|x| (x.byte_idx >= start) && (x.byte_idx <= end))
-        .map(|x| x.clone())
-        .collect()
-}
-
-pub fn get_scopes(syntax_tree: &SyntaxTree) -> Vec<Scope> {
-    let mut scopes: Vec<Scope> = Vec::new();
+pub fn get_scopes(syntax_tree: &SyntaxTree, file_len: usize) -> Scope {
+    let mut global_scope: Scope = Scope::new(("global".to_string(), 0, file_len));
     let identifiers = get_identifiers(&syntax_tree);
     let scope_idents = get_scope_idents(&syntax_tree);
     let defs = get_definitions(&syntax_tree, &scope_idents);
     for scope in scope_idents {
-        let mut idents: HashSet<String> = HashSet::new();
-        filter_idents(scope.1, scope.2, &identifiers)
-            .iter()
-            .for_each(|x| {
-                idents.insert(x.0.clone());
-            });
-        scopes.push(Scope {
-            name: scope.0,
-            start: scope.1,
-            end: scope.2,
-            idents,
-            defs: filter_defs(scope.1, scope.2, &defs),
-        });
+        global_scope.insert_scope(scope);
     }
-    scopes
-}
-
-pub fn get_completion(
-    line: RopeSlice,
-    scopes: &Vec<Scope>,
-    pos: Position,
-    bpos: usize,
-) -> CompletionList {
-    let token = get_completion_token(line, pos);
-    let mut scopes: Vec<&Scope> = scopes
-        .iter()
-        .filter(|x| bpos >= x.start && bpos <= x.end)
-        .collect();
-    scopes.sort_by(|a, b| (a.end - a.start).cmp(&(b.end - b.start)));
-    let scope = *scopes.get(0).unwrap();
-    let mut results: Vec<CompletionItem> = scope
-        .defs
-        .iter()
-        .filter(|x| x.ident.starts_with(&token))
-        .map(|x| CompletionItem {
-            label: x.ident.to_string(),
-            kind: Some(x.kind),
-            detail: Some(x.type_str.to_string()),
-            ..CompletionItem::default()
-        })
-        .collect();
-    let def_idents: Vec<&String> = results.iter().map(|x| &x.label).collect();
-    let mut results_idents: Vec<CompletionItem> = scope
-        .idents
-        .iter()
-        .filter(|x| !def_idents.contains(x))
-        .map(|x| CompletionItem {
-            label: x.to_owned(),
-            ..CompletionItem::default()
-        })
-        .collect();
-    results.append(&mut results_idents);
-    CompletionList {
-        is_incomplete: false,
-        items: results,
+    for def in defs {
+        global_scope.insert_def(def);
     }
+    for ident in identifiers {
+        global_scope.insert_ident(ident);
+    }
+    global_scope.lift_nested_scope_defs();
+    global_scope
 }
 
 fn get_completion_token(line: RopeSlice, pos: Position) -> String {
@@ -409,6 +347,126 @@ endmodule
         if let CompletionResponse::List(item) = response {
             assert!(item.items.contains(&item1));
             assert!(item.items.contains(&item2));
+        } else {
+            assert!(false);
+        }
+    }
+
+    #[test]
+    fn test_nested_completion() {
+        let server = LSPServer::new();
+        let uri = Url::parse("file:///test.sv").unwrap();
+        let text = r#"module test;
+    logic aouter;
+    function func1();
+        logic abc;
+        func1 = abc;
+    endfunction
+    function func2();
+        logic abcd;
+        func2 = abcd;
+    endfunction
+endmodule
+"#;
+        let open_params = DidOpenTextDocumentParams {
+            text_document: TextDocumentItem {
+                uri: uri.clone(),
+                language_id: "systemverilog".to_owned(),
+                version: 0,
+                text: text.to_owned(),
+            },
+        };
+        server.did_open(open_params);
+        let fid = server.srcs.get_id(&uri);
+        server.srcs.wait_parse_ready(fid, true);
+
+        let change_params = DidChangeTextDocumentParams {
+            text_document: VersionedTextDocumentIdentifier {
+                uri: uri.clone(),
+                version: Some(3),
+            },
+            content_changes: vec![
+                TextDocumentContentChangeEvent {
+                    range: Some(Range {
+                        start: Position {
+                            line: 4,
+                            character: 0,
+                        },
+                        end: Position {
+                            line: 4,
+                            character: 0,
+                        },
+                    }),
+                    range_length: None,
+                    text: "\n".to_owned(),
+                },
+                TextDocumentContentChangeEvent {
+                    range: Some(Range {
+                        start: Position {
+                            line: 4,
+                            character: 0,
+                        },
+                        end: Position {
+                            line: 4,
+                            character: 0,
+                        },
+                    }),
+                    range_length: None,
+                    text: "  ".to_owned(),
+                },
+                TextDocumentContentChangeEvent {
+                    range: Some(Range {
+                        start: Position {
+                            line: 4,
+                            character: 2,
+                        },
+                        end: Position {
+                            line: 4,
+                            character: 2,
+                        },
+                    }),
+                    range_length: None,
+                    text: "a".to_owned(),
+                },
+            ],
+        };
+        server.did_change(change_params);
+        server.srcs.wait_parse_ready(fid, true);
+
+        let completion_params = CompletionParams {
+            text_document_position: TextDocumentPositionParams {
+                text_document: TextDocumentIdentifier { uri: uri.clone() },
+                position: Position {
+                    line: 4,
+                    character: 3,
+                },
+            },
+            work_done_progress_params: WorkDoneProgressParams::default(),
+            partial_result_params: PartialResultParams::default(),
+            context: Some(CompletionContext {
+                trigger_kind: CompletionTriggerKind::Invoked,
+                trigger_character: None,
+            }),
+        };
+        let response: CompletionResponse = server.completion(completion_params).unwrap();
+        let item1 = CompletionItem {
+            label: "abc".to_owned(),
+            kind: Some(CompletionItemKind::Variable),
+            detail: Some("logic".to_string()),
+            ..CompletionItem::default()
+        };
+        let item3 = CompletionItem {
+            label: "aouter".to_owned(),
+            kind: Some(CompletionItemKind::Variable),
+            detail: Some("logic".to_string()),
+            ..CompletionItem::default()
+        };
+        if let CompletionResponse::List(item) = response {
+            assert!(item.items.contains(&item1));
+            for comp in &item.items {
+                assert!(comp.label != "abcd");
+            }
+            assert!(item.items.contains(&item3));
         } else {
             assert!(false);
         }

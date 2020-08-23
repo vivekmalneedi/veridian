@@ -73,6 +73,117 @@ pub struct Scope {
     pub end: usize,
     pub idents: HashSet<String>,
     pub defs: Vec<Definition>,
+    pub scopes: Vec<Scope>,
+}
+
+impl Scope {
+    pub fn new(scope_info: (String, usize, usize)) -> Scope {
+        Scope {
+            name: scope_info.0,
+            start: scope_info.1,
+            end: scope_info.2,
+            idents: HashSet::new(),
+            defs: Vec::new(),
+            scopes: Vec::new(),
+        }
+    }
+    pub fn insert_scope(&mut self, scope_info: (String, usize, usize)) {
+        for scope in &mut self.scopes {
+            if scope.start <= scope_info.1 && scope_info.2 <= scope.end {
+                scope.insert_scope(scope_info);
+                return;
+            }
+        }
+        self.scopes.push(Scope::new(scope_info));
+    }
+    pub fn insert_ident(&mut self, ident: (String, usize)) {
+        for scope in &mut self.scopes {
+            if scope.start <= ident.1 && ident.1 <= scope.end {
+                scope.insert_ident(ident);
+                return;
+            }
+        }
+        self.idents.insert(ident.0.to_string());
+    }
+    pub fn insert_def(&mut self, def: Definition) {
+        for scope in &mut self.scopes {
+            if scope.start <= def.byte_idx && def.byte_idx <= scope.end {
+                scope.insert_def(def);
+                return;
+            }
+        }
+        self.defs.push(def);
+    }
+    pub fn lift_nested_scope_defs(&mut self) {
+        'outer: for scope in &mut self.scopes {
+            scope.lift_nested_scope_defs();
+            for def in &scope.defs {
+                if def.ident == scope.name.clone() {
+                    self.defs.push(def.clone());
+                    continue 'outer;
+                }
+            }
+            self.idents.insert(scope.name.clone());
+        }
+    }
+    #[cfg(test)]
+    pub fn contains_scope(&self, scope_ident: &str) -> bool {
+        if self.name == scope_ident {
+            return true;
+        }
+        for scope in &self.scopes {
+            if scope.contains_scope(scope_ident) {
+                return true;
+            }
+        }
+        false
+    }
+    pub fn complete(&self, token: &str, byte_idx: usize) -> Vec<CompletionItem> {
+        let mut completions: Vec<CompletionItem> = Vec::new();
+        for scope in &self.scopes {
+            if scope.start <= byte_idx && byte_idx <= scope.end {
+                completions = scope.complete(token, byte_idx);
+                break;
+            }
+        }
+        for def in &self.defs {
+            if def.ident.starts_with(token) {
+                completions.push(CompletionItem {
+                    label: def.ident.to_string(),
+                    kind: Some(def.kind.clone()),
+                    detail: Some(def.type_str.to_string()),
+                    ..CompletionItem::default()
+                });
+            }
+        }
+        let completion_idents: Vec<String> = completions.iter().map(|x| x.label.clone()).collect();
+        for ident in &self.idents {
+            if !completion_idents.contains(&&ident) & ident.starts_with(token) {
+                completions.push(CompletionItem {
+                    label: ident.clone(),
+                    ..CompletionItem::default()
+                });
+            }
+        }
+        completions
+    }
+    pub fn get_definition(&self, token: &str, byte_idx: usize) -> Option<&Definition> {
+        let mut definition: Option<&Definition> = None;
+        for scope in &self.scopes {
+            if scope.start <= byte_idx && byte_idx <= scope.end {
+                definition = scope.get_definition(token, byte_idx);
+                break;
+            }
+        }
+        if definition.is_none() {
+            for def in &self.defs {
+                if def.ident == token {
+                    return Some(&def);
+                }
+            }
+        }
+        definition
+    }
 }
 
 pub struct Source {
@@ -80,20 +191,17 @@ pub struct Source {
     pub uri: Url,
     pub text: Rope,
     pub version: i64,
-    pub scopes: Vec<Scope>,
+    pub scope_tree: Option<Scope>,
     pub syntax_tree: Option<SyntaxTree>,
     pub last_change_range: Option<Range>,
 }
 
 impl Source {
-    pub fn get_scope(&self, pos: &Position) -> Option<&Scope> {
-        let byte_idx = self.text.pos_to_byte(pos);
-        for scope in &self.scopes {
-            if scope.start <= byte_idx && byte_idx <= scope.end {
-                return Some(scope);
-            }
-        }
-        None
+    pub fn get_completions(&self, token: &String, byte_idx: usize) -> Option<CompletionList> {
+        Some(CompletionList {
+            is_incomplete: false,
+            items: self.scope_tree.as_ref()?.complete(token, byte_idx),
+        })
     }
 }
 
@@ -126,7 +234,7 @@ impl Sources {
             uri: doc.uri.clone(),
             text: Rope::from_str(&doc.text),
             version: doc.version,
-            scopes: Vec::new(),
+            scope_tree: None,
             syntax_tree: None,
             last_change_range: None,
         }));
@@ -136,16 +244,14 @@ impl Sources {
             loop {
                 let file = source_handle.read().unwrap();
                 let syntax_tree = parse(&file.text, &file.uri, &file.last_change_range);
-                let scopes: Vec<Scope>;
-                if let Some(tree) = &syntax_tree {
-                    scopes = get_scopes(tree);
-                } else {
-                    scopes = Vec::new();
-                }
+                let scope_tree = match &syntax_tree {
+                    Some(tree) => Some(get_scopes(tree, file.text.len_bytes())),
+                    None => None,
+                };
                 drop(file);
                 let mut file = source_handle.write().unwrap();
                 file.syntax_tree = syntax_tree;
-                file.scopes = scopes;
+                file.scope_tree = scope_tree;
                 drop(file);
                 let mut valid = lock.lock().unwrap();
                 *valid = true;
@@ -199,7 +305,7 @@ impl Sources {
     pub fn wait_parse_ready(&self, id: usize, wait_valid: bool) {
         let file = self.get_file(id).unwrap();
         let file = file.read().unwrap();
-        if file.syntax_tree.is_none() || file.scopes.len() == 0 || wait_valid {
+        if file.syntax_tree.is_none() || file.scope_tree.is_none() || wait_valid {
             drop(file);
             let meta_data = self.get_meta_data(id).unwrap();
             let (lock, cvar) = &*meta_data.read().unwrap().valid_parse;
@@ -456,7 +562,7 @@ endmodule"#;
         server.srcs.wait_parse_ready(fid, true);
 
         let file = file.read().unwrap();
-        assert_eq!(file.scopes.get(0).unwrap().name, "test");
+        assert!(file.scope_tree.as_ref().unwrap().contains_scope("test"));
     }
 
     #[test]
