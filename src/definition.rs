@@ -101,6 +101,7 @@ pub struct Definition {
     pub kind: CompletionItemKind,
     interface: Option<String>,
     modport: Option<String>,
+    import_ident: Option<String>,
 }
 
 impl std::default::Default for Definition {
@@ -112,6 +113,7 @@ impl std::default::Default for Definition {
             kind: CompletionItemKind::Variable,
             interface: None,
             modport: None,
+            import_ident: None,
         }
     }
 }
@@ -494,6 +496,183 @@ fn net_dec(
     Some(nets)
 }
 
+fn list_var_decl(
+    tree: &SyntaxTree,
+    node: &ListOfVariableDeclAssignments,
+    event_iter: &mut EventIter,
+) -> Option<Vec<Definition>> {
+    let mut vars: Vec<Definition> = Vec::new();
+    let mut var_list = vec![&node.nodes.0.nodes.0];
+    for var_def in &node.nodes.0.nodes.1 {
+        var_list.push(&var_def.1);
+    }
+    for var_def in var_list {
+        let mut var = Definition::default();
+        match &var_def {
+            VariableDeclAssignment::Variable(node) => {
+                let ident = get_ident(tree, RefNode::VariableIdentifier(&node.nodes.0));
+                var.ident = ident.0;
+                var.byte_idx = ident.1;
+                for variable_dim in &node.nodes.1 {
+                    let tokens = &mut var.type_str;
+                    advance_until_leave!(tokens, tree, event_iter, RefNode::VariableDimension);
+                }
+            }
+            VariableDeclAssignment::DynamicArray(node) => {
+                let ident = get_ident(tree, RefNode::DynamicArrayVariableIdentifier(&node.nodes.0));
+                var.ident = ident.0;
+                var.byte_idx = ident.1;
+                for variable_dim in &node.nodes.2 {
+                    let tokens = &mut var.type_str;
+                    advance_until_leave!(tokens, tree, event_iter, RefNode::VariableDimension);
+                }
+            }
+            VariableDeclAssignment::Class(node) => {
+                let ident = get_ident(tree, RefNode::ClassVariableIdentifier(&node.nodes.0));
+                var.ident = ident.0;
+                var.byte_idx = ident.1;
+            }
+        }
+        vars.push(var);
+    }
+    Some(vars)
+}
+
+fn data_dec(
+    tree: &SyntaxTree,
+    node: &DataDeclaration,
+    event_iter: &mut EventIter,
+) -> Option<Vec<Definition>> {
+    let mut data: Vec<Definition>;
+    let mut common = String::new();
+    eprintln!("found data_dec");
+    match node {
+        DataDeclaration::Variable(x) => {
+            let var_list = advance_until_enter!(
+                common,
+                tree,
+                event_iter,
+                RefNode::ListOfVariableDeclAssignments,
+                &ListOfVariableDeclAssignments
+            )?;
+            data = list_var_decl(tree, var_list, event_iter)?;
+        }
+        DataDeclaration::TypeDeclaration(x) => match &**x {
+            TypeDeclaration::DataType(y) => {
+                let mut var = Definition::default();
+                let ident = get_ident(tree, RefNode::TypeIdentifier(&y.nodes.2));
+                var.ident = ident.0;
+                var.byte_idx = ident.1;
+                for variable_dim in &y.nodes.3 {
+                    let tokens = &mut var.type_str;
+                    advance_until_leave!(tokens, tree, event_iter, RefNode::VariableDimension);
+                }
+                data = vec![var];
+            }
+            TypeDeclaration::Interface(y) => {
+                let mut var = Definition::default();
+                let ident = get_ident(tree, RefNode::TypeIdentifier(&y.nodes.5));
+                var.ident = ident.0;
+                var.byte_idx = ident.1;
+                let mut tokens = String::new();
+                advance_until_enter!(
+                    tokens,
+                    tree,
+                    event_iter,
+                    RefNode::TypeIdentifier,
+                    &TypeIdentifier
+                );
+                advance_until_enter!(
+                    tokens,
+                    tree,
+                    event_iter,
+                    RefNode::TypeIdentifier,
+                    &TypeIdentifier
+                );
+                var.type_str = tokens;
+                data = vec![var];
+            }
+            TypeDeclaration::Reserved(y) => {
+                let mut var = Definition::default();
+                let ident = get_ident(tree, RefNode::TypeIdentifier(&y.nodes.2));
+                var.ident = ident.0;
+                var.byte_idx = ident.1;
+                let mut tokens = String::new();
+                advance_until_enter!(
+                    tokens,
+                    tree,
+                    event_iter,
+                    RefNode::TypeIdentifier,
+                    &TypeIdentifier
+                );
+                var.type_str = tokens;
+                data = vec![var];
+            }
+        },
+        DataDeclaration::PackageImportDeclaration(x) => {
+            let mut import_list = vec![&x.nodes.1.nodes.0];
+            for import_def in &x.nodes.1.nodes.1 {
+                import_list.push(&import_def.1);
+            }
+            data = Vec::new();
+            for import_def in import_list {
+                let mut import = Definition::default();
+                match import_def {
+                    PackageImportItem::Identifier(y) => {
+                        let ident = get_ident(tree, RefNode::PackageIdentifier(&y.nodes.0));
+                        import.ident = ident.0;
+                        import.byte_idx = ident.1;
+                        let import_loc = match &y.nodes.2 {
+                            Identifier::SimpleIdentifier(id) => id.nodes.0,
+                            Identifier::EscapedIdentifier(id) => id.nodes.0,
+                        };
+                        import.import_ident = Some(tree.get_str(&import_loc)?.to_string());
+                    }
+                    PackageImportItem::Asterisk(y) => {
+                        let ident = get_ident(tree, RefNode::PackageIdentifier(&y.nodes.0));
+                        import.ident = ident.0;
+                        import.byte_idx = ident.1;
+                    }
+                }
+                data.push(import);
+            }
+        }
+        DataDeclaration::NetTypeDeclaration(x) => match &**x {
+            NetTypeDeclaration::DataType(y) => {
+                let mut var = Definition::default();
+                let ident = get_ident(tree, RefNode::NetTypeIdentifier(&y.nodes.2));
+                var.ident = ident.0;
+                var.byte_idx = ident.1;
+                let mut tokens = String::new();
+                advance_until_enter!(
+                    tokens,
+                    tree,
+                    event_iter,
+                    RefNode::NetTypeIdentifier,
+                    &NetTypeIdentifier
+                );
+                var.type_str = tokens;
+                data = vec![var];
+            }
+            NetTypeDeclaration::NetType(y) => {
+                let mut var = Definition::default();
+                let ident = get_ident(tree, RefNode::NetTypeIdentifier(&y.nodes.2));
+                var.ident = ident.0;
+                var.byte_idx = ident.1;
+                let mut tokens = String::new();
+                advance_until_leave!(tokens, tree, event_iter, RefNode::NetTypeIdentifier);
+                var.type_str = tokens;
+                data = vec![var];
+            }
+        },
+    }
+    for var in &mut data {
+        var.type_str = format!("{} {}", common, var.type_str);
+        var.kind = CompletionItemKind::Variable;
+    }
+    Some(data)
+}
+
 pub fn get_definitions(
     syntax_tree: &SyntaxTree,
     scope_idents: &Vec<(String, usize, usize)>,
@@ -521,6 +700,12 @@ pub fn get_definitions(
                     let nets = net_dec(syntax_tree, n, &mut event_iter);
                     if nets.is_some() {
                         definitions.append(&mut nets?);
+                    }
+                }
+                RefNode::DataDeclaration(n) => {
+                    let vars = data_dec(syntax_tree, n, &mut event_iter);
+                    if vars.is_some() {
+                        definitions.append(&mut vars?);
                     }
                 }
                 _ => (),
