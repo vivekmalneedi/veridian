@@ -5,6 +5,7 @@ use log::info;
 use ropey::RopeSlice;
 use std::collections::HashSet;
 use std::str;
+use std::time::Instant;
 use sv_parser::*;
 use tower_lsp::lsp_types::*;
 
@@ -12,14 +13,19 @@ impl LSPServer {
     pub fn completion(&self, params: CompletionParams) -> Option<CompletionResponse> {
         let doc = params.text_document_position;
         let file_id = self.srcs.get_id(&doc.text_document.uri).to_owned();
+        let now = Instant::now();
         self.srcs.wait_parse_ready(file_id, false);
+        // eprintln!("comp wait parse: {}", now.elapsed().as_millis());
         let file = self.srcs.get_file(file_id)?;
         let file = file.read().ok()?;
+        // eprintln!("comp read: {}", now.elapsed().as_millis());
         let token = get_completion_token(file.text.line(doc.position.line as usize), doc.position);
-        Some(CompletionResponse::List(file.get_completions(
-            &token,
-            file.text.pos_to_byte(&doc.position),
-        )?))
+        eprintln!("token: {}", token);
+        let response = CompletionResponse::List(
+            file.get_completions(&token, file.text.pos_to_byte(&doc.position))?,
+        );
+        // eprintln!("comp response: {}", now.elapsed().as_millis());
+        Some(response)
     }
 }
 
@@ -177,7 +183,7 @@ pub fn get_scopes(syntax_tree: &SyntaxTree, file_len: usize) -> Scope {
     let mut global_scope: Scope = Scope::new(("global".to_string(), 0, file_len));
     let identifiers = get_identifiers(&syntax_tree);
     let scope_idents = get_scope_idents(&syntax_tree);
-    let defs = get_definitions(&syntax_tree, &scope_idents);
+    let defs = get_definitions(&syntax_tree, &scope_idents).unwrap();
     for scope in scope_idents {
         global_scope.insert_scope(scope);
     }
@@ -199,7 +205,7 @@ fn get_completion_token(line: RopeSlice, pos: Position) -> String {
     }
     let mut c = line_iter.prev();
     //TODO: make this a regex
-    while !c.is_none() && (c.unwrap().is_alphanumeric() || c.unwrap() == '_') {
+    while !c.is_none() && (c.unwrap().is_alphanumeric() || c.unwrap() == '_' || c.unwrap() == '.') {
         token.push(c.unwrap());
         c = line_iter.prev();
     }
@@ -470,5 +476,75 @@ endmodule
         } else {
             assert!(false);
         }
+    }
+
+    #[test]
+    fn test_dot_completion() {
+        let server = LSPServer::new();
+        let uri = Url::parse("file:///test.sv").unwrap();
+        let text = r#"interface test_inter;
+    wire abcd;
+endinterface
+module test(
+    test_inter abc
+);
+    abc.
+endmodule
+"#;
+        let open_params = DidOpenTextDocumentParams {
+            text_document: TextDocumentItem {
+                uri: uri.clone(),
+                language_id: "systemverilog".to_owned(),
+                version: 0,
+                text: text.to_owned(),
+            },
+        };
+        server.did_open(open_params);
+        let fid = server.srcs.get_id(&uri);
+        server.srcs.wait_parse_ready(fid, true);
+        let file = server.srcs.get_file(fid).unwrap();
+        let file = file.read().unwrap();
+        eprintln!("{}", file.syntax_tree.as_ref().unwrap());
+        eprintln!("{:#?}", file.scope_tree);
+
+        let completion_params = CompletionParams {
+            text_document_position: TextDocumentPositionParams {
+                text_document: TextDocumentIdentifier { uri: uri.clone() },
+                position: Position {
+                    line: 6,
+                    character: 8,
+                },
+            },
+            work_done_progress_params: WorkDoneProgressParams::default(),
+            partial_result_params: PartialResultParams::default(),
+            context: Some(CompletionContext {
+                trigger_kind: CompletionTriggerKind::TriggerCharacter,
+                trigger_character: Some(".".to_string()),
+            }),
+        };
+        let response: CompletionResponse = server.completion(completion_params).unwrap();
+        let item1 = CompletionItem {
+            label: "abc".to_owned(),
+            kind: Some(CompletionItemKind::Variable),
+            detail: Some("logic".to_string()),
+            ..CompletionItem::default()
+        };
+        let item3 = CompletionItem {
+            label: "aouter".to_owned(),
+            kind: Some(CompletionItemKind::Variable),
+            detail: Some("logic".to_string()),
+            ..CompletionItem::default()
+        };
+        if let CompletionResponse::List(item) = response {
+            eprintln!("{:#?}", item);
+            assert!(item.items.contains(&item1));
+            for comp in &item.items {
+                assert!(comp.label != "abcd");
+            }
+            assert!(item.items.contains(&item3));
+        } else {
+            assert!(false);
+        }
+        assert!(false);
     }
 }

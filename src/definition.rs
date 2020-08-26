@@ -4,7 +4,6 @@ use ropey::{Rope, RopeSlice};
 use std::fmt::Display;
 use sv_parser::*;
 use tower_lsp::lsp_types::*;
-use CaptureMode::{Post, Pre};
 
 impl LSPServer {
     pub fn goto_definition(&self, params: GotoDefinitionParams) -> Option<GotoDefinitionResponse> {
@@ -71,12 +70,27 @@ fn get_definition_token(line: RopeSlice, pos: Position) -> String {
     token
 }
 
-#[derive(Eq, PartialEq, Debug)]
-enum CaptureMode {
-    Pre,
-    Post,
-    Full,
-    No,
+/*
+pub trait Definition: Sync + Send {
+    fn get_ident(&self) -> &str;
+    fn get_byte_idx(&self) -> usize;
+    fn get_type_str(&self) -> &str;
+    fn get_kind(&self) -> &CompletionItemKind;
+}
+*/
+
+fn clean_type_str(type_str: &str, ident: &str) -> String {
+    let endings: &[_] = &[';', ','];
+    let eq_offset = type_str.find('=').unwrap_or(type_str.len());
+    let mut result = type_str.to_string();
+    result.replace_range(eq_offset.., "");
+    result
+        .trim_start()
+        .trim_end()
+        .trim_end_matches(endings)
+        .trim_end_matches(ident)
+        .trim_end()
+        .to_string()
 }
 
 #[derive(Debug, Clone)]
@@ -85,265 +99,439 @@ pub struct Definition {
     pub byte_idx: usize,
     pub type_str: String,
     pub kind: CompletionItemKind,
+    interface: Option<String>,
+    modport: Option<String>,
 }
 
-fn clean_type_str(type_str: String, ident: &str) -> String {
-    let endings: &[_] = &[';', ','];
-    let eq_offset = type_str.find('=').unwrap_or(type_str.len());
-    let mut result = type_str.clone();
-    result.replace_range(eq_offset.., "");
-    result
-        .trim_end()
-        .trim_end_matches(endings)
-        .trim_end_matches(ident)
-        .trim_end()
-        .to_string()
+impl std::default::Default for Definition {
+    fn default() -> Self {
+        Definition {
+            ident: String::new(),
+            byte_idx: 0,
+            type_str: String::new(),
+            kind: CompletionItemKind::Variable,
+            interface: None,
+            modport: None,
+        }
+    }
 }
 
-macro_rules! dec_list {
-    ($loop:tt, $cap_args:ident, $event:ident, $start:path, ($($end:path),*), ($($mid:path),*), $kind:expr) => {
-        match &$event {
-            NodeEvent::Enter(node) => match node {
-                $start(_) => {
-                    $cap_args.capture = CaptureMode::Pre;
-                    $cap_args.kind = $kind;
-                    // eprintln!("startlst");
-                }
-                $($mid(ident_node) => match $cap_args.capture {
-                    CaptureMode::Pre | CaptureMode::Post => {
-                            if !$cap_args.post_dec.is_empty() {
-                                let result = Definition{
-                                    ident: $cap_args.ident.clone(),
-                                    byte_idx: $cap_args.byte_idx,
-                                    type_str: clean_type_str(format!(
-                                        "{} {}{}",
-                                        $cap_args.pre_dec.trim_end(),
-                                        $cap_args.ident,
-                                        $cap_args.post_dec,
-                                    ), &$cap_args.ident),
-                                    kind: $kind,
-                                };
-                                // eprintln!("midlst: {:?}", result);
-                                $cap_args.defs.push(result);
-                                $cap_args.post_dec.clear();
+/*
+impl Definition for Port {
+    fn get_ident(&self) -> &str {
+        &self.ident
+    }
+    fn get_byte_idx(&self) -> usize {
+        self.byte_idx
+    }
+    fn get_type_str(&self) -> &str {
+        &self.type_str
+    }
+    fn get_kind(&self) -> &CompletionItemKind {
+        &self.kind
+    }
+}
+*/
+
+fn get_ident(tree: &SyntaxTree, node: RefNode) -> (String, usize) {
+    let loc = unwrap_locate!(node).unwrap();
+    let ident_str = tree.get_str(loc).unwrap().to_string();
+    let byte_idx = tree.get_origin(loc).unwrap().1;
+    (ident_str, byte_idx)
+}
+
+macro_rules! advance_until_leave {
+    ($tokens:ident, $tree:ident, $event_iter:ident, $node:path) => {{
+        let mut result: Option<RefNode> = None;
+        while let Some(event) = $event_iter.next() {
+            match event {
+                NodeEvent::Leave(x) => match x {
+                    $node(node) => {
+                        result = Some($node(node));
+                        break;
+                    }
+                    RefNode::Locate(node) => {
+                        $tokens.push(' ');
+                        $tokens.push_str($tree.get_str(node)?);
+                    }
+                    _ => (),
+                },
+                NodeEvent::Enter(_) => (),
+            }
+        }
+        result
+    }};
+}
+
+macro_rules! advance_until_enter {
+    ($tokens:ident, $tree:ident, $event_iter:ident, $node:path, $type:ty) => {{
+        let mut result: Option<$type> = None;
+        while let Some(event) = $event_iter.next() {
+            match event {
+                NodeEvent::Enter(x) => match x {
+                    $node(node) => {
+                        result = Some(node);
+                        break;
+                    }
+                    RefNode::Locate(node) => {
+                        $tokens.push(' ');
+                        $tokens.push_str($tree.get_str(node)?);
+                    }
+                    _ => (),
+                },
+                NodeEvent::Leave(_) => (),
+            }
+        }
+        result
+    }};
+}
+
+fn port_dec_ansi(
+    tree: &SyntaxTree,
+    node: &AnsiPortDeclaration,
+    event_iter: &mut EventIter,
+) -> Option<Definition> {
+    let mut port = Definition::default();
+    let mut tokens = String::new();
+    match node {
+        AnsiPortDeclaration::Net(x) => {
+            eprintln!("found ansi_port_net");
+            let ident = get_ident(tree, RefNode::PortIdentifier(&x.nodes.1));
+            port.ident = ident.0;
+            port.byte_idx = ident.1;
+            match &x.nodes.0 {
+                Some(y) => match y {
+                    NetPortHeaderOrInterfacePortHeader::InterfacePortHeader(z) => match &**z {
+                        InterfacePortHeader::Identifier(node) => {
+                            port.interface = Some(
+                                get_ident(tree, RefNode::InterfaceIdentifier(&node.nodes.0)).0,
+                            );
+                            match &node.nodes.1 {
+                                Some((_, mod_ident)) => {
+                                    port.modport = Some(
+                                        get_ident(tree, RefNode::ModportIdentifier(mod_ident)).0,
+                                    );
+                                }
+                                None => (),
                             }
-                            $cap_args.capture = CaptureMode::Post;
-                            $cap_args.skip = true;
-                            let loc = unwrap_locate!(*ident_node).unwrap();
-                            $cap_args.ident =
-                                $cap_args.tree.get_str(loc).unwrap().trim_end().to_string();
-                            $cap_args.byte_idx = $cap_args.tree.get_origin(loc).unwrap().1;
-                            continue $loop;
-                    }
+                        }
+                        InterfacePortHeader::Interface(node) => {
+                            port.interface = Some("interface".to_string());
+                            match &node.nodes.1 {
+                                Some((_, mod_ident)) => {
+                                    port.modport = Some(
+                                        get_ident(tree, RefNode::ModportIdentifier(mod_ident)).0,
+                                    );
+                                }
+                                None => (),
+                            }
+                        }
+                    },
                     _ => (),
-                },)*
-                _ => (),
-            },
-            NodeEvent::Leave(node) => match node {
-                $($end(_) => {
-                    if !$cap_args.pre_dec.trim_start().is_empty(){
-                        let result = Definition{
-                            ident: $cap_args.ident.clone(),
-                            byte_idx: $cap_args.byte_idx,
-                            type_str: clean_type_str(format!(
-                                "{} {}{}",
-                                $cap_args.pre_dec.trim_end(),
-                                $cap_args.ident,
-                                $cap_args.post_dec), &$cap_args.ident),
-                            kind: $kind,
-                        };
-                        // eprintln!("endlst: {:?}", result);
-                        $cap_args.defs.push(result);
-                    }
-                    $cap_args.post_dec.clear();
-                    $cap_args.pre_dec.clear();
-                    $cap_args.ident.clear();
-                    $cap_args.capture = CaptureMode::No;
-                },)*
-                _ => (),
-            },
-        };
-    };
+                },
+                None => (),
+            }
+        }
+        _ => (),
+    }
+
+    advance_until_leave!(tokens, tree, event_iter, RefNode::AnsiPortDeclaration);
+    port.type_str = tokens;
+    port.kind = CompletionItemKind::Property;
+    Some(port)
 }
 
-macro_rules! dec_full {
-    ($loop:tt, $cap_args:ident, $event:ident, $start:path, ($($mid:path),*), $kind:expr) => {
-        match &$event {
-            NodeEvent::Enter(node) => match node {
-                $start(_) => {
-                    $cap_args.capture = CaptureMode::Full;
-                    $cap_args.kind = $kind;
-                    // eprintln!("startfull");
+fn list_port_idents(
+    tree: &SyntaxTree,
+    node: &ListOfPortIdentifiers,
+    event_iter: &mut EventIter,
+) -> Option<Vec<Definition>> {
+    let mut ports: Vec<Definition> = Vec::new();
+    let mut port_list = vec![&node.nodes.0.nodes.0];
+    for port_def in &node.nodes.0.nodes.1 {
+        port_list.push(&port_def.1);
+    }
+    for port_def in port_list {
+        let mut port = Definition::default();
+        let ident = get_ident(tree, RefNode::PortIdentifier(&port_def.0));
+        port.ident = ident.0;
+        port.byte_idx = ident.1;
+        for unpacked_dim in &port_def.1 {
+            let tokens = &mut port.type_str;
+            advance_until_leave!(tokens, tree, event_iter, RefNode::UnpackedDimension);
+        }
+        ports.push(port);
+    }
+    Some(ports)
+}
+
+fn list_interface_idents(
+    tree: &SyntaxTree,
+    node: &ListOfInterfaceIdentifiers,
+    event_iter: &mut EventIter,
+) -> Option<Vec<Definition>> {
+    let mut ports: Vec<Definition> = Vec::new();
+    let mut port_list = vec![&node.nodes.0.nodes.0];
+    for port_def in &node.nodes.0.nodes.1 {
+        port_list.push(&port_def.1);
+    }
+    for port_def in port_list {
+        let mut port = Definition::default();
+        let ident = get_ident(tree, RefNode::InterfaceIdentifier(&port_def.0));
+        port.ident = ident.0;
+        port.byte_idx = ident.1;
+        for unpacked_dim in &port_def.1 {
+            let tokens = &mut port.type_str;
+            advance_until_leave!(tokens, tree, event_iter, RefNode::UnpackedDimension);
+        }
+        ports.push(port);
+    }
+    Some(ports)
+}
+
+fn list_variable_idents(
+    tree: &SyntaxTree,
+    node: &ListOfVariableIdentifiers,
+    event_iter: &mut EventIter,
+) -> Option<Vec<Definition>> {
+    let mut ports: Vec<Definition> = Vec::new();
+    let mut port_list = vec![&node.nodes.0.nodes.0];
+    for port_def in &node.nodes.0.nodes.1 {
+        port_list.push(&port_def.1);
+    }
+    for port_def in port_list {
+        let mut port = Definition::default();
+        let ident = get_ident(tree, RefNode::VariableIdentifier(&port_def.0));
+        port.ident = ident.0;
+        port.byte_idx = ident.1;
+        for variable_dim in &port_def.1 {
+            let tokens = &mut port.type_str;
+            advance_until_leave!(tokens, tree, event_iter, RefNode::VariableDimension);
+        }
+        ports.push(port);
+    }
+    Some(ports)
+}
+
+fn port_dec_non_ansi(
+    tree: &SyntaxTree,
+    node: &PortDeclaration,
+    event_iter: &mut EventIter,
+) -> Option<Vec<Definition>> {
+    let mut ports: Vec<Definition>;
+    let mut common = String::new();
+    eprintln!("found non-ansi ports");
+    match node {
+        PortDeclaration::Inout(x) => {
+            let port_list = advance_until_enter!(
+                common,
+                tree,
+                event_iter,
+                RefNode::ListOfPortIdentifiers,
+                &ListOfPortIdentifiers
+            )?;
+            ports = list_port_idents(tree, &port_list, event_iter)?;
+        }
+        PortDeclaration::Input(x) => match &x.nodes.1 {
+            InputDeclaration::Net(y) => {
+                let port_list = advance_until_enter!(
+                    common,
+                    tree,
+                    event_iter,
+                    RefNode::ListOfPortIdentifiers,
+                    &ListOfPortIdentifiers
+                )?;
+                ports = list_port_idents(tree, &port_list, event_iter)?;
+            }
+            InputDeclaration::Variable(y) => {
+                let port_list = advance_until_enter!(
+                    common,
+                    tree,
+                    event_iter,
+                    RefNode::ListOfVariableIdentifiers,
+                    &ListOfVariableIdentifiers
+                )?;
+                ports = list_variable_idents(tree, &port_list, event_iter)?;
+            }
+        },
+        PortDeclaration::Output(x) => match &x.nodes.1 {
+            OutputDeclaration::Net(y) => {
+                let port_list = advance_until_enter!(
+                    common,
+                    tree,
+                    event_iter,
+                    RefNode::ListOfPortIdentifiers,
+                    &ListOfPortIdentifiers
+                )?;
+                ports = list_port_idents(tree, &port_list, event_iter)?;
+            }
+            OutputDeclaration::Variable(y) => {
+                let port_list = advance_until_enter!(
+                    common,
+                    tree,
+                    event_iter,
+                    RefNode::ListOfVariableIdentifiers,
+                    &ListOfVariableIdentifiers
+                )?;
+                ports = list_variable_idents(tree, &port_list, event_iter)?;
+            }
+        },
+        PortDeclaration::Ref(x) => {
+            let port_list = advance_until_enter!(
+                common,
+                tree,
+                event_iter,
+                RefNode::ListOfVariableIdentifiers,
+                &ListOfVariableIdentifiers
+            )?;
+            ports = list_variable_idents(tree, &port_list, event_iter)?;
+        }
+        PortDeclaration::Interface(x) => {
+            let interface =
+                Some(get_ident(tree, RefNode::InterfaceIdentifier(&x.nodes.1.nodes.0)).0);
+            let modport = match &x.nodes.1.nodes.1 {
+                Some((_, mod_ident)) => {
+                    Some(get_ident(tree, RefNode::ModportIdentifier(mod_ident)).0)
                 }
-                $($mid(ident_node) => match $cap_args.capture {
-                    CaptureMode::Full => {
-                            let loc = unwrap_locate!(*ident_node).unwrap();
-                            $cap_args.ident =
-                                $cap_args.tree.get_str(loc).unwrap().trim_end().to_string();
-                            // eprintln!("ident:{}", $cap_args.ident);
-                            $cap_args.byte_idx = $cap_args.tree.get_origin(loc).unwrap().1;
-                            continue $loop;
-                    }
-                    _ => (),
-                },)*
-                _ => (),
-            },
-            _ => (),
-        };
-    };
+                None => None,
+            };
+            let port_list = advance_until_enter!(
+                common,
+                tree,
+                event_iter,
+                RefNode::ListOfInterfaceIdentifiers,
+                &ListOfInterfaceIdentifiers
+            )?;
+            ports = list_interface_idents(tree, &port_list, event_iter)?;
+            for port in &mut ports {
+                port.interface = interface.clone();
+                port.modport = modport.clone();
+            }
+        }
+    }
+    for port in &mut ports {
+        port.type_str = format!("{} {}", common, port.type_str);
+        port.kind = CompletionItemKind::Property;
+    }
+    Some(ports)
+}
+
+fn list_net_decl(
+    tree: &SyntaxTree,
+    node: &ListOfNetDeclAssignments,
+    event_iter: &mut EventIter,
+) -> Option<Vec<Definition>> {
+    let mut nets: Vec<Definition> = Vec::new();
+    let mut net_list = vec![&node.nodes.0.nodes.0];
+    for net_def in &node.nodes.0.nodes.1 {
+        net_list.push(&net_def.1);
+    }
+    for net_def in net_list {
+        let mut net = Definition::default();
+        let ident = get_ident(tree, RefNode::NetIdentifier(&net_def.nodes.0));
+        net.ident = ident.0;
+        net.byte_idx = ident.1;
+        for variable_dim in &net_def.nodes.1 {
+            let tokens = &mut net.type_str;
+            advance_until_leave!(tokens, tree, event_iter, RefNode::UnpackedDimension);
+        }
+        nets.push(net);
+    }
+    Some(nets)
+}
+
+fn net_dec(
+    tree: &SyntaxTree,
+    node: &NetDeclaration,
+    event_iter: &mut EventIter,
+) -> Option<Vec<Definition>> {
+    let mut nets: Vec<Definition>;
+    let mut common = String::new();
+    eprintln!("found net");
+    match node {
+        NetDeclaration::NetType(x) => {
+            let net_list = advance_until_enter!(
+                common,
+                tree,
+                event_iter,
+                RefNode::ListOfNetDeclAssignments,
+                &ListOfNetDeclAssignments
+            )?;
+            nets = list_net_decl(tree, net_list, event_iter)?;
+        }
+        NetDeclaration::NetTypeIdentifier(x) => {
+            let net_list = advance_until_enter!(
+                common,
+                tree,
+                event_iter,
+                RefNode::ListOfNetDeclAssignments,
+                &ListOfNetDeclAssignments
+            )?;
+            nets = list_net_decl(tree, net_list, event_iter)?;
+        }
+        NetDeclaration::Interconnect(x) => {
+            let mut net = Definition::default();
+            let ident = get_ident(tree, RefNode::NetIdentifier(&x.nodes.3));
+            net.ident = ident.0;
+            net.byte_idx = ident.1;
+            advance_until_enter!(
+                common,
+                tree,
+                event_iter,
+                RefNode::NetIdentifier,
+                &NetIdentifier
+            );
+            for unpacked_dim in &x.nodes.4 {
+                advance_until_leave!(common, tree, event_iter, RefNode::UnpackedDimension);
+            }
+            nets = vec![net];
+        }
+    }
+    for net in &mut nets {
+        net.type_str = format!("{} {}", common, net.type_str);
+        net.kind = CompletionItemKind::Variable;
+    }
+    Some(nets)
 }
 
 pub fn get_definitions(
     syntax_tree: &SyntaxTree,
     scope_idents: &Vec<(String, usize, usize)>,
-) -> Vec<Definition> {
-    // eprintln!("{}", syntax_tree);
+) -> Option<Vec<Definition>> {
+    eprintln!("{}", syntax_tree);
 
-    struct CaptureArgs<'a> {
-        tree: &'a SyntaxTree,
-        pre_dec: String,
-        post_dec: String,
-        capture: CaptureMode,
-        skip: bool,
-        byte_idx: usize,
-        ident: String,
-        kind: CompletionItemKind,
-        defs: Vec<Definition>,
-    }
-    impl<'a> CaptureArgs<'a> {
-        fn new(tree: &SyntaxTree) -> CaptureArgs {
-            CaptureArgs {
-                tree,
-                pre_dec: String::new(),
-                post_dec: String::new(),
-                capture: CaptureMode::No,
-                skip: false,
-                byte_idx: 0,
-                ident: "".into(),
-                kind: CompletionItemKind::Field,
-                defs: Vec::new(),
-            }
-        }
-    }
-
-    let mut capture_args = CaptureArgs::new(syntax_tree);
-
-    'outer: for event in syntax_tree.into_iter().event() {
-        //TODO: handle interface port
-        dec_list!(
-            'outer,
-            capture_args,
-            event,
-            RefNode::PortDeclaration,
-            (RefNode::PortDeclaration),
-            (RefNode::PortIdentifier, RefNode::VariableIdentifier),
-             CompletionItemKind::Property
-        );
-        dec_list!(
-            'outer,
-            capture_args,
-            event,
-            RefNode::DataDeclarationVariable,
-            (RefNode::DataDeclarationVariable),
-            (RefNode::VariableIdentifier),
-            CompletionItemKind::Variable
-        );
-        dec_list!(
-            'outer,
-            capture_args,
-            event,
-            RefNode::NetDeclaration,
-            (RefNode::NetDeclaration),
-            (RefNode::NetIdentifier),
-            CompletionItemKind::Variable
-        );
-        dec_full!(
-            'outer,
-            capture_args,
-            event,
-            RefNode::FunctionDeclaration,
-            (RefNode::FunctionIdentifier),
-            CompletionItemKind::Function
-        );
-        dec_full!(
-            'outer,
-            capture_args,
-            event,
-            RefNode::TaskDeclaration,
-            (RefNode::TaskIdentifier),
-            CompletionItemKind::Function
-        );
+    let mut definitions = Vec::new();
+    let mut event_iter = syntax_tree.into_iter().event();
+    while let Some(event) = event_iter.next() {
         match event {
             NodeEvent::Enter(node) => match node {
-                RefNode::Locate(loc) => {
-                    // eprintln!("capture: {:?}", capture_args.capture);
-                    if !capture_args.skip {
-                        let token = capture_args.tree.get_str(loc).unwrap().trim_end();
-                        match capture_args.capture {
-                            CaptureMode::Pre => {
-                                if token.chars().count() > 1 {
-                                    if capture_args.pre_dec.len() > 0
-                                        && capture_args.pre_dec.chars().last().unwrap() != ' '
-                                    {
-                                        capture_args.pre_dec.push(' ');
-                                    }
-                                    capture_args.pre_dec.push_str(token);
-                                    capture_args.pre_dec.push(' ');
-                                } else {
-                                    capture_args.pre_dec.push_str(token);
-                                }
-                            }
-                            CaptureMode::Post => {
-                                if token.chars().count() > 1
-                                    && capture_args.post_dec.len() > 0
-                                    && capture_args.post_dec.chars().last().unwrap() != ' '
-                                {
-                                    capture_args.post_dec.push(' ');
-                                }
-                                capture_args.post_dec.push_str(token);
-                            }
-                            CaptureMode::Full => {
-                                if token == ";" {
-                                    let full_def = Definition {
-                                        ident: capture_args.ident.clone(),
-                                        byte_idx: capture_args.byte_idx,
-                                        type_str: clean_type_str(
-                                            capture_args.pre_dec.clone(),
-                                            &capture_args.ident,
-                                        ),
-                                        kind: capture_args.kind,
-                                    };
-                                    // eprintln!("endfull: {:?}", full_def);
-                                    capture_args.defs.push(full_def);
-                                    capture_args.capture = CaptureMode::No;
-                                    capture_args.ident.clear();
-                                    capture_args.pre_dec.clear();
-                                    capture_args.post_dec.clear();
-                                } else {
-                                    if token.chars().count() > 1 {
-                                        if capture_args.pre_dec.len() > 0
-                                            && capture_args.pre_dec.chars().last().unwrap() != ' '
-                                        {
-                                            capture_args.pre_dec.push(' ');
-                                        }
-                                        capture_args.pre_dec.push_str(token);
-                                        capture_args.pre_dec.push(' ');
-                                    } else {
-                                        capture_args.pre_dec.push_str(token);
-                                    }
-                                }
-                            }
-                            CaptureMode::No => (),
-                        }
+                RefNode::AnsiPortDeclaration(n) => {
+                    let port = port_dec_ansi(syntax_tree, n, &mut event_iter);
+                    if port.is_some() {
+                        definitions.push(port?);
                     }
-                    capture_args.skip = false;
+                }
+                RefNode::PortDeclaration(n) => {
+                    let port = port_dec_non_ansi(syntax_tree, n, &mut event_iter);
+                    if port.is_some() {
+                        definitions.append(&mut port?);
+                    }
+                }
+                RefNode::NetDeclaration(n) => {
+                    let nets = net_dec(syntax_tree, n, &mut event_iter);
+                    if nets.is_some() {
+                        definitions.append(&mut nets?);
+                    }
                 }
                 _ => (),
             },
-            _ => (),
+            NodeEvent::Leave(_) => (),
         }
     }
-    capture_args.defs
+    for def in &mut definitions {
+        def.type_str = clean_type_str(&def.type_str, &def.ident);
+    }
+    Some(definitions)
 }
 
 fn get_hover(doc: &Rope, line: usize) -> String {
@@ -423,17 +611,19 @@ mod tests {
         )
         .unwrap();
         let scope_idents = get_scope_idents(&syntax_tree);
-        let defs = get_definitions(&syntax_tree, &scope_idents);
+        let defs = get_definitions(&syntax_tree, &scope_idents).unwrap();
         for def in &defs {
             println!("{:?} {:?}", def, doc.byte_to_pos(def.byte_idx));
         }
+        /*
         let token = get_definition_token(doc.line(3), Position::new(3, 13));
         for def in defs {
             if token == def.ident {
                 assert_eq!(doc.byte_to_pos(def.byte_idx), Position::new(3, 9))
             }
         }
-        // assert!(false);
+        */
+        assert!(false);
     }
 
     #[test]

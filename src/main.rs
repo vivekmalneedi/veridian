@@ -3,6 +3,7 @@
 #![allow(unused_variables)]
 
 use log::info;
+use std::sync::Arc;
 use tower_lsp::{LspService, Server};
 
 mod completion;
@@ -20,7 +21,7 @@ async fn main() {
     let stdin = tokio::io::stdin();
     let stdout = tokio::io::stdout();
 
-    let (service, messages) = LspService::new(|client| Backend::new(client));
+    let (service, messages) = LspService::new(|client| Arc::new(Backend::new(client)));
     Server::new(stdin, stdout)
         .interleave(messages)
         .serve(service)
