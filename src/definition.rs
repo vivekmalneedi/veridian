@@ -188,6 +188,25 @@ macro_rules! advance_until_enter {
     }};
 }
 
+macro_rules! skip_until_enter {
+    ($tree:ident, $event_iter:ident, $node:path, $type:ty) => {{
+        let mut result: Option<$type> = None;
+        while let Some(event) = $event_iter.next() {
+            match event {
+                NodeEvent::Enter(x) => match x {
+                    $node(node) => {
+                        result = Some(node);
+                        break;
+                    }
+                    _ => (),
+                },
+                NodeEvent::Leave(_) => (),
+            }
+        }
+        result
+    }};
+}
+
 fn port_dec_ansi(
     tree: &SyntaxTree,
     node: &AnsiPortDeclaration,
@@ -673,6 +692,144 @@ fn data_dec(
     Some(data)
 }
 
+fn tfport_list(
+    tree: &SyntaxTree,
+    node: &TfPortList,
+    event_iter: &mut EventIter,
+) -> Option<Vec<Definition>> {
+    let mut tfportss: Vec<Definition> = Vec::new();
+    let mut tfports_list = vec![&node.nodes.0.nodes.0];
+    for tfports_def in &node.nodes.0.nodes.1 {
+        tfports_list.push(&tfports_def.1);
+    }
+    for tfports_def in tfports_list {
+        match &tfports_def.nodes.4 {
+            Some(def) => {
+                let mut tfports = Definition::default();
+                let ident = get_ident(tree, RefNode::PortIdentifier(&def.0));
+                tfports.ident = ident.0;
+                tfports.byte_idx = ident.1;
+                tfports.kind = CompletionItemKind::Property;
+                for variable_dim in &def.1 {
+                    let tokens = &mut tfports.type_str;
+                    advance_until_leave!(tokens, tree, event_iter, RefNode::UnpackedDimension);
+                }
+                tfportss.push(tfports);
+            }
+            None => (),
+        }
+    }
+    Some(tfportss)
+}
+
+fn function_dec(
+    tree: &SyntaxTree,
+    node: &FunctionDeclaration,
+    event_iter: &mut EventIter,
+) -> Option<Vec<Definition>> {
+    let mut defs: Vec<Definition>;
+    eprintln!("found func");
+    match &node.nodes.2 {
+        FunctionBodyDeclaration::WithoutPort(x) => {
+            let mut func = Definition::default();
+            let ident = get_ident(tree, RefNode::FunctionIdentifier(&x.nodes.2));
+            func.ident = ident.0;
+            func.byte_idx = ident.1;
+            let mut tokens = String::new();
+            advance_until_enter!(
+                tokens,
+                tree,
+                event_iter,
+                RefNode::FunctionIdentifier,
+                &FunctionIdentifier
+            );
+            func.type_str = tokens;
+            func.kind = CompletionItemKind::Function;
+            defs = vec![func];
+        }
+        FunctionBodyDeclaration::WithPort(x) => {
+            let mut func = Definition::default();
+            let ident = get_ident(tree, RefNode::FunctionIdentifier(&x.nodes.2));
+            func.ident = ident.0;
+            func.byte_idx = ident.1;
+            let mut tokens = String::new();
+            advance_until_enter!(
+                tokens,
+                tree,
+                event_iter,
+                RefNode::FunctionIdentifier,
+                &FunctionIdentifier
+            );
+            func.type_str = tokens;
+            func.kind = CompletionItemKind::Function;
+            defs = vec![func];
+            match &x.nodes.3.nodes.1 {
+                Some(tfports) => {
+                    skip_until_enter!(tree, event_iter, RefNode::TfPortList, &TfPortList);
+                    let mut ports = tfport_list(tree, tfports, event_iter)?;
+                    defs.append(&mut ports);
+                }
+                None => (),
+            }
+        }
+    }
+    Some(defs)
+}
+
+fn task_dec(
+    tree: &SyntaxTree,
+    node: &TaskDeclaration,
+    event_iter: &mut EventIter,
+) -> Option<Vec<Definition>> {
+    let mut defs: Vec<Definition>;
+    eprintln!("found task");
+    match &node.nodes.2 {
+        TaskBodyDeclaration::WithoutPort(x) => {
+            let mut task = Definition::default();
+            let ident = get_ident(tree, RefNode::TaskIdentifier(&x.nodes.1));
+            task.ident = ident.0;
+            task.byte_idx = ident.1;
+            let mut tokens = String::new();
+            advance_until_enter!(
+                tokens,
+                tree,
+                event_iter,
+                RefNode::TaskIdentifier,
+                &TaskIdentifier
+            );
+            task.type_str = tokens;
+            task.kind = CompletionItemKind::Function;
+            defs = vec![task];
+        }
+        TaskBodyDeclaration::WithPort(x) => {
+            let mut task = Definition::default();
+            let ident = get_ident(tree, RefNode::TaskIdentifier(&x.nodes.1));
+            task.ident = ident.0;
+            task.byte_idx = ident.1;
+            let mut tokens = String::new();
+            advance_until_enter!(
+                tokens,
+                tree,
+                event_iter,
+                RefNode::TaskIdentifier,
+                &TaskIdentifier
+            );
+            task.type_str = tokens;
+            task.kind = CompletionItemKind::Function;
+            defs = vec![task];
+            match &x.nodes.2.nodes.1 {
+                Some(tfports) => {
+                    skip_until_enter!(tree, event_iter, RefNode::TfPortList, &TfPortList);
+                    let mut ports = tfport_list(tree, tfports, event_iter)?;
+                    defs.append(&mut ports);
+                }
+                None => (),
+            }
+        }
+    }
+    Some(defs)
+}
+
 pub fn get_definitions(
     syntax_tree: &SyntaxTree,
     scope_idents: &Vec<(String, usize, usize)>,
@@ -706,6 +863,18 @@ pub fn get_definitions(
                     let vars = data_dec(syntax_tree, n, &mut event_iter);
                     if vars.is_some() {
                         definitions.append(&mut vars?);
+                    }
+                }
+                RefNode::FunctionDeclaration(n) => {
+                    let decs = function_dec(syntax_tree, n, &mut event_iter);
+                    if decs.is_some() {
+                        definitions.append(&mut decs?);
+                    }
+                }
+                RefNode::TaskDeclaration(n) => {
+                    let decs = task_dec(syntax_tree, n, &mut event_iter);
+                    if decs.is_some() {
+                        definitions.append(&mut decs?);
                     }
                 }
                 _ => (),
