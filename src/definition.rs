@@ -697,7 +697,7 @@ fn tfport_list(
     node: &TfPortList,
     event_iter: &mut EventIter,
 ) -> Option<Vec<Definition>> {
-    let mut tfportss: Vec<Definition> = Vec::new();
+    let mut tfports: Vec<Definition> = Vec::new();
     let mut tfports_list = vec![&node.nodes.0.nodes.0];
     for tfports_def in &node.nodes.0.nodes.1 {
         tfports_list.push(&tfports_def.1);
@@ -705,21 +705,21 @@ fn tfport_list(
     for tfports_def in tfports_list {
         match &tfports_def.nodes.4 {
             Some(def) => {
-                let mut tfports = Definition::default();
+                let mut tfport = Definition::default();
                 let ident = get_ident(tree, RefNode::PortIdentifier(&def.0));
-                tfports.ident = ident.0;
-                tfports.byte_idx = ident.1;
-                tfports.kind = CompletionItemKind::Property;
+                tfport.ident = ident.0;
+                tfport.byte_idx = ident.1;
+                tfport.kind = CompletionItemKind::Property;
                 for variable_dim in &def.1 {
-                    let tokens = &mut tfports.type_str;
+                    let tokens = &mut tfport.type_str;
                     advance_until_leave!(tokens, tree, event_iter, RefNode::UnpackedDimension);
                 }
-                tfportss.push(tfports);
+                tfports.push(tfport);
             }
             None => (),
         }
     }
-    Some(tfportss)
+    Some(tfports)
 }
 
 fn function_dec(
@@ -830,6 +830,194 @@ fn task_dec(
     Some(defs)
 }
 
+fn modport_dec(
+    tree: &SyntaxTree,
+    node: &ModportDeclaration,
+    event_iter: &mut EventIter,
+) -> Option<Vec<Definition>> {
+    let mut modports: Vec<Definition> = Vec::new();
+    let mut common = String::new();
+    eprintln!("found modport");
+    advance_until_enter!(common, tree, event_iter, RefNode::ModportItem, &ModportItem);
+    let mut modports_list = vec![&node.nodes.1.nodes.0];
+    for modports_def in &node.nodes.1.nodes.1 {
+        modports_list.push(&modports_def.1);
+    }
+    for modport_def in modports_list {
+        let mut modport = Definition::default();
+        let ident = get_ident(tree, RefNode::ModportIdentifier(&modport_def.nodes.0));
+        modport.ident = ident.0;
+        modport.byte_idx = ident.1;
+        modport.type_str = common.clone();
+        modport.kind = CompletionItemKind::Interface;
+
+        let mut mp_port_decs = vec![&modport_def.nodes.1.nodes.1.nodes.0];
+        for mp_port_def in &modport_def.nodes.1.nodes.1.nodes.1 {
+            mp_port_decs.push(&mp_port_def.1);
+        }
+        for mp_port_dec in mp_port_decs {
+            match mp_port_dec {
+                ModportPortsDeclaraton::Simple(x) => {
+                    skip_until_enter!(
+                        tree,
+                        event_iter,
+                        RefNode::ModportPortsDeclaratonSimple,
+                        &ModportPortsDeclaratonSimple
+                    );
+                    let mut prepend = String::new();
+                    advance_until_enter!(
+                        prepend,
+                        tree,
+                        event_iter,
+                        RefNode::ModportSimplePort,
+                        &ModportSimplePort
+                    );
+                    let mut mp_simple_port_decs = vec![&x.nodes.1.nodes.1.nodes.0];
+                    for mp_simple_dec in &x.nodes.1.nodes.1.nodes.1 {
+                        mp_simple_port_decs.push(&mp_simple_dec.1);
+                    }
+                    for mp_simple_def in mp_simple_port_decs {
+                        match mp_simple_def {
+                            ModportSimplePort::Ordered(y) => {
+                                let mut port = Definition::default();
+                                let ident = get_ident(tree, RefNode::PortIdentifier(&y.nodes.0));
+                                port.ident = ident.0;
+                                port.byte_idx = ident.1;
+                                port.kind = CompletionItemKind::Property;
+                                port.type_str = prepend.clone();
+                                modports.push(port);
+                            }
+                            ModportSimplePort::Named(y) => {
+                                let port_ident = skip_until_enter!(
+                                    tree,
+                                    event_iter,
+                                    RefNode::PortIdentifier,
+                                    &PortIdentifier
+                                )?;
+                                let mut port = Definition::default();
+                                let ident = get_ident(tree, RefNode::PortIdentifier(port_ident));
+                                port.ident = ident.0;
+                                port.byte_idx = ident.1;
+                                port.kind = CompletionItemKind::Property;
+                                let mut append = String::new();
+                                advance_until_leave!(
+                                    append,
+                                    tree,
+                                    event_iter,
+                                    RefNode::ModportSimplePortNamed
+                                );
+                                port.type_str = format!("{} {}", prepend, append);
+                                modports.push(port);
+                            }
+                        }
+                    }
+                }
+                ModportPortsDeclaraton::Tf(x) => {
+                    skip_until_enter!(
+                        tree,
+                        event_iter,
+                        RefNode::ModportPortsDeclaratonTf,
+                        &ModportPortsDeclaratonTf
+                    );
+                    let mut prepend = String::new();
+                    let mp_tf_ports_dec = advance_until_enter!(
+                        prepend,
+                        tree,
+                        event_iter,
+                        RefNode::ModportTfPortsDeclaration,
+                        &ModportTfPortsDeclaration
+                    )?;
+                    let mut mp_tf_ports = vec![&mp_tf_ports_dec.nodes.1.nodes.0];
+                    for mp_tf_port_dec in &mp_tf_ports_dec.nodes.1.nodes.1 {
+                        mp_tf_ports.push(&mp_tf_port_dec.1);
+                    }
+                    for mp_tf_port in mp_tf_ports {
+                        match mp_tf_port {
+                            ModportTfPort::MethodPrototype(y) => match &**y {
+                                MethodPrototype::TaskPrototype(z) => {
+                                    let mut port = Definition::default();
+                                    let ident =
+                                        get_ident(tree, RefNode::TaskIdentifier(&z.nodes.1));
+                                    port.ident = ident.0;
+                                    port.byte_idx = ident.1;
+                                    skip_until_enter!(
+                                        tree,
+                                        event_iter,
+                                        RefNode::TaskPrototype,
+                                        &TaskPrototype
+                                    );
+                                    let tokens = &mut port.type_str;
+                                    advance_until_leave!(
+                                        tokens,
+                                        tree,
+                                        event_iter,
+                                        RefNode::TaskPrototype
+                                    );
+                                    modports.push(port);
+                                }
+                                MethodPrototype::FunctionPrototype(z) => {
+                                    let mut port = Definition::default();
+                                    let ident =
+                                        get_ident(tree, RefNode::FunctionIdentifier(&z.nodes.2));
+                                    port.ident = ident.0;
+                                    port.byte_idx = ident.1;
+                                    skip_until_enter!(
+                                        tree,
+                                        event_iter,
+                                        RefNode::FunctionPrototype,
+                                        &FunctionPrototype
+                                    );
+                                    let tokens = &mut port.type_str;
+                                    advance_until_leave!(
+                                        tokens,
+                                        tree,
+                                        event_iter,
+                                        RefNode::FunctionIdentifier
+                                    );
+                                    modports.push(port);
+                                }
+                            },
+                            ModportTfPort::TfIdentifier(y) => {
+                                let mut port = Definition::default();
+                                let ident = get_ident(tree, RefNode::TfIdentifier(&y));
+                                port.ident = ident.0;
+                                port.byte_idx = ident.1;
+                                port.type_str = prepend.clone();
+                                modports.push(port);
+                            }
+                        }
+                    }
+                }
+                ModportPortsDeclaraton::Clocking(x) => {
+                    skip_until_enter!(
+                        tree,
+                        event_iter,
+                        RefNode::ModportPortsDeclaratonClocking,
+                        &ModportPortsDeclaratonClocking
+                    );
+                    let mut tokens = String::new();
+                    let clock_ident = advance_until_enter!(
+                        tokens,
+                        tree,
+                        event_iter,
+                        RefNode::ClockingIdentifier,
+                        &ClockingIdentifier
+                    )?;
+                    let ident = get_ident(tree, RefNode::ClockingIdentifier(clock_ident));
+                    let mut port = Definition::default();
+                    port.ident = ident.0;
+                    port.byte_idx = ident.1;
+                    port.type_str = tokens;
+                    modports.push(port);
+                }
+            }
+        }
+
+        modports.push(modport);
+    }
+    Some(modports)
+}
+
 pub fn get_definitions(
     syntax_tree: &SyntaxTree,
     scope_idents: &Vec<(String, usize, usize)>,
@@ -873,6 +1061,12 @@ pub fn get_definitions(
                 }
                 RefNode::TaskDeclaration(n) => {
                     let decs = task_dec(syntax_tree, n, &mut event_iter);
+                    if decs.is_some() {
+                        definitions.append(&mut decs?);
+                    }
+                }
+                RefNode::ModportDeclaration(n) => {
+                    let decs = modport_dec(syntax_tree, n, &mut event_iter);
                     if decs.is_some() {
                         definitions.append(&mut decs?);
                     }
