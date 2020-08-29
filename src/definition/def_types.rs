@@ -35,6 +35,7 @@ pub enum DefinitionType {
     Modport,
     Subroutine,
     ModuleInstantiation,
+    GenericScope,
 }
 
 #[derive(Debug)]
@@ -335,6 +336,7 @@ pub struct ModInst {
     pub type_str: String,
     pub kind: CompletionItemKind,
     def_type: DefinitionType,
+    pub mod_ident: String,
 }
 
 impl Default for ModInst {
@@ -345,11 +347,70 @@ impl Default for ModInst {
             type_str: String::new(),
             kind: CompletionItemKind::Variable,
             def_type: DefinitionType::ModuleInstantiation,
+            mod_ident: String::new(),
         }
     }
 }
 
 impl Definition for ModInst {
+    fn ident(&self) -> String {
+        self.ident.clone()
+    }
+    fn byte_idx(&self) -> usize {
+        self.byte_idx
+    }
+    fn type_str(&self) -> String {
+        self.type_str.clone()
+    }
+    fn kind(&self) -> CompletionItemKind {
+        self.kind.clone()
+    }
+    fn def_type(&self) -> &DefinitionType {
+        &self.def_type
+    }
+    fn starts_with(&self, token: &str) -> bool {
+        self.ident.starts_with(token)
+    }
+    fn completion(&self) -> CompletionItem {
+        CompletionItem {
+            label: self.ident.clone(),
+            detail: Some(clean_type_str(&self.type_str, &self.ident)),
+            kind: Some(self.kind.clone()),
+            ..CompletionItem::default()
+        }
+    }
+    fn dot_completion(&self, scope_tree: &Scope) -> Option<Vec<CompletionItem>> {
+        for scope in &scope_tree.scopes {
+            if &scope.name == &self.mod_ident {
+                return Some(scope.defs.iter().map(|x| x.completion()).collect());
+            }
+        }
+        None
+    }
+}
+
+#[derive(Debug)]
+pub struct GenericScope {
+    pub ident: String,
+    pub byte_idx: usize,
+    pub type_str: String,
+    pub kind: CompletionItemKind,
+    def_type: DefinitionType,
+}
+
+impl Default for GenericScope {
+    fn default() -> Self {
+        Self {
+            ident: String::new(),
+            byte_idx: 0,
+            type_str: String::new(),
+            kind: CompletionItemKind::Module,
+            def_type: DefinitionType::GenericScope,
+        }
+    }
+}
+
+impl Definition for GenericScope {
     fn ident(&self) -> String {
         self.ident.clone()
     }

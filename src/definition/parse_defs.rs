@@ -912,6 +912,7 @@ pub fn module_inst(
         instance.ident = ident.0;
         instance.byte_idx = ident.1;
         instance.type_str = mod_ident.clone();
+        instance.mod_ident = mod_ident.clone();
         let type_str = &mut instance.type_str;
         for unpacked_dim in &hinst.nodes.0.nodes.1 {
             advance_until_leave!(type_str, tree, event_iter, RefNode::UnpackedDimension);

@@ -205,10 +205,10 @@ pub fn get_scopes(syntax_tree: &SyntaxTree, file_len: usize) -> Scope {
     for def in defs {
         global_scope.insert_def(def);
     }
+    global_scope.lift_nested_scope_defs();
     for ident in identifiers {
         global_scope.insert_ident(ident);
     }
-    global_scope.lift_nested_scope_defs();
     global_scope
 }
 

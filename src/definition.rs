@@ -6,7 +6,7 @@ use std::sync::Arc;
 use sv_parser::*;
 use tower_lsp::lsp_types::*;
 
-mod def_types;
+pub mod def_types;
 pub use def_types::*;
 
 mod parse_defs;

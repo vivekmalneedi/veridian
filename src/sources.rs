@@ -1,4 +1,5 @@
 use crate::completion::get_scopes;
+use crate::definition::def_types::*;
 use crate::definition::Definition;
 use crate::diagnostics::get_diagnostics;
 use crate::server::LSPServer;
@@ -106,6 +107,11 @@ impl Scope {
                 return;
             }
         }
+        for def in &self.defs {
+            if def.starts_with(&ident.0) {
+                return;
+            }
+        }
         self.idents.insert(ident.0.to_string());
     }
     pub fn insert_def(&mut self, def: Arc<dyn Definition>) {
@@ -126,8 +132,13 @@ impl Scope {
                     continue 'outer;
                 }
             }
-            self.idents.insert(scope.name.clone());
         }
+
+        //TODO: properly handle scope definitions
+        let mut def = GenericScope::default();
+        def.ident = self.name.clone();
+        def.byte_idx = self.start;
+        self.defs.push(Arc::new(def));
     }
     #[cfg(test)]
     pub fn contains_scope(&self, scope_ident: &str) -> bool {
@@ -149,8 +160,9 @@ impl Scope {
                 break;
             }
         }
+        let completion_idents: Vec<String> = completions.iter().map(|x| x.label.clone()).collect();
         for def in &self.defs {
-            if def.starts_with(token) {
+            if !completion_idents.contains(&def.ident()) && def.starts_with(token) {
                 completions.push(def.completion());
             }
         }
