@@ -21,11 +21,26 @@ impl LSPServer {
         // eprintln!("comp read: {}", now.elapsed().as_millis());
         let token = get_completion_token(file.text.line(doc.position.line as usize), doc.position);
         eprintln!("token: {}", token);
-        let response = CompletionResponse::List(
-            file.get_completions(&token, file.text.pos_to_byte(&doc.position))?,
-        );
+        let response = match params.context {
+            Some(context) => match context.trigger_kind {
+                CompletionTriggerKind::TriggerCharacter => {
+                    match context.trigger_character?.as_str() {
+                        "." => Some(file.get_dot_completions(
+                            token.trim_end_matches("."),
+                            file.text.pos_to_byte(&doc.position),
+                        )?),
+                        _ => None,
+                    }
+                }
+                CompletionTriggerKind::TriggerForIncompleteCompletions => None,
+                CompletionTriggerKind::Invoked => {
+                    Some(file.get_completions(&token, file.text.pos_to_byte(&doc.position))?)
+                }
+            },
+            None => Some(file.get_completions(&token, file.text.pos_to_byte(&doc.position))?),
+        };
         // eprintln!("comp response: {}", now.elapsed().as_millis());
-        Some(response)
+        Some(CompletionResponse::List(response?))
     }
 }
 

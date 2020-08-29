@@ -75,7 +75,7 @@ pub struct Scope {
     pub start: usize,
     pub end: usize,
     pub idents: HashSet<String>,
-    pub defs: Vec<Definition>,
+    pub defs: Vec<Arc<dyn Definition>>,
     pub scopes: Vec<Scope>,
 }
 
@@ -108,9 +108,9 @@ impl Scope {
         }
         self.idents.insert(ident.0.to_string());
     }
-    pub fn insert_def(&mut self, def: Definition) {
+    pub fn insert_def(&mut self, def: Arc<dyn Definition>) {
         for scope in &mut self.scopes {
-            if scope.start <= def.byte_idx && def.byte_idx <= scope.end {
+            if scope.start <= def.byte_idx() && def.byte_idx() <= scope.end {
                 scope.insert_def(def);
                 return;
             }
@@ -121,7 +121,7 @@ impl Scope {
         'outer: for scope in &mut self.scopes {
             scope.lift_nested_scope_defs();
             for def in &scope.defs {
-                if def.ident == scope.name.clone() {
+                if def.ident() == scope.name.clone() {
                     self.defs.push(def.clone());
                     continue 'outer;
                 }
@@ -150,13 +150,8 @@ impl Scope {
             }
         }
         for def in &self.defs {
-            if def.ident.starts_with(token) {
-                completions.push(CompletionItem {
-                    label: def.ident.to_string(),
-                    kind: Some(def.kind.clone()),
-                    detail: Some(def.type_str.to_string()),
-                    ..CompletionItem::default()
-                });
+            if def.starts_with(token) {
+                completions.push(def.completion());
             }
         }
         let completion_idents: Vec<String> = completions.iter().map(|x| x.label.clone()).collect();
@@ -170,8 +165,28 @@ impl Scope {
         }
         completions
     }
-    pub fn get_definition(&self, token: &str, byte_idx: usize) -> Option<&Definition> {
-        let mut definition: Option<&Definition> = None;
+    pub fn dot_completion(
+        &self,
+        token: &str,
+        byte_idx: usize,
+        scope_tree: &Scope,
+    ) -> Option<Vec<CompletionItem>> {
+        for scope in &self.scopes {
+            if scope.start <= byte_idx && byte_idx <= scope.end {
+                eprintln!("found scope: {}", scope.name);
+                return scope.dot_completion(token, byte_idx, scope_tree);
+            }
+        }
+        for def in &self.defs {
+            if def.starts_with(token) {
+                eprintln!("found def: {}", def.ident());
+                return def.dot_completion(scope_tree);
+            }
+        }
+        None
+    }
+    pub fn get_definition(&self, token: &str, byte_idx: usize) -> Option<&dyn Definition> {
+        let mut definition: Option<&dyn Definition> = None;
         for scope in &self.scopes {
             if scope.start <= byte_idx && byte_idx <= scope.end {
                 definition = scope.get_definition(token, byte_idx);
@@ -180,8 +195,8 @@ impl Scope {
         }
         if definition.is_none() {
             for def in &self.defs {
-                if def.ident == token {
-                    return Some(&def);
+                if def.ident() == token {
+                    return Some(&**def);
                 }
             }
         }
@@ -207,7 +222,17 @@ impl Source {
         })
     }
 
-    pub fn get_dot_completions(&self, token: &String, byte_idx: usize) {}
+    pub fn get_dot_completions(&self, token: &str, byte_idx: usize) -> Option<CompletionList> {
+        eprintln!("get dot completions");
+        Some(CompletionList {
+            is_incomplete: false,
+            items: self.scope_tree.as_ref()?.dot_completion(
+                token,
+                byte_idx,
+                self.scope_tree.as_ref()?,
+            )?,
+        })
+    }
 }
 
 pub struct SourceMeta {

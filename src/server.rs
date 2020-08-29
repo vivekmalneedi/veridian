@@ -50,7 +50,7 @@ impl LanguageServer for Backend {
                 )),
                 completion_provider: Some(CompletionOptions {
                     resolve_provider: Some(false),
-                    trigger_characters: None,
+                    trigger_characters: Some(vec![".".to_string()]),
                     work_done_progress_options: WorkDoneProgressOptions {
                         work_done_progress: None,
                     },

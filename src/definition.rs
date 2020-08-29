@@ -2,8 +2,12 @@ use crate::server::LSPServer;
 use crate::sources::LSPSupport;
 use ropey::{Rope, RopeSlice};
 use std::fmt::Display;
+use std::sync::Arc;
 use sv_parser::*;
 use tower_lsp::lsp_types::*;
+
+mod def_types;
+pub use def_types::*;
 
 impl LSPServer {
     pub fn goto_definition(&self, params: GotoDefinitionParams) -> Option<GotoDefinitionResponse> {
@@ -17,7 +21,7 @@ impl LSPServer {
             .scope_tree
             .as_ref()?
             .get_definition(&token, file.text.pos_to_byte(&pos))?;
-        let def_pos = file.text.byte_to_pos(def.byte_idx);
+        let def_pos = file.text.byte_to_pos(def.byte_idx());
         Some(GotoDefinitionResponse::Scalar(Location::new(
             doc,
             Range::new(def_pos, def_pos),
@@ -35,7 +39,7 @@ impl LSPServer {
             .scope_tree
             .as_ref()?
             .get_definition(&token, file.text.pos_to_byte(&pos))?;
-        let def_line = file.text.byte_to_line(def.byte_idx);
+        let def_line = file.text.byte_to_line(def.byte_idx());
         Some(Hover {
             contents: HoverContents::Scalar(MarkedString::LanguageString(LanguageString {
                 language: "systemverilog".to_owned(),
@@ -69,71 +73,6 @@ fn get_definition_token(line: RopeSlice, pos: Position) -> String {
     }
     token
 }
-
-/*
-pub trait Definition: Sync + Send {
-    fn get_ident(&self) -> &str;
-    fn get_byte_idx(&self) -> usize;
-    fn get_type_str(&self) -> &str;
-    fn get_kind(&self) -> &CompletionItemKind;
-}
-*/
-
-fn clean_type_str(type_str: &str, ident: &str) -> String {
-    let endings: &[_] = &[';', ','];
-    let eq_offset = type_str.find('=').unwrap_or(type_str.len());
-    let mut result = type_str.to_string();
-    result.replace_range(eq_offset.., "");
-    result
-        .trim_start()
-        .trim_end()
-        .trim_end_matches(endings)
-        .trim_end_matches(ident)
-        .trim_end()
-        .to_string()
-}
-
-#[derive(Debug, Clone)]
-pub struct Definition {
-    pub ident: String,
-    pub byte_idx: usize,
-    pub type_str: String,
-    pub kind: CompletionItemKind,
-    interface: Option<String>,
-    modport: Option<String>,
-    import_ident: Option<String>,
-}
-
-impl std::default::Default for Definition {
-    fn default() -> Self {
-        Definition {
-            ident: String::new(),
-            byte_idx: 0,
-            type_str: String::new(),
-            kind: CompletionItemKind::Variable,
-            interface: None,
-            modport: None,
-            import_ident: None,
-        }
-    }
-}
-
-/*
-impl Definition for Port {
-    fn get_ident(&self) -> &str {
-        &self.ident
-    }
-    fn get_byte_idx(&self) -> usize {
-        self.byte_idx
-    }
-    fn get_type_str(&self) -> &str {
-        &self.type_str
-    }
-    fn get_kind(&self) -> &CompletionItemKind {
-        &self.kind
-    }
-}
-*/
 
 fn get_ident(tree: &SyntaxTree, node: RefNode) -> (String, usize) {
     let loc = unwrap_locate!(node).unwrap();
@@ -211,8 +150,8 @@ fn port_dec_ansi(
     tree: &SyntaxTree,
     node: &AnsiPortDeclaration,
     event_iter: &mut EventIter,
-) -> Option<Definition> {
-    let mut port = Definition::default();
+) -> Option<PortDec> {
+    let mut port = PortDec::default();
     let mut tokens = String::new();
     match node {
         AnsiPortDeclaration::Net(x) => {
@@ -266,14 +205,14 @@ fn list_port_idents(
     tree: &SyntaxTree,
     node: &ListOfPortIdentifiers,
     event_iter: &mut EventIter,
-) -> Option<Vec<Definition>> {
-    let mut ports: Vec<Definition> = Vec::new();
+) -> Option<Vec<PortDec>> {
+    let mut ports: Vec<PortDec> = Vec::new();
     let mut port_list = vec![&node.nodes.0.nodes.0];
     for port_def in &node.nodes.0.nodes.1 {
         port_list.push(&port_def.1);
     }
     for port_def in port_list {
-        let mut port = Definition::default();
+        let mut port = PortDec::default();
         let ident = get_ident(tree, RefNode::PortIdentifier(&port_def.0));
         port.ident = ident.0;
         port.byte_idx = ident.1;
@@ -290,14 +229,14 @@ fn list_interface_idents(
     tree: &SyntaxTree,
     node: &ListOfInterfaceIdentifiers,
     event_iter: &mut EventIter,
-) -> Option<Vec<Definition>> {
-    let mut ports: Vec<Definition> = Vec::new();
+) -> Option<Vec<PortDec>> {
+    let mut ports: Vec<PortDec> = Vec::new();
     let mut port_list = vec![&node.nodes.0.nodes.0];
     for port_def in &node.nodes.0.nodes.1 {
         port_list.push(&port_def.1);
     }
     for port_def in port_list {
-        let mut port = Definition::default();
+        let mut port = PortDec::default();
         let ident = get_ident(tree, RefNode::InterfaceIdentifier(&port_def.0));
         port.ident = ident.0;
         port.byte_idx = ident.1;
@@ -314,14 +253,14 @@ fn list_variable_idents(
     tree: &SyntaxTree,
     node: &ListOfVariableIdentifiers,
     event_iter: &mut EventIter,
-) -> Option<Vec<Definition>> {
-    let mut ports: Vec<Definition> = Vec::new();
+) -> Option<Vec<PortDec>> {
+    let mut ports: Vec<PortDec> = Vec::new();
     let mut port_list = vec![&node.nodes.0.nodes.0];
     for port_def in &node.nodes.0.nodes.1 {
         port_list.push(&port_def.1);
     }
     for port_def in port_list {
-        let mut port = Definition::default();
+        let mut port = PortDec::default();
         let ident = get_ident(tree, RefNode::VariableIdentifier(&port_def.0));
         port.ident = ident.0;
         port.byte_idx = ident.1;
@@ -338,8 +277,8 @@ fn port_dec_non_ansi(
     tree: &SyntaxTree,
     node: &PortDeclaration,
     event_iter: &mut EventIter,
-) -> Option<Vec<Definition>> {
-    let mut ports: Vec<Definition>;
+) -> Option<Vec<PortDec>> {
+    let mut ports: Vec<PortDec>;
     let mut common = String::new();
     eprintln!("found non-ansi ports");
     match node {
@@ -441,14 +380,14 @@ fn list_net_decl(
     tree: &SyntaxTree,
     node: &ListOfNetDeclAssignments,
     event_iter: &mut EventIter,
-) -> Option<Vec<Definition>> {
-    let mut nets: Vec<Definition> = Vec::new();
+) -> Option<Vec<NetDec>> {
+    let mut nets: Vec<NetDec> = Vec::new();
     let mut net_list = vec![&node.nodes.0.nodes.0];
     for net_def in &node.nodes.0.nodes.1 {
         net_list.push(&net_def.1);
     }
     for net_def in net_list {
-        let mut net = Definition::default();
+        let mut net = NetDec::default();
         let ident = get_ident(tree, RefNode::NetIdentifier(&net_def.nodes.0));
         net.ident = ident.0;
         net.byte_idx = ident.1;
@@ -465,8 +404,8 @@ fn net_dec(
     tree: &SyntaxTree,
     node: &NetDeclaration,
     event_iter: &mut EventIter,
-) -> Option<Vec<Definition>> {
-    let mut nets: Vec<Definition>;
+) -> Option<Vec<NetDec>> {
+    let mut nets: Vec<NetDec>;
     let mut common = String::new();
     eprintln!("found net");
     match node {
@@ -491,7 +430,7 @@ fn net_dec(
             nets = list_net_decl(tree, net_list, event_iter)?;
         }
         NetDeclaration::Interconnect(x) => {
-            let mut net = Definition::default();
+            let mut net = NetDec::default();
             let ident = get_ident(tree, RefNode::NetIdentifier(&x.nodes.3));
             net.ident = ident.0;
             net.byte_idx = ident.1;
@@ -510,7 +449,6 @@ fn net_dec(
     }
     for net in &mut nets {
         net.type_str = format!("{} {}", common, net.type_str);
-        net.kind = CompletionItemKind::Variable;
     }
     Some(nets)
 }
@@ -519,14 +457,14 @@ fn list_var_decl(
     tree: &SyntaxTree,
     node: &ListOfVariableDeclAssignments,
     event_iter: &mut EventIter,
-) -> Option<Vec<Definition>> {
-    let mut vars: Vec<Definition> = Vec::new();
+) -> Option<Vec<DataDec>> {
+    let mut vars: Vec<DataDec> = Vec::new();
     let mut var_list = vec![&node.nodes.0.nodes.0];
     for var_def in &node.nodes.0.nodes.1 {
         var_list.push(&var_def.1);
     }
     for var_def in var_list {
-        let mut var = Definition::default();
+        let mut var = DataDec::default();
         match &var_def {
             VariableDeclAssignment::Variable(node) => {
                 let ident = get_ident(tree, RefNode::VariableIdentifier(&node.nodes.0));
@@ -561,8 +499,8 @@ fn data_dec(
     tree: &SyntaxTree,
     node: &DataDeclaration,
     event_iter: &mut EventIter,
-) -> Option<Vec<Definition>> {
-    let mut data: Vec<Definition>;
+) -> Option<Vec<DataDec>> {
+    let mut data: Vec<DataDec>;
     let mut common = String::new();
     eprintln!("found data_dec");
     match node {
@@ -578,7 +516,7 @@ fn data_dec(
         }
         DataDeclaration::TypeDeclaration(x) => match &**x {
             TypeDeclaration::DataType(y) => {
-                let mut var = Definition::default();
+                let mut var = DataDec::default();
                 let ident = get_ident(tree, RefNode::TypeIdentifier(&y.nodes.2));
                 var.ident = ident.0;
                 var.byte_idx = ident.1;
@@ -589,7 +527,7 @@ fn data_dec(
                 data = vec![var];
             }
             TypeDeclaration::Interface(y) => {
-                let mut var = Definition::default();
+                let mut var = DataDec::default();
                 let ident = get_ident(tree, RefNode::TypeIdentifier(&y.nodes.5));
                 var.ident = ident.0;
                 var.byte_idx = ident.1;
@@ -612,7 +550,7 @@ fn data_dec(
                 data = vec![var];
             }
             TypeDeclaration::Reserved(y) => {
-                let mut var = Definition::default();
+                let mut var = DataDec::default();
                 let ident = get_ident(tree, RefNode::TypeIdentifier(&y.nodes.2));
                 var.ident = ident.0;
                 var.byte_idx = ident.1;
@@ -635,7 +573,7 @@ fn data_dec(
             }
             data = Vec::new();
             for import_def in import_list {
-                let mut import = Definition::default();
+                let mut import = DataDec::default();
                 match import_def {
                     PackageImportItem::Identifier(y) => {
                         let ident = get_ident(tree, RefNode::PackageIdentifier(&y.nodes.0));
@@ -658,7 +596,7 @@ fn data_dec(
         }
         DataDeclaration::NetTypeDeclaration(x) => match &**x {
             NetTypeDeclaration::DataType(y) => {
-                let mut var = Definition::default();
+                let mut var = DataDec::default();
                 let ident = get_ident(tree, RefNode::NetTypeIdentifier(&y.nodes.2));
                 var.ident = ident.0;
                 var.byte_idx = ident.1;
@@ -674,7 +612,7 @@ fn data_dec(
                 data = vec![var];
             }
             NetTypeDeclaration::NetType(y) => {
-                let mut var = Definition::default();
+                let mut var = DataDec::default();
                 let ident = get_ident(tree, RefNode::NetTypeIdentifier(&y.nodes.2));
                 var.ident = ident.0;
                 var.byte_idx = ident.1;
@@ -687,7 +625,6 @@ fn data_dec(
     }
     for var in &mut data {
         var.type_str = format!("{} {}", common, var.type_str);
-        var.kind = CompletionItemKind::Variable;
     }
     Some(data)
 }
@@ -696,8 +633,8 @@ fn tfport_list(
     tree: &SyntaxTree,
     node: &TfPortList,
     event_iter: &mut EventIter,
-) -> Option<Vec<Definition>> {
-    let mut tfports: Vec<Definition> = Vec::new();
+) -> Option<Vec<PortDec>> {
+    let mut tfports: Vec<PortDec> = Vec::new();
     let mut tfports_list = vec![&node.nodes.0.nodes.0];
     for tfports_def in &node.nodes.0.nodes.1 {
         tfports_list.push(&tfports_def.1);
@@ -705,7 +642,7 @@ fn tfport_list(
     for tfports_def in tfports_list {
         match &tfports_def.nodes.4 {
             Some(def) => {
-                let mut tfport = Definition::default();
+                let mut tfport = PortDec::default();
                 let ident = get_ident(tree, RefNode::PortIdentifier(&def.0));
                 tfport.ident = ident.0;
                 tfport.byte_idx = ident.1;
@@ -726,12 +663,12 @@ fn function_dec(
     tree: &SyntaxTree,
     node: &FunctionDeclaration,
     event_iter: &mut EventIter,
-) -> Option<Vec<Definition>> {
-    let mut defs: Vec<Definition>;
+) -> Option<Vec<Arc<dyn Definition>>> {
+    let mut defs: Vec<Arc<dyn Definition>>;
     eprintln!("found func");
     match &node.nodes.2 {
         FunctionBodyDeclaration::WithoutPort(x) => {
-            let mut func = Definition::default();
+            let mut func = SubDec::default();
             let ident = get_ident(tree, RefNode::FunctionIdentifier(&x.nodes.2));
             func.ident = ident.0;
             func.byte_idx = ident.1;
@@ -745,10 +682,10 @@ fn function_dec(
             );
             func.type_str = tokens;
             func.kind = CompletionItemKind::Function;
-            defs = vec![func];
+            defs = vec![Arc::new(func)];
         }
         FunctionBodyDeclaration::WithPort(x) => {
-            let mut func = Definition::default();
+            let mut func = SubDec::default();
             let ident = get_ident(tree, RefNode::FunctionIdentifier(&x.nodes.2));
             func.ident = ident.0;
             func.byte_idx = ident.1;
@@ -762,12 +699,14 @@ fn function_dec(
             );
             func.type_str = tokens;
             func.kind = CompletionItemKind::Function;
-            defs = vec![func];
+            defs = vec![Arc::new(func)];
             match &x.nodes.3.nodes.1 {
                 Some(tfports) => {
                     skip_until_enter!(tree, event_iter, RefNode::TfPortList, &TfPortList);
-                    let mut ports = tfport_list(tree, tfports, event_iter)?;
-                    defs.append(&mut ports);
+                    let ports = tfport_list(tree, tfports, event_iter)?;
+                    for port in ports {
+                        defs.push(Arc::new(port));
+                    }
                 }
                 None => (),
             }
@@ -780,12 +719,12 @@ fn task_dec(
     tree: &SyntaxTree,
     node: &TaskDeclaration,
     event_iter: &mut EventIter,
-) -> Option<Vec<Definition>> {
-    let mut defs: Vec<Definition>;
+) -> Option<Vec<Arc<dyn Definition>>> {
+    let mut defs: Vec<Arc<dyn Definition>>;
     eprintln!("found task");
     match &node.nodes.2 {
         TaskBodyDeclaration::WithoutPort(x) => {
-            let mut task = Definition::default();
+            let mut task = SubDec::default();
             let ident = get_ident(tree, RefNode::TaskIdentifier(&x.nodes.1));
             task.ident = ident.0;
             task.byte_idx = ident.1;
@@ -799,10 +738,10 @@ fn task_dec(
             );
             task.type_str = tokens;
             task.kind = CompletionItemKind::Function;
-            defs = vec![task];
+            defs = vec![Arc::new(task)];
         }
         TaskBodyDeclaration::WithPort(x) => {
-            let mut task = Definition::default();
+            let mut task = SubDec::default();
             let ident = get_ident(tree, RefNode::TaskIdentifier(&x.nodes.1));
             task.ident = ident.0;
             task.byte_idx = ident.1;
@@ -816,12 +755,14 @@ fn task_dec(
             );
             task.type_str = tokens;
             task.kind = CompletionItemKind::Function;
-            defs = vec![task];
+            defs = vec![Arc::new(task)];
             match &x.nodes.2.nodes.1 {
                 Some(tfports) => {
                     skip_until_enter!(tree, event_iter, RefNode::TfPortList, &TfPortList);
-                    let mut ports = tfport_list(tree, tfports, event_iter)?;
-                    defs.append(&mut ports);
+                    let ports = tfport_list(tree, tfports, event_iter)?;
+                    for port in ports {
+                        defs.push(Arc::new(port));
+                    }
                 }
                 None => (),
             }
@@ -834,8 +775,8 @@ fn modport_dec(
     tree: &SyntaxTree,
     node: &ModportDeclaration,
     event_iter: &mut EventIter,
-) -> Option<Vec<Definition>> {
-    let mut modports: Vec<Definition> = Vec::new();
+) -> Option<Vec<ModportDec>> {
+    let mut modports: Vec<ModportDec> = Vec::new();
     let mut common = String::new();
     eprintln!("found modport");
     advance_until_enter!(common, tree, event_iter, RefNode::ModportItem, &ModportItem);
@@ -844,7 +785,7 @@ fn modport_dec(
         modports_list.push(&modports_def.1);
     }
     for modport_def in modports_list {
-        let mut modport = Definition::default();
+        let mut modport = ModportDec::default();
         let ident = get_ident(tree, RefNode::ModportIdentifier(&modport_def.nodes.0));
         modport.ident = ident.0;
         modport.byte_idx = ident.1;
@@ -879,13 +820,13 @@ fn modport_dec(
                     for mp_simple_def in mp_simple_port_decs {
                         match mp_simple_def {
                             ModportSimplePort::Ordered(y) => {
-                                let mut port = Definition::default();
+                                let mut port = PortDec::default();
                                 let ident = get_ident(tree, RefNode::PortIdentifier(&y.nodes.0));
                                 port.ident = ident.0;
                                 port.byte_idx = ident.1;
                                 port.kind = CompletionItemKind::Property;
                                 port.type_str = prepend.clone();
-                                modports.push(port);
+                                modport.ports.push(Arc::new(port));
                             }
                             ModportSimplePort::Named(y) => {
                                 let port_ident = skip_until_enter!(
@@ -894,7 +835,7 @@ fn modport_dec(
                                     RefNode::PortIdentifier,
                                     &PortIdentifier
                                 )?;
-                                let mut port = Definition::default();
+                                let mut port = PortDec::default();
                                 let ident = get_ident(tree, RefNode::PortIdentifier(port_ident));
                                 port.ident = ident.0;
                                 port.byte_idx = ident.1;
@@ -907,7 +848,7 @@ fn modport_dec(
                                     RefNode::ModportSimplePortNamed
                                 );
                                 port.type_str = format!("{} {}", prepend, append);
-                                modports.push(port);
+                                modport.ports.push(Arc::new(port));
                             }
                         }
                     }
@@ -935,7 +876,7 @@ fn modport_dec(
                         match mp_tf_port {
                             ModportTfPort::MethodPrototype(y) => match &**y {
                                 MethodPrototype::TaskPrototype(z) => {
-                                    let mut port = Definition::default();
+                                    let mut port = SubDec::default();
                                     let ident =
                                         get_ident(tree, RefNode::TaskIdentifier(&z.nodes.1));
                                     port.ident = ident.0;
@@ -953,10 +894,10 @@ fn modport_dec(
                                         event_iter,
                                         RefNode::TaskPrototype
                                     );
-                                    modports.push(port);
+                                    modport.ports.push(Arc::new(port));
                                 }
                                 MethodPrototype::FunctionPrototype(z) => {
-                                    let mut port = Definition::default();
+                                    let mut port = SubDec::default();
                                     let ident =
                                         get_ident(tree, RefNode::FunctionIdentifier(&z.nodes.2));
                                     port.ident = ident.0;
@@ -974,16 +915,16 @@ fn modport_dec(
                                         event_iter,
                                         RefNode::FunctionIdentifier
                                     );
-                                    modports.push(port);
+                                    modport.ports.push(Arc::new(port));
                                 }
                             },
                             ModportTfPort::TfIdentifier(y) => {
-                                let mut port = Definition::default();
+                                let mut port = SubDec::default();
                                 let ident = get_ident(tree, RefNode::TfIdentifier(&y));
                                 port.ident = ident.0;
                                 port.byte_idx = ident.1;
                                 port.type_str = prepend.clone();
-                                modports.push(port);
+                                modport.ports.push(Arc::new(port));
                             }
                         }
                     }
@@ -1004,11 +945,11 @@ fn modport_dec(
                         &ClockingIdentifier
                     )?;
                     let ident = get_ident(tree, RefNode::ClockingIdentifier(clock_ident));
-                    let mut port = Definition::default();
+                    let mut port = PortDec::default();
                     port.ident = ident.0;
                     port.byte_idx = ident.1;
                     port.type_str = tokens;
-                    modports.push(port);
+                    modport.ports.push(Arc::new(port));
                 }
             }
         }
@@ -1021,10 +962,10 @@ fn modport_dec(
 pub fn get_definitions(
     syntax_tree: &SyntaxTree,
     scope_idents: &Vec<(String, usize, usize)>,
-) -> Option<Vec<Definition>> {
+) -> Option<Vec<Arc<dyn Definition>>> {
     eprintln!("{}", syntax_tree);
 
-    let mut definitions = Vec::new();
+    let mut definitions: Vec<Arc<dyn Definition>> = Vec::new();
     let mut event_iter = syntax_tree.into_iter().event();
     while let Some(event) = event_iter.next() {
         match event {
@@ -1032,25 +973,31 @@ pub fn get_definitions(
                 RefNode::AnsiPortDeclaration(n) => {
                     let port = port_dec_ansi(syntax_tree, n, &mut event_iter);
                     if port.is_some() {
-                        definitions.push(port?);
+                        definitions.push(Arc::new(port?));
                     }
                 }
                 RefNode::PortDeclaration(n) => {
-                    let port = port_dec_non_ansi(syntax_tree, n, &mut event_iter);
-                    if port.is_some() {
-                        definitions.append(&mut port?);
+                    let ports = port_dec_non_ansi(syntax_tree, n, &mut event_iter);
+                    if ports.is_some() {
+                        for port in ports? {
+                            definitions.push(Arc::new(port));
+                        }
                     }
                 }
                 RefNode::NetDeclaration(n) => {
                     let nets = net_dec(syntax_tree, n, &mut event_iter);
                     if nets.is_some() {
-                        definitions.append(&mut nets?);
+                        for net in nets? {
+                            definitions.push(Arc::new(net));
+                        }
                     }
                 }
                 RefNode::DataDeclaration(n) => {
                     let vars = data_dec(syntax_tree, n, &mut event_iter);
                     if vars.is_some() {
-                        definitions.append(&mut vars?);
+                        for var in vars? {
+                            definitions.push(Arc::new(var));
+                        }
                     }
                 }
                 RefNode::FunctionDeclaration(n) => {
@@ -1068,16 +1015,15 @@ pub fn get_definitions(
                 RefNode::ModportDeclaration(n) => {
                     let decs = modport_dec(syntax_tree, n, &mut event_iter);
                     if decs.is_some() {
-                        definitions.append(&mut decs?);
+                        for dec in decs? {
+                            definitions.push(Arc::new(dec));
+                        }
                     }
                 }
                 _ => (),
             },
             NodeEvent::Leave(_) => (),
         }
-    }
-    for def in &mut definitions {
-        def.type_str = clean_type_str(&def.type_str, &def.ident);
     }
     Some(definitions)
 }
@@ -1149,19 +1095,19 @@ mod tests {
     #[test]
     fn test_get_definition() {
         let mut d = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-        d.push("tests_rtl/definition_test.sv");
+        d.push("tests_rtl/complete.sv");
         let text = read_to_string(d).unwrap();
         let doc = Rope::from_str(&text);
         let syntax_tree = parse(
             &doc.clone(),
-            &Url::parse("file:///tests_rtl/definition_test.sv").unwrap(),
+            &Url::parse("file:///tests_rtl/complete.sv").unwrap(),
             &None,
         )
         .unwrap();
         let scope_idents = get_scope_idents(&syntax_tree);
         let defs = get_definitions(&syntax_tree, &scope_idents).unwrap();
         for def in &defs {
-            println!("{:?} {:?}", def, doc.byte_to_pos(def.byte_idx));
+            println!("{:?} {:?}", def, doc.byte_to_pos(def.byte_idx()));
         }
         /*
         let token = get_definition_token(doc.line(3), Position::new(3, 13));
