@@ -34,6 +34,7 @@ pub enum DefinitionType {
     Data,
     Modport,
     Subroutine,
+    ModuleInstantiation,
 }
 
 #[derive(Debug)]
@@ -324,5 +325,58 @@ impl Definition for ModportDec {
     }
     fn dot_completion(&self, scope_tree: &Scope) -> Option<Vec<CompletionItem>> {
         Some(self.ports.iter().map(|x| x.completion()).collect())
+    }
+}
+
+#[derive(Debug)]
+pub struct ModInst {
+    pub ident: String,
+    pub byte_idx: usize,
+    pub type_str: String,
+    pub kind: CompletionItemKind,
+    def_type: DefinitionType,
+}
+
+impl Default for ModInst {
+    fn default() -> Self {
+        Self {
+            ident: String::new(),
+            byte_idx: 0,
+            type_str: String::new(),
+            kind: CompletionItemKind::Variable,
+            def_type: DefinitionType::ModuleInstantiation,
+        }
+    }
+}
+
+impl Definition for ModInst {
+    fn ident(&self) -> String {
+        self.ident.clone()
+    }
+    fn byte_idx(&self) -> usize {
+        self.byte_idx
+    }
+    fn type_str(&self) -> String {
+        self.type_str.clone()
+    }
+    fn kind(&self) -> CompletionItemKind {
+        self.kind.clone()
+    }
+    fn def_type(&self) -> &DefinitionType {
+        &self.def_type
+    }
+    fn starts_with(&self, token: &str) -> bool {
+        self.ident.starts_with(token)
+    }
+    fn completion(&self) -> CompletionItem {
+        CompletionItem {
+            label: self.ident.clone(),
+            detail: Some(clean_type_str(&self.type_str, &self.ident)),
+            kind: Some(self.kind.clone()),
+            ..CompletionItem::default()
+        }
+    }
+    fn dot_completion(&self, scope_tree: &Scope) -> Option<Vec<CompletionItem>> {
+        None
     }
 }
