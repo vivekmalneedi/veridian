@@ -75,30 +75,32 @@ pub struct Scope {
     pub name: String,
     pub start: usize,
     pub end: usize,
+    pub url: Url,
     pub idents: HashSet<String>,
     pub defs: Vec<Arc<dyn Definition>>,
     pub scopes: Vec<Scope>,
 }
 
 impl Scope {
-    pub fn new(scope_info: (String, usize, usize)) -> Scope {
+    pub fn new(scope_info: (String, usize, usize), url: &Url) -> Scope {
         Scope {
             name: scope_info.0,
             start: scope_info.1,
             end: scope_info.2,
+            url: url.clone(),
             idents: HashSet::new(),
             defs: Vec::new(),
             scopes: Vec::new(),
         }
     }
-    pub fn insert_scope(&mut self, scope_info: (String, usize, usize)) {
+    pub fn insert_scope(&mut self, scope_info: (String, usize, usize), url: &Url) {
         for scope in &mut self.scopes {
             if scope.start <= scope_info.1 && scope_info.2 <= scope.end {
-                scope.insert_scope(scope_info);
+                scope.insert_scope(scope_info, url);
                 return;
             }
         }
-        self.scopes.push(Scope::new(scope_info));
+        self.scopes.push(Scope::new(scope_info, url));
     }
     pub fn insert_ident(&mut self, ident: (String, usize)) {
         for scope in &mut self.scopes {
@@ -135,7 +137,7 @@ impl Scope {
         }
 
         //TODO: properly handle scope definitions
-        let mut def = GenericScope::default();
+        let mut def = GenericScope::new(&self.url);
         def.ident = self.name.clone();
         def.byte_idx = self.start;
         self.defs.push(Arc::new(def));
@@ -185,13 +187,11 @@ impl Scope {
     ) -> Option<Vec<CompletionItem>> {
         for scope in &self.scopes {
             if scope.start <= byte_idx && byte_idx <= scope.end {
-                eprintln!("found scope: {}", scope.name);
                 return scope.dot_completion(token, byte_idx, scope_tree);
             }
         }
         for def in &self.defs {
             if def.starts_with(token) {
-                eprintln!("found def: {}", def.ident());
                 return def.dot_completion(scope_tree);
             }
         }
@@ -221,30 +221,8 @@ pub struct Source {
     pub uri: Url,
     pub text: Rope,
     pub version: i64,
-    pub scope_tree: Option<Scope>,
     pub syntax_tree: Option<SyntaxTree>,
     pub last_change_range: Option<Range>,
-}
-
-impl Source {
-    pub fn get_completions(&self, token: &String, byte_idx: usize) -> Option<CompletionList> {
-        Some(CompletionList {
-            is_incomplete: false,
-            items: self.scope_tree.as_ref()?.complete(token, byte_idx),
-        })
-    }
-
-    pub fn get_dot_completions(&self, token: &str, byte_idx: usize) -> Option<CompletionList> {
-        eprintln!("get dot completions");
-        Some(CompletionList {
-            is_incomplete: false,
-            items: self.scope_tree.as_ref()?.dot_completion(
-                token,
-                byte_idx,
-                self.scope_tree.as_ref()?,
-            )?,
-        })
-    }
 }
 
 pub struct SourceMeta {
@@ -257,6 +235,7 @@ pub struct Sources {
     pub files: Arc<RwLock<Vec<Arc<RwLock<Source>>>>>,
     pub names: Arc<RwLock<HashMap<Url, usize>>>,
     pub meta: Arc<RwLock<Vec<Arc<RwLock<SourceMeta>>>>>,
+    pub scope_tree: Arc<RwLock<Option<Scope>>>,
 }
 
 impl Sources {
@@ -265,6 +244,7 @@ impl Sources {
             files: Arc::new(RwLock::new(Vec::new())),
             names: Arc::new(RwLock::new(HashMap::new())),
             meta: Arc::new(RwLock::new(Vec::new())),
+            scope_tree: Arc::new(RwLock::new(None)),
         }
     }
     pub fn add(&self, doc: TextDocumentItem) {
@@ -276,11 +256,11 @@ impl Sources {
             uri: doc.uri.clone(),
             text: Rope::from_str(&doc.text),
             version: doc.version,
-            scope_tree: None,
             syntax_tree: None,
             last_change_range: None,
         }));
         let source_handle = source.clone();
+        let scope_handle = self.scope_tree.clone();
         let parse_handle = thread::spawn(move || {
             let (lock, cvar) = &*valid_parse2;
             loop {
@@ -292,16 +272,26 @@ impl Sources {
                 drop(file);
                 // eprintln!("parse read: {}", now.elapsed().as_millis());
                 let syntax_tree = parse(&text, &uri, &range);
-                let scope_tree = match &syntax_tree {
-                    Some(tree) => Some(get_scopes(tree, text.len_bytes())),
+                let mut scope_tree = match &syntax_tree {
+                    Some(tree) => Some(get_scopes(tree, text.len_bytes(), uri)),
                     None => None,
                 };
                 // eprintln!("parse read complete: {}", now.elapsed().as_millis());
                 let mut file = source_handle.write().unwrap();
                 // eprintln!("parse write: {}", now.elapsed().as_millis());
                 file.syntax_tree = syntax_tree;
-                file.scope_tree = scope_tree;
                 drop(file);
+                let mut global_scope = scope_handle.write().unwrap();
+                match &mut *global_scope {
+                    Some(scope) => match &mut scope_tree {
+                        Some(tree) => {
+                            scope.scopes.append(&mut tree.scopes);
+                        }
+                        None => (),
+                    },
+                    None => *global_scope = scope_tree,
+                }
+                drop(global_scope);
                 // eprintln!("parse write complete: {}", now.elapsed().as_millis());
                 let mut valid = lock.lock().unwrap();
                 *valid = true;
@@ -355,7 +345,7 @@ impl Sources {
     pub fn wait_parse_ready(&self, id: usize, wait_valid: bool) {
         let file = self.get_file(id).unwrap();
         let file = file.read().unwrap();
-        if file.syntax_tree.is_none() || file.scope_tree.is_none() || wait_valid {
+        if file.syntax_tree.is_none() || wait_valid {
             drop(file);
             let meta_data = self.get_meta_data(id).unwrap();
             let (lock, cvar) = &*meta_data.read().unwrap().valid_parse;
@@ -368,6 +358,29 @@ impl Sources {
 
     pub fn get_id(&self, uri: &Url) -> usize {
         self.names.read().unwrap().get(uri).unwrap().clone()
+    }
+
+    pub fn get_completions(&self, token: &String, byte_idx: usize) -> Option<CompletionList> {
+        Some(CompletionList {
+            is_incomplete: false,
+            items: self
+                .scope_tree
+                .read()
+                .ok()?
+                .as_ref()?
+                .complete(token, byte_idx),
+        })
+    }
+
+    pub fn get_dot_completions(&self, token: &str, byte_idx: usize) -> Option<CompletionList> {
+        eprintln!("get dot completions");
+        let tree = self.scope_tree.read().ok()?;
+        Some(CompletionList {
+            is_incomplete: false,
+            items: tree
+                .as_ref()?
+                .dot_completion(token, byte_idx, tree.as_ref()?)?,
+        })
     }
 }
 
@@ -612,7 +625,14 @@ endmodule"#;
         server.srcs.wait_parse_ready(fid, true);
 
         let file = file.read().unwrap();
-        assert!(file.scope_tree.as_ref().unwrap().contains_scope("test"));
+        assert!(server
+            .srcs
+            .scope_tree
+            .read()
+            .unwrap()
+            .as_ref()
+            .unwrap()
+            .contains_scope("test"));
     }
 
     #[test]

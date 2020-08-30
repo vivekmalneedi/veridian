@@ -25,7 +25,7 @@ impl LSPServer {
             Some(context) => match context.trigger_kind {
                 CompletionTriggerKind::TriggerCharacter => {
                     match context.trigger_character?.as_str() {
-                        "." => Some(file.get_dot_completions(
+                        "." => Some(self.srcs.get_dot_completions(
                             token.trim_end_matches("."),
                             file.text.pos_to_byte(&doc.position),
                         )?),
@@ -33,11 +33,15 @@ impl LSPServer {
                     }
                 }
                 CompletionTriggerKind::TriggerForIncompleteCompletions => None,
-                CompletionTriggerKind::Invoked => {
-                    Some(file.get_completions(&token, file.text.pos_to_byte(&doc.position))?)
-                }
+                CompletionTriggerKind::Invoked => Some(
+                    self.srcs
+                        .get_completions(&token, file.text.pos_to_byte(&doc.position))?,
+                ),
             },
-            None => Some(file.get_completions(&token, file.text.pos_to_byte(&doc.position))?),
+            None => Some(
+                self.srcs
+                    .get_completions(&token, file.text.pos_to_byte(&doc.position))?,
+            ),
         };
         // eprintln!("comp response: {}", now.elapsed().as_millis());
         Some(CompletionResponse::List(response?))
@@ -194,13 +198,13 @@ fn get_identifiers(syntax_tree: &SyntaxTree) -> Vec<(String, usize)> {
     idents
 }
 
-pub fn get_scopes(syntax_tree: &SyntaxTree, file_len: usize) -> Scope {
-    let mut global_scope: Scope = Scope::new(("global".to_string(), 0, file_len));
+pub fn get_scopes(syntax_tree: &SyntaxTree, file_len: usize, url: &Url) -> Scope {
+    let mut global_scope: Scope = Scope::new(("global".to_string(), 0, file_len), url);
     let identifiers = get_identifiers(&syntax_tree);
     let scope_idents = get_scope_idents(&syntax_tree);
-    let defs = get_definitions(&syntax_tree, &scope_idents).unwrap();
+    let defs = get_definitions(&syntax_tree, &scope_idents, url).unwrap();
     for scope in scope_idents {
-        global_scope.insert_scope(scope);
+        global_scope.insert_scope(scope, url);
     }
     for def in defs {
         global_scope.insert_def(def);
@@ -251,7 +255,7 @@ mod tests {
                 character: 11,
             },
         );
-        assert_eq!(&result, "cba");
+        assert_eq!(&result, "abc.cba");
         result = get_completion_token(
             text.line(0),
             Position {
@@ -519,8 +523,13 @@ endmodule
         server.srcs.wait_parse_ready(fid, true);
         let file = server.srcs.get_file(fid).unwrap();
         let file = file.read().unwrap();
+        /*
         eprintln!("{}", file.syntax_tree.as_ref().unwrap());
-        eprintln!("{:#?}", file.scope_tree);
+        eprintln!(
+            "{:#?}",
+            server.srcs.scope_tree.read().unwrap().as_ref().unwrap()
+        );
+        */
 
         let completion_params = CompletionParams {
             text_document_position: TextDocumentPositionParams {
@@ -539,27 +548,17 @@ endmodule
         };
         let response: CompletionResponse = server.completion(completion_params).unwrap();
         let item1 = CompletionItem {
-            label: "abc".to_owned(),
+            label: "abcd".to_owned(),
             kind: Some(CompletionItemKind::Variable),
-            detail: Some("logic".to_string()),
-            ..CompletionItem::default()
-        };
-        let item3 = CompletionItem {
-            label: "aouter".to_owned(),
-            kind: Some(CompletionItemKind::Variable),
-            detail: Some("logic".to_string()),
+            detail: Some("wire".to_string()),
             ..CompletionItem::default()
         };
         if let CompletionResponse::List(item) = response {
-            eprintln!("{:#?}", item);
+            // eprintln!("{:#?}", item);
             assert!(item.items.contains(&item1));
-            for comp in &item.items {
-                assert!(comp.label != "abcd");
-            }
-            assert!(item.items.contains(&item3));
+            assert!(item.items.len() == 1);
         } else {
             assert!(false);
         }
-        assert!(false);
     }
 }

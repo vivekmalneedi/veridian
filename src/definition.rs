@@ -20,13 +20,13 @@ impl LSPServer {
         let file = self.srcs.get_file(file_id)?;
         let file = file.read().ok()?;
         let token = get_definition_token(file.text.line(pos.line as usize), pos);
-        let def = file
-            .scope_tree
+        let scope_tree = self.srcs.scope_tree.read().ok()?;
+        let def = scope_tree
             .as_ref()?
             .get_definition(&token, file.text.pos_to_byte(&pos))?;
         let def_pos = file.text.byte_to_pos(def.byte_idx());
         Some(GotoDefinitionResponse::Scalar(Location::new(
-            doc,
+            def.url(),
             Range::new(def_pos, def_pos),
         )))
     }
@@ -38,8 +38,8 @@ impl LSPServer {
         let file = self.srcs.get_file(file_id)?;
         let file = file.read().ok()?;
         let token = get_definition_token(file.text.line(pos.line as usize), pos);
-        let def = file
-            .scope_tree
+        let scope_tree = self.srcs.scope_tree.read().ok()?;
+        let def = scope_tree
             .as_ref()?
             .get_definition(&token, file.text.pos_to_byte(&pos))?;
         let def_line = file.text.byte_to_line(def.byte_idx());
@@ -80,8 +80,9 @@ fn get_definition_token(line: RopeSlice, pos: Position) -> String {
 pub fn get_definitions(
     syntax_tree: &SyntaxTree,
     scope_idents: &Vec<(String, usize, usize)>,
+    url: &Url,
 ) -> Option<Vec<Arc<dyn Definition>>> {
-    eprintln!("{}", syntax_tree);
+    // eprintln!("{}", syntax_tree);
 
     let mut definitions: Vec<Arc<dyn Definition>> = Vec::new();
     let mut event_iter = syntax_tree.into_iter().event();
@@ -89,13 +90,13 @@ pub fn get_definitions(
         match event {
             NodeEvent::Enter(node) => match node {
                 RefNode::AnsiPortDeclaration(n) => {
-                    let port = port_dec_ansi(syntax_tree, n, &mut event_iter);
+                    let port = port_dec_ansi(syntax_tree, n, &mut event_iter, url);
                     if port.is_some() {
                         definitions.push(Arc::new(port?));
                     }
                 }
                 RefNode::PortDeclaration(n) => {
-                    let ports = port_dec_non_ansi(syntax_tree, n, &mut event_iter);
+                    let ports = port_dec_non_ansi(syntax_tree, n, &mut event_iter, url);
                     if ports.is_some() {
                         for port in ports? {
                             definitions.push(Arc::new(port));
@@ -103,7 +104,7 @@ pub fn get_definitions(
                     }
                 }
                 RefNode::NetDeclaration(n) => {
-                    let nets = net_dec(syntax_tree, n, &mut event_iter);
+                    let nets = net_dec(syntax_tree, n, &mut event_iter, url);
                     if nets.is_some() {
                         for net in nets? {
                             definitions.push(Arc::new(net));
@@ -111,7 +112,7 @@ pub fn get_definitions(
                     }
                 }
                 RefNode::DataDeclaration(n) => {
-                    let vars = data_dec(syntax_tree, n, &mut event_iter);
+                    let vars = data_dec(syntax_tree, n, &mut event_iter, url);
                     if vars.is_some() {
                         for var in vars? {
                             definitions.push(Arc::new(var));
@@ -119,19 +120,19 @@ pub fn get_definitions(
                     }
                 }
                 RefNode::FunctionDeclaration(n) => {
-                    let decs = function_dec(syntax_tree, n, &mut event_iter);
+                    let decs = function_dec(syntax_tree, n, &mut event_iter, url);
                     if decs.is_some() {
                         definitions.append(&mut decs?);
                     }
                 }
                 RefNode::TaskDeclaration(n) => {
-                    let decs = task_dec(syntax_tree, n, &mut event_iter);
+                    let decs = task_dec(syntax_tree, n, &mut event_iter, url);
                     if decs.is_some() {
                         definitions.append(&mut decs?);
                     }
                 }
                 RefNode::ModportDeclaration(n) => {
-                    let decs = modport_dec(syntax_tree, n, &mut event_iter);
+                    let decs = modport_dec(syntax_tree, n, &mut event_iter, url);
                     if decs.is_some() {
                         for dec in decs? {
                             definitions.push(Arc::new(dec));
@@ -139,7 +140,7 @@ pub fn get_definitions(
                     }
                 }
                 RefNode::ModuleInstantiation(n) => {
-                    let decs = module_inst(syntax_tree, n, &mut event_iter);
+                    let decs = module_inst(syntax_tree, n, &mut event_iter, url);
                     if decs.is_some() {
                         for dec in decs? {
                             definitions.push(Arc::new(dec));
@@ -224,26 +225,19 @@ mod tests {
         d.push("tests_rtl/definition_test.sv");
         let text = read_to_string(d).unwrap();
         let doc = Rope::from_str(&text);
-        let syntax_tree = parse(
-            &doc.clone(),
-            &Url::parse("file:///tests_rtl/definition_test.sv").unwrap(),
-            &None,
-        )
-        .unwrap();
+        let url = Url::parse("file:///tests_rtl/definition_test.sv").unwrap();
+        let syntax_tree = parse(&doc.clone(), &url, &None).unwrap();
         let scope_idents = get_scope_idents(&syntax_tree);
-        let defs = get_definitions(&syntax_tree, &scope_idents).unwrap();
+        let defs = get_definitions(&syntax_tree, &scope_idents, &url).unwrap();
         for def in &defs {
             println!("{:?} {:?}", def, doc.byte_to_pos(def.byte_idx()));
         }
-        /*
         let token = get_definition_token(doc.line(3), Position::new(3, 13));
         for def in defs {
-            if token == def.ident {
-                assert_eq!(doc.byte_to_pos(def.byte_idx), Position::new(3, 9))
+            if token == def.ident() {
+                assert_eq!(doc.byte_to_pos(def.byte_idx()), Position::new(3, 9))
             }
         }
-        */
-        assert!(false);
     }
 
     #[test]

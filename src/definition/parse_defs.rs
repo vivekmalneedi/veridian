@@ -79,12 +79,12 @@ pub fn port_dec_ansi(
     tree: &SyntaxTree,
     node: &AnsiPortDeclaration,
     event_iter: &mut EventIter,
+    url: &Url,
 ) -> Option<PortDec> {
-    let mut port = PortDec::default();
+    let mut port = PortDec::new(url);
     let mut tokens = String::new();
     match node {
         AnsiPortDeclaration::Net(x) => {
-            eprintln!("found ansi_port_net");
             let ident = get_ident(tree, RefNode::PortIdentifier(&x.nodes.1));
             port.ident = ident.0;
             port.byte_idx = ident.1;
@@ -134,6 +134,7 @@ pub fn list_port_idents(
     tree: &SyntaxTree,
     node: &ListOfPortIdentifiers,
     event_iter: &mut EventIter,
+    url: &Url,
 ) -> Option<Vec<PortDec>> {
     let mut ports: Vec<PortDec> = Vec::new();
     let mut port_list = vec![&node.nodes.0.nodes.0];
@@ -141,7 +142,7 @@ pub fn list_port_idents(
         port_list.push(&port_def.1);
     }
     for port_def in port_list {
-        let mut port = PortDec::default();
+        let mut port = PortDec::new(url);
         let ident = get_ident(tree, RefNode::PortIdentifier(&port_def.0));
         port.ident = ident.0;
         port.byte_idx = ident.1;
@@ -158,6 +159,7 @@ pub fn list_interface_idents(
     tree: &SyntaxTree,
     node: &ListOfInterfaceIdentifiers,
     event_iter: &mut EventIter,
+    url: &Url,
 ) -> Option<Vec<PortDec>> {
     let mut ports: Vec<PortDec> = Vec::new();
     let mut port_list = vec![&node.nodes.0.nodes.0];
@@ -165,7 +167,7 @@ pub fn list_interface_idents(
         port_list.push(&port_def.1);
     }
     for port_def in port_list {
-        let mut port = PortDec::default();
+        let mut port = PortDec::new(url);
         let ident = get_ident(tree, RefNode::InterfaceIdentifier(&port_def.0));
         port.ident = ident.0;
         port.byte_idx = ident.1;
@@ -182,6 +184,7 @@ pub fn list_variable_idents(
     tree: &SyntaxTree,
     node: &ListOfVariableIdentifiers,
     event_iter: &mut EventIter,
+    url: &Url,
 ) -> Option<Vec<PortDec>> {
     let mut ports: Vec<PortDec> = Vec::new();
     let mut port_list = vec![&node.nodes.0.nodes.0];
@@ -189,7 +192,7 @@ pub fn list_variable_idents(
         port_list.push(&port_def.1);
     }
     for port_def in port_list {
-        let mut port = PortDec::default();
+        let mut port = PortDec::new(url);
         let ident = get_ident(tree, RefNode::VariableIdentifier(&port_def.0));
         port.ident = ident.0;
         port.byte_idx = ident.1;
@@ -206,10 +209,10 @@ pub fn port_dec_non_ansi(
     tree: &SyntaxTree,
     node: &PortDeclaration,
     event_iter: &mut EventIter,
+    url: &Url,
 ) -> Option<Vec<PortDec>> {
     let mut ports: Vec<PortDec>;
     let mut common = String::new();
-    eprintln!("found non-ansi ports");
     match node {
         PortDeclaration::Inout(x) => {
             let port_list = advance_until_enter!(
@@ -219,7 +222,7 @@ pub fn port_dec_non_ansi(
                 RefNode::ListOfPortIdentifiers,
                 &ListOfPortIdentifiers
             )?;
-            ports = list_port_idents(tree, &port_list, event_iter)?;
+            ports = list_port_idents(tree, &port_list, event_iter, url)?;
         }
         PortDeclaration::Input(x) => match &x.nodes.1 {
             InputDeclaration::Net(y) => {
@@ -230,7 +233,7 @@ pub fn port_dec_non_ansi(
                     RefNode::ListOfPortIdentifiers,
                     &ListOfPortIdentifiers
                 )?;
-                ports = list_port_idents(tree, &port_list, event_iter)?;
+                ports = list_port_idents(tree, &port_list, event_iter, url)?;
             }
             InputDeclaration::Variable(y) => {
                 let port_list = advance_until_enter!(
@@ -240,7 +243,7 @@ pub fn port_dec_non_ansi(
                     RefNode::ListOfVariableIdentifiers,
                     &ListOfVariableIdentifiers
                 )?;
-                ports = list_variable_idents(tree, &port_list, event_iter)?;
+                ports = list_variable_idents(tree, &port_list, event_iter, url)?;
             }
         },
         PortDeclaration::Output(x) => match &x.nodes.1 {
@@ -252,7 +255,7 @@ pub fn port_dec_non_ansi(
                     RefNode::ListOfPortIdentifiers,
                     &ListOfPortIdentifiers
                 )?;
-                ports = list_port_idents(tree, &port_list, event_iter)?;
+                ports = list_port_idents(tree, &port_list, event_iter, url)?;
             }
             OutputDeclaration::Variable(y) => {
                 let port_list = advance_until_enter!(
@@ -262,7 +265,7 @@ pub fn port_dec_non_ansi(
                     RefNode::ListOfVariableIdentifiers,
                     &ListOfVariableIdentifiers
                 )?;
-                ports = list_variable_idents(tree, &port_list, event_iter)?;
+                ports = list_variable_idents(tree, &port_list, event_iter, url)?;
             }
         },
         PortDeclaration::Ref(x) => {
@@ -273,7 +276,7 @@ pub fn port_dec_non_ansi(
                 RefNode::ListOfVariableIdentifiers,
                 &ListOfVariableIdentifiers
             )?;
-            ports = list_variable_idents(tree, &port_list, event_iter)?;
+            ports = list_variable_idents(tree, &port_list, event_iter, url)?;
         }
         PortDeclaration::Interface(x) => {
             let interface =
@@ -291,7 +294,7 @@ pub fn port_dec_non_ansi(
                 RefNode::ListOfInterfaceIdentifiers,
                 &ListOfInterfaceIdentifiers
             )?;
-            ports = list_interface_idents(tree, &port_list, event_iter)?;
+            ports = list_interface_idents(tree, &port_list, event_iter, url)?;
             for port in &mut ports {
                 port.interface = interface.clone();
                 port.modport = modport.clone();
@@ -309,6 +312,7 @@ pub fn list_net_decl(
     tree: &SyntaxTree,
     node: &ListOfNetDeclAssignments,
     event_iter: &mut EventIter,
+    url: &Url,
 ) -> Option<Vec<NetDec>> {
     let mut nets: Vec<NetDec> = Vec::new();
     let mut net_list = vec![&node.nodes.0.nodes.0];
@@ -316,7 +320,7 @@ pub fn list_net_decl(
         net_list.push(&net_def.1);
     }
     for net_def in net_list {
-        let mut net = NetDec::default();
+        let mut net = NetDec::new(url);
         let ident = get_ident(tree, RefNode::NetIdentifier(&net_def.nodes.0));
         net.ident = ident.0;
         net.byte_idx = ident.1;
@@ -333,10 +337,10 @@ pub fn net_dec(
     tree: &SyntaxTree,
     node: &NetDeclaration,
     event_iter: &mut EventIter,
+    url: &Url,
 ) -> Option<Vec<NetDec>> {
     let mut nets: Vec<NetDec>;
     let mut common = String::new();
-    eprintln!("found net");
     match node {
         NetDeclaration::NetType(x) => {
             let net_list = advance_until_enter!(
@@ -346,7 +350,7 @@ pub fn net_dec(
                 RefNode::ListOfNetDeclAssignments,
                 &ListOfNetDeclAssignments
             )?;
-            nets = list_net_decl(tree, net_list, event_iter)?;
+            nets = list_net_decl(tree, net_list, event_iter, url)?;
         }
         NetDeclaration::NetTypeIdentifier(x) => {
             let net_list = advance_until_enter!(
@@ -356,10 +360,10 @@ pub fn net_dec(
                 RefNode::ListOfNetDeclAssignments,
                 &ListOfNetDeclAssignments
             )?;
-            nets = list_net_decl(tree, net_list, event_iter)?;
+            nets = list_net_decl(tree, net_list, event_iter, url)?;
         }
         NetDeclaration::Interconnect(x) => {
-            let mut net = NetDec::default();
+            let mut net = NetDec::new(url);
             let ident = get_ident(tree, RefNode::NetIdentifier(&x.nodes.3));
             net.ident = ident.0;
             net.byte_idx = ident.1;
@@ -386,6 +390,7 @@ pub fn list_var_decl(
     tree: &SyntaxTree,
     node: &ListOfVariableDeclAssignments,
     event_iter: &mut EventIter,
+    url: &Url,
 ) -> Option<Vec<DataDec>> {
     let mut vars: Vec<DataDec> = Vec::new();
     let mut var_list = vec![&node.nodes.0.nodes.0];
@@ -393,7 +398,7 @@ pub fn list_var_decl(
         var_list.push(&var_def.1);
     }
     for var_def in var_list {
-        let mut var = DataDec::default();
+        let mut var = DataDec::new(url);
         match &var_def {
             VariableDeclAssignment::Variable(node) => {
                 let ident = get_ident(tree, RefNode::VariableIdentifier(&node.nodes.0));
@@ -428,10 +433,10 @@ pub fn data_dec(
     tree: &SyntaxTree,
     node: &DataDeclaration,
     event_iter: &mut EventIter,
+    url: &Url,
 ) -> Option<Vec<DataDec>> {
     let mut data: Vec<DataDec>;
     let mut common = String::new();
-    eprintln!("found data_dec");
     match node {
         DataDeclaration::Variable(x) => {
             let var_list = advance_until_enter!(
@@ -441,11 +446,11 @@ pub fn data_dec(
                 RefNode::ListOfVariableDeclAssignments,
                 &ListOfVariableDeclAssignments
             )?;
-            data = list_var_decl(tree, var_list, event_iter)?;
+            data = list_var_decl(tree, var_list, event_iter, url)?;
         }
         DataDeclaration::TypeDeclaration(x) => match &**x {
             TypeDeclaration::DataType(y) => {
-                let mut var = DataDec::default();
+                let mut var = DataDec::new(url);
                 let ident = get_ident(tree, RefNode::TypeIdentifier(&y.nodes.2));
                 var.ident = ident.0;
                 var.byte_idx = ident.1;
@@ -456,7 +461,7 @@ pub fn data_dec(
                 data = vec![var];
             }
             TypeDeclaration::Interface(y) => {
-                let mut var = DataDec::default();
+                let mut var = DataDec::new(url);
                 let ident = get_ident(tree, RefNode::TypeIdentifier(&y.nodes.5));
                 var.ident = ident.0;
                 var.byte_idx = ident.1;
@@ -479,7 +484,7 @@ pub fn data_dec(
                 data = vec![var];
             }
             TypeDeclaration::Reserved(y) => {
-                let mut var = DataDec::default();
+                let mut var = DataDec::new(url);
                 let ident = get_ident(tree, RefNode::TypeIdentifier(&y.nodes.2));
                 var.ident = ident.0;
                 var.byte_idx = ident.1;
@@ -502,7 +507,7 @@ pub fn data_dec(
             }
             data = Vec::new();
             for import_def in import_list {
-                let mut import = DataDec::default();
+                let mut import = DataDec::new(url);
                 match import_def {
                     PackageImportItem::Identifier(y) => {
                         let ident = get_ident(tree, RefNode::PackageIdentifier(&y.nodes.0));
@@ -525,7 +530,7 @@ pub fn data_dec(
         }
         DataDeclaration::NetTypeDeclaration(x) => match &**x {
             NetTypeDeclaration::DataType(y) => {
-                let mut var = DataDec::default();
+                let mut var = DataDec::new(url);
                 let ident = get_ident(tree, RefNode::NetTypeIdentifier(&y.nodes.2));
                 var.ident = ident.0;
                 var.byte_idx = ident.1;
@@ -541,7 +546,7 @@ pub fn data_dec(
                 data = vec![var];
             }
             NetTypeDeclaration::NetType(y) => {
-                let mut var = DataDec::default();
+                let mut var = DataDec::new(url);
                 let ident = get_ident(tree, RefNode::NetTypeIdentifier(&y.nodes.2));
                 var.ident = ident.0;
                 var.byte_idx = ident.1;
@@ -562,6 +567,7 @@ pub fn tfport_list(
     tree: &SyntaxTree,
     node: &TfPortList,
     event_iter: &mut EventIter,
+    url: &Url,
 ) -> Option<Vec<PortDec>> {
     let mut tfports: Vec<PortDec> = Vec::new();
     let mut tfports_list = vec![&node.nodes.0.nodes.0];
@@ -571,7 +577,7 @@ pub fn tfport_list(
     for tfports_def in tfports_list {
         match &tfports_def.nodes.4 {
             Some(def) => {
-                let mut tfport = PortDec::default();
+                let mut tfport = PortDec::new(url);
                 let ident = get_ident(tree, RefNode::PortIdentifier(&def.0));
                 tfport.ident = ident.0;
                 tfport.byte_idx = ident.1;
@@ -592,12 +598,12 @@ pub fn function_dec(
     tree: &SyntaxTree,
     node: &FunctionDeclaration,
     event_iter: &mut EventIter,
+    url: &Url,
 ) -> Option<Vec<Arc<dyn Definition>>> {
     let mut defs: Vec<Arc<dyn Definition>>;
-    eprintln!("found func");
     match &node.nodes.2 {
         FunctionBodyDeclaration::WithoutPort(x) => {
-            let mut func = SubDec::default();
+            let mut func = SubDec::new(url);
             let ident = get_ident(tree, RefNode::FunctionIdentifier(&x.nodes.2));
             func.ident = ident.0;
             func.byte_idx = ident.1;
@@ -614,7 +620,7 @@ pub fn function_dec(
             defs = vec![Arc::new(func)];
         }
         FunctionBodyDeclaration::WithPort(x) => {
-            let mut func = SubDec::default();
+            let mut func = SubDec::new(url);
             let ident = get_ident(tree, RefNode::FunctionIdentifier(&x.nodes.2));
             func.ident = ident.0;
             func.byte_idx = ident.1;
@@ -632,7 +638,7 @@ pub fn function_dec(
             match &x.nodes.3.nodes.1 {
                 Some(tfports) => {
                     skip_until_enter!(tree, event_iter, RefNode::TfPortList, &TfPortList);
-                    let ports = tfport_list(tree, tfports, event_iter)?;
+                    let ports = tfport_list(tree, tfports, event_iter, url)?;
                     for port in ports {
                         defs.push(Arc::new(port));
                     }
@@ -648,12 +654,12 @@ pub fn task_dec(
     tree: &SyntaxTree,
     node: &TaskDeclaration,
     event_iter: &mut EventIter,
+    url: &Url,
 ) -> Option<Vec<Arc<dyn Definition>>> {
     let mut defs: Vec<Arc<dyn Definition>>;
-    eprintln!("found task");
     match &node.nodes.2 {
         TaskBodyDeclaration::WithoutPort(x) => {
-            let mut task = SubDec::default();
+            let mut task = SubDec::new(url);
             let ident = get_ident(tree, RefNode::TaskIdentifier(&x.nodes.1));
             task.ident = ident.0;
             task.byte_idx = ident.1;
@@ -670,7 +676,7 @@ pub fn task_dec(
             defs = vec![Arc::new(task)];
         }
         TaskBodyDeclaration::WithPort(x) => {
-            let mut task = SubDec::default();
+            let mut task = SubDec::new(url);
             let ident = get_ident(tree, RefNode::TaskIdentifier(&x.nodes.1));
             task.ident = ident.0;
             task.byte_idx = ident.1;
@@ -688,7 +694,7 @@ pub fn task_dec(
             match &x.nodes.2.nodes.1 {
                 Some(tfports) => {
                     skip_until_enter!(tree, event_iter, RefNode::TfPortList, &TfPortList);
-                    let ports = tfport_list(tree, tfports, event_iter)?;
+                    let ports = tfport_list(tree, tfports, event_iter, url)?;
                     for port in ports {
                         defs.push(Arc::new(port));
                     }
@@ -704,17 +710,17 @@ pub fn modport_dec(
     tree: &SyntaxTree,
     node: &ModportDeclaration,
     event_iter: &mut EventIter,
+    url: &Url,
 ) -> Option<Vec<ModportDec>> {
     let mut modports: Vec<ModportDec> = Vec::new();
     let mut common = String::new();
-    eprintln!("found modport");
     advance_until_enter!(common, tree, event_iter, RefNode::ModportItem, &ModportItem);
     let mut modports_list = vec![&node.nodes.1.nodes.0];
     for modports_def in &node.nodes.1.nodes.1 {
         modports_list.push(&modports_def.1);
     }
     for modport_def in modports_list {
-        let mut modport = ModportDec::default();
+        let mut modport = ModportDec::new(url);
         let ident = get_ident(tree, RefNode::ModportIdentifier(&modport_def.nodes.0));
         modport.ident = ident.0;
         modport.byte_idx = ident.1;
@@ -749,7 +755,7 @@ pub fn modport_dec(
                     for mp_simple_def in mp_simple_port_decs {
                         match mp_simple_def {
                             ModportSimplePort::Ordered(y) => {
-                                let mut port = PortDec::default();
+                                let mut port = PortDec::new(url);
                                 let ident = get_ident(tree, RefNode::PortIdentifier(&y.nodes.0));
                                 port.ident = ident.0;
                                 port.byte_idx = ident.1;
@@ -764,7 +770,7 @@ pub fn modport_dec(
                                     RefNode::PortIdentifier,
                                     &PortIdentifier
                                 )?;
-                                let mut port = PortDec::default();
+                                let mut port = PortDec::new(url);
                                 let ident = get_ident(tree, RefNode::PortIdentifier(port_ident));
                                 port.ident = ident.0;
                                 port.byte_idx = ident.1;
@@ -805,7 +811,7 @@ pub fn modport_dec(
                         match mp_tf_port {
                             ModportTfPort::MethodPrototype(y) => match &**y {
                                 MethodPrototype::TaskPrototype(z) => {
-                                    let mut port = SubDec::default();
+                                    let mut port = SubDec::new(url);
                                     let ident =
                                         get_ident(tree, RefNode::TaskIdentifier(&z.nodes.1));
                                     port.ident = ident.0;
@@ -826,7 +832,7 @@ pub fn modport_dec(
                                     modport.ports.push(Arc::new(port));
                                 }
                                 MethodPrototype::FunctionPrototype(z) => {
-                                    let mut port = SubDec::default();
+                                    let mut port = SubDec::new(url);
                                     let ident =
                                         get_ident(tree, RefNode::FunctionIdentifier(&z.nodes.2));
                                     port.ident = ident.0;
@@ -848,7 +854,7 @@ pub fn modport_dec(
                                 }
                             },
                             ModportTfPort::TfIdentifier(y) => {
-                                let mut port = SubDec::default();
+                                let mut port = SubDec::new(url);
                                 let ident = get_ident(tree, RefNode::TfIdentifier(&y));
                                 port.ident = ident.0;
                                 port.byte_idx = ident.1;
@@ -874,7 +880,7 @@ pub fn modport_dec(
                         &ClockingIdentifier
                     )?;
                     let ident = get_ident(tree, RefNode::ClockingIdentifier(clock_ident));
-                    let mut port = PortDec::default();
+                    let mut port = PortDec::new(url);
                     port.ident = ident.0;
                     port.byte_idx = ident.1;
                     port.type_str = tokens;
@@ -892,9 +898,9 @@ pub fn module_inst(
     tree: &SyntaxTree,
     node: &ModuleInstantiation,
     event_iter: &mut EventIter,
+    url: &Url,
 ) -> Option<Vec<ModInst>> {
     let mut defs: Vec<ModInst> = Vec::new();
-    eprintln!("found module inst");
     let mod_ident = get_ident(tree, RefNode::ModuleIdentifier(&node.nodes.0)).0;
     let mut instances = vec![&node.nodes.2.nodes.0];
     for inst in &node.nodes.2.nodes.1 {
@@ -907,7 +913,7 @@ pub fn module_inst(
             RefNode::HierarchicalInstance,
             &HierarchicalInstance
         )?;
-        let mut instance = ModInst::default();
+        let mut instance = ModInst::new(url);
         let ident = get_ident(tree, RefNode::InstanceIdentifier(&hinst.nodes.0.nodes.0));
         instance.ident = ident.0;
         instance.byte_idx = ident.1;

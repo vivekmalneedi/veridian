@@ -19,6 +19,7 @@ fn clean_type_str(type_str: &str, ident: &str) -> String {
 pub trait Definition: std::fmt::Debug + Sync + Send {
     fn ident(&self) -> String;
     fn byte_idx(&self) -> usize;
+    fn url(&self) -> Url;
     fn type_str(&self) -> String;
     fn kind(&self) -> CompletionItemKind;
     fn def_type(&self) -> &DefinitionType;
@@ -42,6 +43,7 @@ pub enum DefinitionType {
 pub struct PortDec {
     pub ident: String,
     pub byte_idx: usize,
+    pub url: Url,
     pub type_str: String,
     pub kind: CompletionItemKind,
     def_type: DefinitionType,
@@ -49,8 +51,8 @@ pub struct PortDec {
     pub modport: Option<String>,
 }
 
-impl Default for PortDec {
-    fn default() -> Self {
+impl PortDec {
+    pub fn new(url: &Url) -> Self {
         Self {
             ident: String::new(),
             byte_idx: 0,
@@ -59,6 +61,7 @@ impl Default for PortDec {
             def_type: DefinitionType::Port,
             interface: None,
             modport: None,
+            url: url.clone(),
         }
     }
 }
@@ -69,6 +72,9 @@ impl Definition for PortDec {
     }
     fn byte_idx(&self) -> usize {
         self.byte_idx
+    }
+    fn url(&self) -> Url {
+        self.url.clone()
     }
     fn type_str(&self) -> String {
         self.type_str.clone()
@@ -91,11 +97,8 @@ impl Definition for PortDec {
         }
     }
     fn dot_completion(&self, scope_tree: &Scope) -> Option<Vec<CompletionItem>> {
-        eprintln!("dot complete for {}", self.ident);
         for scope in &scope_tree.scopes {
-            eprintln!("inter: {}", &scope.name);
             if &scope.name == self.interface.as_ref()? {
-                eprintln!("found inter: {}", &scope.name);
                 return match &self.modport {
                     Some(modport) => {
                         for def in &scope.defs {
@@ -105,7 +108,14 @@ impl Definition for PortDec {
                         }
                         None
                     }
-                    None => Some(scope.defs.iter().map(|x| x.completion()).collect()),
+                    None => Some(
+                        scope
+                            .defs
+                            .iter()
+                            .filter(|x| !x.starts_with(&scope.name))
+                            .map(|x| x.completion())
+                            .collect(),
+                    ),
                 };
             }
         }
@@ -117,16 +127,18 @@ impl Definition for PortDec {
 pub struct NetDec {
     pub ident: String,
     pub byte_idx: usize,
+    pub url: Url,
     pub type_str: String,
     pub kind: CompletionItemKind,
     def_type: DefinitionType,
 }
 
-impl Default for NetDec {
-    fn default() -> Self {
+impl NetDec {
+    pub fn new(url: &Url) -> Self {
         Self {
             ident: String::new(),
             byte_idx: 0,
+            url: url.clone(),
             type_str: String::new(),
             kind: CompletionItemKind::Variable,
             def_type: DefinitionType::Net,
@@ -140,6 +152,9 @@ impl Definition for NetDec {
     }
     fn byte_idx(&self) -> usize {
         self.byte_idx
+    }
+    fn url(&self) -> Url {
+        self.url.clone()
     }
     fn type_str(&self) -> String {
         self.type_str.clone()
@@ -170,17 +185,19 @@ impl Definition for NetDec {
 pub struct DataDec {
     pub ident: String,
     pub byte_idx: usize,
+    pub url: Url,
     pub type_str: String,
     pub kind: CompletionItemKind,
     def_type: DefinitionType,
     pub import_ident: Option<String>,
 }
 
-impl Default for DataDec {
-    fn default() -> Self {
+impl DataDec {
+    pub fn new(url: &Url) -> Self {
         Self {
             ident: String::new(),
             byte_idx: 0,
+            url: url.clone(),
             type_str: String::new(),
             kind: CompletionItemKind::Variable,
             def_type: DefinitionType::Data,
@@ -195,6 +212,9 @@ impl Definition for DataDec {
     }
     fn byte_idx(&self) -> usize {
         self.byte_idx
+    }
+    fn url(&self) -> Url {
+        self.url.clone()
     }
     fn type_str(&self) -> String {
         self.type_str.clone()
@@ -225,16 +245,18 @@ impl Definition for DataDec {
 pub struct SubDec {
     pub ident: String,
     pub byte_idx: usize,
+    pub url: Url,
     pub type_str: String,
     pub kind: CompletionItemKind,
     def_type: DefinitionType,
 }
 
-impl Default for SubDec {
-    fn default() -> Self {
+impl SubDec {
+    pub fn new(url: &Url) -> Self {
         Self {
             ident: String::new(),
             byte_idx: 0,
+            url: url.clone(),
             type_str: String::new(),
             kind: CompletionItemKind::Function,
             def_type: DefinitionType::Subroutine,
@@ -248,6 +270,9 @@ impl Definition for SubDec {
     }
     fn byte_idx(&self) -> usize {
         self.byte_idx
+    }
+    fn url(&self) -> Url {
+        self.url.clone()
     }
     fn type_str(&self) -> String {
         self.type_str.clone()
@@ -278,17 +303,19 @@ impl Definition for SubDec {
 pub struct ModportDec {
     pub ident: String,
     pub byte_idx: usize,
+    pub url: Url,
     pub type_str: String,
     pub kind: CompletionItemKind,
     def_type: DefinitionType,
     pub ports: Vec<Arc<dyn Definition>>,
 }
 
-impl Default for ModportDec {
-    fn default() -> Self {
+impl ModportDec {
+    pub fn new(url: &Url) -> Self {
         Self {
             ident: String::new(),
             byte_idx: 0,
+            url: url.clone(),
             type_str: String::new(),
             kind: CompletionItemKind::Interface,
             def_type: DefinitionType::Modport,
@@ -303,6 +330,9 @@ impl Definition for ModportDec {
     }
     fn byte_idx(&self) -> usize {
         self.byte_idx
+    }
+    fn url(&self) -> Url {
+        self.url.clone()
     }
     fn type_str(&self) -> String {
         self.type_str.clone()
@@ -333,17 +363,19 @@ impl Definition for ModportDec {
 pub struct ModInst {
     pub ident: String,
     pub byte_idx: usize,
+    pub url: Url,
     pub type_str: String,
     pub kind: CompletionItemKind,
     def_type: DefinitionType,
     pub mod_ident: String,
 }
 
-impl Default for ModInst {
-    fn default() -> Self {
+impl ModInst {
+    pub fn new(url: &Url) -> Self {
         Self {
             ident: String::new(),
             byte_idx: 0,
+            url: url.clone(),
             type_str: String::new(),
             kind: CompletionItemKind::Variable,
             def_type: DefinitionType::ModuleInstantiation,
@@ -358,6 +390,9 @@ impl Definition for ModInst {
     }
     fn byte_idx(&self) -> usize {
         self.byte_idx
+    }
+    fn url(&self) -> Url {
+        self.url.clone()
     }
     fn type_str(&self) -> String {
         self.type_str.clone()
@@ -382,7 +417,14 @@ impl Definition for ModInst {
     fn dot_completion(&self, scope_tree: &Scope) -> Option<Vec<CompletionItem>> {
         for scope in &scope_tree.scopes {
             if &scope.name == &self.mod_ident {
-                return Some(scope.defs.iter().map(|x| x.completion()).collect());
+                return Some(
+                    scope
+                        .defs
+                        .iter()
+                        .filter(|x| !x.starts_with(&scope.name))
+                        .map(|x| x.completion())
+                        .collect(),
+                );
             }
         }
         None
@@ -393,16 +435,18 @@ impl Definition for ModInst {
 pub struct GenericScope {
     pub ident: String,
     pub byte_idx: usize,
+    pub url: Url,
     pub type_str: String,
     pub kind: CompletionItemKind,
     def_type: DefinitionType,
 }
 
-impl Default for GenericScope {
-    fn default() -> Self {
+impl GenericScope {
+    pub fn new(url: &Url) -> Self {
         Self {
             ident: String::new(),
             byte_idx: 0,
+            url: url.clone(),
             type_str: String::new(),
             kind: CompletionItemKind::Module,
             def_type: DefinitionType::GenericScope,
@@ -416,6 +460,9 @@ impl Definition for GenericScope {
     }
     fn byte_idx(&self) -> usize {
         self.byte_idx
+    }
+    fn url(&self) -> Url {
+        self.url.clone()
     }
     fn type_str(&self) -> String {
         self.type_str.clone()
