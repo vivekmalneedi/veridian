@@ -28,20 +28,23 @@ impl LSPServer {
                         "." => Some(self.srcs.get_dot_completions(
                             token.trim_end_matches("."),
                             file.text.pos_to_byte(&doc.position),
+                            &doc.text_document.uri,
                         )?),
                         _ => None,
                     }
                 }
                 CompletionTriggerKind::TriggerForIncompleteCompletions => None,
-                CompletionTriggerKind::Invoked => Some(
-                    self.srcs
-                        .get_completions(&token, file.text.pos_to_byte(&doc.position))?,
-                ),
+                CompletionTriggerKind::Invoked => Some(self.srcs.get_completions(
+                    &token,
+                    file.text.pos_to_byte(&doc.position),
+                    &doc.text_document.uri,
+                )?),
             },
-            None => Some(
-                self.srcs
-                    .get_completions(&token, file.text.pos_to_byte(&doc.position))?,
-            ),
+            None => Some(self.srcs.get_completions(
+                &token,
+                file.text.pos_to_byte(&doc.position),
+                &doc.text_document.uri,
+            )?),
         };
         // eprintln!("comp response: {}", now.elapsed().as_millis());
         Some(CompletionResponse::List(response?))

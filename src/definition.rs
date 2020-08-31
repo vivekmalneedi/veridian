@@ -21,10 +21,12 @@ impl LSPServer {
         let file = file.read().ok()?;
         let token = get_definition_token(file.text.line(pos.line as usize), pos);
         let scope_tree = self.srcs.scope_tree.read().ok()?;
+        eprintln!("{:#?}", scope_tree.as_ref()?);
         let def = scope_tree
             .as_ref()?
-            .get_definition(&token, file.text.pos_to_byte(&pos))?;
+            .get_definition(&token, file.text.pos_to_byte(&pos), &doc)?;
         let def_pos = file.text.byte_to_pos(def.byte_idx());
+        eprintln!("def: {:?}", def_pos);
         Some(GotoDefinitionResponse::Scalar(Location::new(
             def.url(),
             Range::new(def_pos, def_pos),
@@ -41,7 +43,7 @@ impl LSPServer {
         let scope_tree = self.srcs.scope_tree.read().ok()?;
         let def = scope_tree
             .as_ref()?
-            .get_definition(&token, file.text.pos_to_byte(&pos))?;
+            .get_definition(&token, file.text.pos_to_byte(&pos), &doc)?;
         let def_line = file.text.byte_to_line(def.byte_idx());
         Some(Hover {
             contents: HoverContents::Scalar(MarkedString::LanguageString(LanguageString {

@@ -126,21 +126,32 @@ impl Scope {
         self.defs.push(def);
     }
     pub fn lift_nested_scope_defs(&mut self) {
+        let mut exists = false;
+        for def in &self.defs {
+            if def.ident() == self.name {
+                exists = true;
+            }
+        }
+
+        if !exists {
+            //TODO: properly handle scope definitions
+            eprintln!("created {}", self.name);
+            let mut def = GenericScope::new(&self.url);
+            def.ident = self.name.clone();
+            def.byte_idx = self.start;
+            self.defs.push(Arc::new(def));
+        }
+
         'outer: for scope in &mut self.scopes {
             scope.lift_nested_scope_defs();
             for def in &scope.defs {
                 if def.ident() == scope.name.clone() {
                     self.defs.push(def.clone());
+                    // eprintln!("lifted {} to {}: {:#?}", scope.name, self.name, self.defs);
                     continue 'outer;
                 }
             }
         }
-
-        //TODO: properly handle scope definitions
-        let mut def = GenericScope::new(&self.url);
-        def.ident = self.name.clone();
-        def.byte_idx = self.start;
-        self.defs.push(Arc::new(def));
     }
     #[cfg(test)]
     pub fn contains_scope(&self, scope_ident: &str) -> bool {
@@ -154,11 +165,11 @@ impl Scope {
         }
         false
     }
-    pub fn complete(&self, token: &str, byte_idx: usize) -> Vec<CompletionItem> {
+    pub fn complete(&self, token: &str, byte_idx: usize, url: &Url) -> Vec<CompletionItem> {
         let mut completions: Vec<CompletionItem> = Vec::new();
         for scope in &self.scopes {
-            if scope.start <= byte_idx && byte_idx <= scope.end {
-                completions = scope.complete(token, byte_idx);
+            if &scope.url == url && scope.start <= byte_idx && byte_idx <= scope.end {
+                completions = scope.complete(token, byte_idx, url);
                 break;
             }
         }
@@ -183,11 +194,12 @@ impl Scope {
         &self,
         token: &str,
         byte_idx: usize,
+        url: &Url,
         scope_tree: &Scope,
     ) -> Option<Vec<CompletionItem>> {
         for scope in &self.scopes {
-            if scope.start <= byte_idx && byte_idx <= scope.end {
-                return scope.dot_completion(token, byte_idx, scope_tree);
+            if &scope.url == url && scope.start <= byte_idx && byte_idx <= scope.end {
+                return scope.dot_completion(token, byte_idx, url, scope_tree);
             }
         }
         for def in &self.defs {
@@ -197,11 +209,16 @@ impl Scope {
         }
         None
     }
-    pub fn get_definition(&self, token: &str, byte_idx: usize) -> Option<&dyn Definition> {
+    pub fn get_definition(
+        &self,
+        token: &str,
+        byte_idx: usize,
+        url: &Url,
+    ) -> Option<&dyn Definition> {
         let mut definition: Option<&dyn Definition> = None;
         for scope in &self.scopes {
-            if scope.start <= byte_idx && byte_idx <= scope.end {
-                definition = scope.get_definition(token, byte_idx);
+            if &scope.url == url && scope.start <= byte_idx && byte_idx <= scope.end {
+                definition = scope.get_definition(token, byte_idx, url);
                 break;
             }
         }
@@ -281,17 +298,23 @@ impl Sources {
                 // eprintln!("parse write: {}", now.elapsed().as_millis());
                 file.syntax_tree = syntax_tree;
                 drop(file);
+                eprintln!("try write global scope");
                 let mut global_scope = scope_handle.write().unwrap();
                 match &mut *global_scope {
                     Some(scope) => match &mut scope_tree {
                         Some(tree) => {
+                            scope.defs.retain(|x| &x.url() != uri);
+                            scope.scopes.retain(|x| &x.url != uri);
+                            scope.defs.append(&mut tree.defs);
                             scope.scopes.append(&mut tree.scopes);
                         }
                         None => (),
                     },
                     None => *global_scope = scope_tree,
                 }
+                eprintln!("{:#?}", *global_scope);
                 drop(global_scope);
+                eprintln!("write global scope");
                 // eprintln!("parse write complete: {}", now.elapsed().as_millis());
                 let mut valid = lock.lock().unwrap();
                 *valid = true;
@@ -360,7 +383,12 @@ impl Sources {
         self.names.read().unwrap().get(uri).unwrap().clone()
     }
 
-    pub fn get_completions(&self, token: &String, byte_idx: usize) -> Option<CompletionList> {
+    pub fn get_completions(
+        &self,
+        token: &String,
+        byte_idx: usize,
+        url: &Url,
+    ) -> Option<CompletionList> {
         Some(CompletionList {
             is_incomplete: false,
             items: self
@@ -368,18 +396,23 @@ impl Sources {
                 .read()
                 .ok()?
                 .as_ref()?
-                .complete(token, byte_idx),
+                .complete(token, byte_idx, url),
         })
     }
 
-    pub fn get_dot_completions(&self, token: &str, byte_idx: usize) -> Option<CompletionList> {
+    pub fn get_dot_completions(
+        &self,
+        token: &str,
+        byte_idx: usize,
+        url: &Url,
+    ) -> Option<CompletionList> {
         eprintln!("get dot completions");
         let tree = self.scope_tree.read().ok()?;
         Some(CompletionList {
             is_incomplete: false,
             items: tree
                 .as_ref()?
-                .dot_completion(token, byte_idx, tree.as_ref()?)?,
+                .dot_completion(token, byte_idx, url, tree.as_ref()?)?,
         })
     }
 }
