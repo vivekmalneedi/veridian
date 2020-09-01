@@ -1,6 +1,3 @@
-[submodule "verilogls_slang_wrapper/slang"]
-	path = verilogls_slang_wrapper/slang
-	url = git@github.com:MikePopoloski/slang.git
 [submodule "veridian-slang/slang"]
 	path = veridian-slang/slang
-	url = git@github.com:MikePopoloski/slang.git
+	url = https://github.com/MikePopoloski/slang.git
