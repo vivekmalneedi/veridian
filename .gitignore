@@ -10,6 +10,5 @@
 !veridian-slang/
 !veridian-slang/slang
 !veridian-slang/src/*
-!veridian-slang/slang_wrapper/include/*/*
 !veridian-slang/slang_wrapper/src/*
 !*.gitignore

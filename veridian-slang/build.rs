@@ -58,8 +58,7 @@ fn main() {
     println!("cargo:rustc-link-lib=static=slangruntime");
     println!("cargo:rustc-link-lib=static=slangparser");
     println!("cargo:rustc-link-lib=static=slangcore");
-    // println!("cargo:rustc-link-lib=static=fmt");
-    // println!("cargo:rustc-link-lib=static=stdc++");
+    println!("cargo:rustc-link-lib=dylib=stdc++");
 
     let out_path = PathBuf::from(out_dir);
     bindings
