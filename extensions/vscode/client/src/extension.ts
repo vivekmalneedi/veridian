@@ -18,7 +18,7 @@ let cwd: string = workSpaceFolder.uri.fsPath;
 
 export function activate(context: ExtensionContext) {
   const run: Executable = {
-    command: "/home/vivek/Documents/projects/verilogls/target/debug/verilogls",
+    command: "/home/vivek/Documents/projects/veridian/target/debug/veridian",
     // options: { cwd },
   };
 

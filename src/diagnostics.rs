@@ -4,7 +4,7 @@ use std::io;
 use std::path::Path;
 use std::path::PathBuf;
 use tower_lsp::lsp_types::*;
-use verilogls_slang_wrapper::slang_compile;
+use veridian_slang::slang_compile;
 use walkdir::{DirEntry, WalkDir};
 
 pub fn get_diagnostics(uri: Url, files: Vec<Url>) -> PublishDiagnosticsParams {

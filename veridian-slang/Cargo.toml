@@ -1,5 +1,5 @@
 [package]
-name = "verilogls_slang_wrapper"
+name = "veridian_slang"
 version = "0.1.0"
 authors = ["Vivek Malneedi <vivekmalneedi@gmail.com>"]
 edition = "2018"

@@ -1,10 +1,11 @@
-/*
-verilogls_slang_wrapper/*
+*
+!*/
 !Cargo.lock
 !Cargo.toml
 !src/
 !extensions/
 !build.rs
 !rustfmt.toml
-!tests
-!verilogls_slang_wrapper
+!tests/
+!veridian-slang/
+!*.gitignore

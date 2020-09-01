@@ -61,7 +61,7 @@ fn main() {
         env::var("CARGO_MANIFEST_DIR").unwrap()
     );
     println!("cargo:rustc-link-search=native={}", fmt_lib_dir);
-    println!("cargo:rustc-link-search=native=/usr/lib");
+    // println!("cargo:rustc-link-search=native=/usr/lib");
 
     println!("cargo:rustc-link-lib=static=slangwrapper");
     println!("cargo:rustc-link-lib=static=slangcompiler");
@@ -69,7 +69,7 @@ fn main() {
     println!("cargo:rustc-link-lib=static=slangparser");
     println!("cargo:rustc-link-lib=static=slangcore");
     println!("cargo:rustc-link-lib=static=fmt");
-    println!("cargo:rustc-link-lib=static=stdc++");
+    // println!("cargo:rustc-link-lib=static=stdc++");
 
     let out_path = PathBuf::from(out_dir);
     bindings

@@ -1,5 +1,5 @@
 [package]
-name = "verilogls"
+name = "veridian"
 version = "0.1.0"
 authors = ["Vivek Malneedi <vivekmalneedi@gmail.com>"]
 edition = "2018"
@@ -17,4 +17,4 @@ path-clean = "0.1.0"
 pathdiff = "0.2.0"
 walkdir = "2.3.1"
 
-verilogls_slang_wrapper = { path = "verilogls_slang_wrapper" }
+veridian_slang = { path = "veridian-slang" }
