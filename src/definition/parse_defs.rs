@@ -733,12 +733,12 @@ pub fn modport_dec(
         }
         for mp_port_dec in mp_port_decs {
             match mp_port_dec {
-                ModportPortsDeclaraton::Simple(x) => {
+                ModportPortsDeclaration::Simple(x) => {
                     skip_until_enter!(
                         tree,
                         event_iter,
-                        RefNode::ModportPortsDeclaratonSimple,
-                        &ModportPortsDeclaratonSimple
+                        RefNode::ModportPortsDeclarationSimple,
+                        &ModportPortsDeclarationSimple
                     );
                     let mut prepend = String::new();
                     advance_until_enter!(
@@ -788,12 +788,12 @@ pub fn modport_dec(
                         }
                     }
                 }
-                ModportPortsDeclaraton::Tf(x) => {
+                ModportPortsDeclaration::Tf(x) => {
                     skip_until_enter!(
                         tree,
                         event_iter,
-                        RefNode::ModportPortsDeclaratonTf,
-                        &ModportPortsDeclaratonTf
+                        RefNode::ModportPortsDeclarationTf,
+                        &ModportPortsDeclarationTf
                     );
                     let mut prepend = String::new();
                     let mp_tf_ports_dec = advance_until_enter!(
@@ -864,12 +864,12 @@ pub fn modport_dec(
                         }
                     }
                 }
-                ModportPortsDeclaraton::Clocking(x) => {
+                ModportPortsDeclaration::Clocking(x) => {
                     skip_until_enter!(
                         tree,
                         event_iter,
-                        RefNode::ModportPortsDeclaratonClocking,
-                        &ModportPortsDeclaratonClocking
+                        RefNode::ModportPortsDeclarationClocking,
+                        &ModportPortsDeclarationClocking
                     );
                     let mut tokens = String::new();
                     let clock_ident = advance_until_enter!(

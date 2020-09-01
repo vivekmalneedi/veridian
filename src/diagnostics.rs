@@ -5,28 +5,73 @@ use std::path::Path;
 use std::path::PathBuf;
 use tower_lsp::lsp_types::*;
 use verilogls_slang_wrapper::slang_compile;
+use walkdir::{DirEntry, WalkDir};
 
-pub fn get_diagnostics(uri: Url) -> PublishDiagnosticsParams {
-    let path = uri.to_file_path().unwrap();
-    if !path.exists() {
-        return PublishDiagnosticsParams::new(uri, Vec::new(), None);
-    }
-    let mut paths: Vec<PathBuf> = Vec::new();
-    paths.push(path);
+pub fn get_diagnostics(uri: Url, files: Vec<Url>) -> PublishDiagnosticsParams {
+    let paths = get_paths(files);
+    eprintln!("{:#?}", paths);
+    let diagnostics = slang_compile(paths).unwrap();
+    eprintln!("{}", diagnostics);
     PublishDiagnosticsParams {
         uri: uri.clone(),
-        diagnostics: parse_report(uri, slang_compile(paths).unwrap()),
+        diagnostics: parse_report(uri, diagnostics),
         version: None,
     }
+}
+
+fn get_paths(files: Vec<Url>) -> Vec<PathBuf> {
+    let mut paths: Vec<PathBuf> = Vec::new();
+    let walker = WalkDir::new(".").into_iter();
+    for entry in walker.filter_entry(|e| !is_hidden(e)) {
+        let entry = entry.unwrap();
+        if entry.file_type().is_file() {
+            let extension = entry.path().extension().unwrap();
+
+            if extension == "sv" || extension == "svh" || extension == "v" || extension == "vh" {
+                paths.push(entry.path().to_path_buf());
+            }
+        }
+    }
+
+    for file in files {
+        let path = file.to_file_path().unwrap();
+        if !paths.contains(&path) {
+            let walker = WalkDir::new(path.parent().unwrap()).into_iter();
+            for entry in walker.filter_entry(|e| !is_hidden(e)) {
+                let entry = entry.unwrap();
+                if entry.file_type().is_file() && entry.path().extension().is_some() {
+                    let extension = entry.path().extension().unwrap();
+
+                    if extension == "sv"
+                        || extension == "svh"
+                        || extension == "v"
+                        || extension == "vh"
+                    {
+                        let entry_path = entry.path().to_path_buf();
+                        if !paths.contains(&entry_path) {
+                            paths.push(entry_path);
+                        }
+                    }
+                }
+            }
+        }
+    }
+    paths
+}
+
+fn is_hidden(entry: &DirEntry) -> bool {
+    entry
+        .file_name()
+        .to_str()
+        .map(|s| s.starts_with("."))
+        .unwrap_or(false)
 }
 
 fn parse_report(uri: Url, report: String) -> Vec<Diagnostic> {
     let mut diagnostics: Vec<Diagnostic> = Vec::new();
     for line in report.lines() {
         let diag: Vec<&str> = line.splitn(5, ":").collect();
-        if absolute_path(diag.get(0).unwrap()).unwrap()
-            == uri.to_file_path().unwrap().as_os_str()
-        {
+        if absolute_path(diag.get(0).unwrap()).unwrap() == uri.to_file_path().unwrap().as_os_str() {
             let pos = Position::new(
                 diag.get(1).unwrap().parse::<u64>().unwrap() - 1,
                 diag.get(2).unwrap().parse::<u64>().unwrap() - 1,
@@ -65,8 +110,8 @@ mod tests {
 
     #[test]
     fn test_diagnostics() {
-        let uri = Url::from_file_path(absolute_path("tests_rtl/diag_test.sv").unwrap())
-            .unwrap();
+        let uri =
+            Url::from_file_path(absolute_path("tests_rtl/diag/diag_test.sv").unwrap()).unwrap();
         let expected = PublishDiagnosticsParams::new(
             uri.clone(),
             vec![Diagnostic::new(
@@ -80,6 +125,6 @@ mod tests {
             )],
             None,
         );
-        assert_eq!(get_diagnostics(uri), expected);
+        assert_eq!(get_diagnostics(uri.clone(), vec![uri.clone()]), expected);
     }
 }

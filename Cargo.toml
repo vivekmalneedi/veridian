@@ -7,13 +7,14 @@ edition = "2018"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-sv-parser = "0.7.0"
+sv-parser = "0.8.2"
 log = "0.4.11"
-tower-lsp = "0.12.0"
-flexi_logger = "0.15.11"
+tower-lsp = "0.13.1"
+flexi_logger = "0.15.12"
 ropey = "1.2.0"
 tokio = { version = "0.2.22", features = ["macros", "io-std"] }
 path-clean = "0.1.0"
 pathdiff = "0.2.0"
+walkdir = "2.3.1"
 
 verilogls_slang_wrapper = { path = "verilogls_slang_wrapper" }

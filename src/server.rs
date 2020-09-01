@@ -63,18 +63,21 @@ impl LanguageServer for Backend {
     }
     async fn initialized(&self, _: InitializedParams) {
         self.client
-            .log_message(MessageType::Info, "server initialized!");
+            .log_message(MessageType::Info, "server initialized!")
+            .await;
     }
     async fn shutdown(&self) -> Result<()> {
         Ok(())
     }
     async fn did_open(&self, params: DidOpenTextDocumentParams) {
         let diagnostics = self.server.did_open(params);
-        self.client.publish_diagnostics(
-            diagnostics.uri,
-            diagnostics.diagnostics,
-            diagnostics.version,
-        );
+        self.client
+            .publish_diagnostics(
+                diagnostics.uri,
+                diagnostics.diagnostics,
+                diagnostics.version,
+            )
+            .await;
     }
     async fn did_close(&self, params: DidCloseTextDocumentParams) {
         self.server.did_close(params);
@@ -84,11 +87,13 @@ impl LanguageServer for Backend {
     }
     async fn did_save(&self, params: DidSaveTextDocumentParams) {
         let diagnostics = self.server.did_save(params);
-        self.client.publish_diagnostics(
-            diagnostics.uri,
-            diagnostics.diagnostics,
-            diagnostics.version,
-        );
+        self.client
+            .publish_diagnostics(
+                diagnostics.uri,
+                diagnostics.diagnostics,
+                diagnostics.version,
+            )
+            .await;
     }
     async fn completion(&self, params: CompletionParams) -> Result<Option<CompletionResponse>> {
         Ok(self.server.completion(params))

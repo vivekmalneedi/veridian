@@ -66,7 +66,15 @@ impl LSPServer {
     }
 
     pub fn did_save(&self, params: DidSaveTextDocumentParams) -> PublishDiagnosticsParams {
-        get_diagnostics(params.text_document.uri)
+        let urls = self
+            .srcs
+            .names
+            .read()
+            .unwrap()
+            .keys()
+            .map(|x| x.clone())
+            .collect();
+        get_diagnostics(params.text_document.uri, urls)
     }
 }
 

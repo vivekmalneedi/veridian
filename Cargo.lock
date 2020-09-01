@@ -81,9 +81,9 @@ checksum = "3441f0f7b02788e948e47f457ca01f1d7e6d92c693bc132c22b087d3141c03ff"
 
 [[package]]
 name = "bindgen"
-version = "0.54.1"
+version = "0.55.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f4d49b80beb70d76cdac92f5681e666f9a697c737c4f4117a67229a0386dc736"
+checksum = "75b13ce559e6433d360c26305643803cb52cfbabbc2b9c47ce04a58493dfb443"
 dependencies = [
  "bitflags",
  "cexpr",
@@ -129,9 +129,9 @@ checksum = "0e4cec68f03f32e44924783795810fa50a7035d8c8ebe78580ad7e6c703fba38"
 
 [[package]]
 name = "cc"
-version = "1.0.58"
+version = "1.0.59"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f9a06fb2e53271d7c279ec1efea6ab691c35a2ae67ec0d91d7acec0caf13b518"
+checksum = "66120af515773fb005778dc07c261bd201ec8ce50bd6e7144c927753fe013381"
 dependencies = [
  "jobserver",
 ]
@@ -164,9 +164,9 @@ dependencies = [
 
 [[package]]
 name = "clang-sys"
-version = "0.29.3"
+version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fe6837df1d5cba2397b835c8530f51723267e16abbf83892e9e5af4f0e5dd10a"
+checksum = "9da1484c6a890e374ca5086062d4847e0a2c1e5eba9afa5d48c09e8eb39b2519"
 dependencies = [
  "glob",
  "libc",
@@ -243,9 +243,9 @@ dependencies = [
 
 [[package]]
 name = "flexi_logger"
-version = "0.15.11"
+version = "0.15.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cd6eef7db1ac705f67069bf9cf58f64a90238462e0192a8e6730e323a8444579"
+checksum = "aaab3caedb4149800f91e8e4899f29cd9ddf3b569b04c365ca9334f92f7542bf"
 dependencies = [
  "atty",
  "chrono",
@@ -443,11 +443,11 @@ checksum = "a2f02823cf78b754822df5f7f268fb59822e7296276d3e069d8e8cb26a14bd10"
 
 [[package]]
 name = "libloading"
-version = "0.5.2"
+version = "0.6.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f2b111a074963af1d37a139918ac6d49ad1d0d5e47f72fd55388619691a7d753"
+checksum = "2443d8f0478b16759158b2f66d525991a05491138bc05814ef52a250148ef4f9"
 dependencies = [
- "cc",
+ "cfg-if",
  "winapi",
 ]
 
@@ -552,9 +552,9 @@ dependencies = [
 
 [[package]]
 name = "nom-tracable"
-version = "0.5.2"
+version = "0.6.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e012c742e1269f801f6bfe0d1ebf99d7a3f7bc1d65c970bab0e7bee439e31610"
+checksum = "1875762c6bd471741e093a85fd66f6b9b93b14203b592b66ec7b41b31f553559"
 dependencies = [
  "nom",
  "nom-tracable-macros",
@@ -564,9 +564,9 @@ dependencies = [
 
 [[package]]
 name = "nom-tracable-macros"
-version = "0.5.2"
+version = "0.6.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "65ad630ff46d4c61da89042f327e6fdf104a6ebb667565727ef0bb294a7c3197"
+checksum = "a8b4ba141c87dc4f398331f8772b629d546dc25fb469999ee0ed0c63145c13fb"
 dependencies = [
  "quote",
  "syn",
@@ -875,9 +875,9 @@ checksum = "8ea5119cdb4c55b55d432abb513a0429384878c15dde60cc77b1c99de1a95a6a"
 
 [[package]]
 name = "sv-parser"
-version = "0.7.0"
+version = "0.8.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "be379d571861f1a4a23150dbf7c9f8fee72e7746f87bfdf3f1fbfd8c9971cde5"
+checksum = "c8a5fac079737f220c32f31cc97eb61985d57bc113e8f609b9b64234bfe481fe"
 dependencies = [
  "nom",
  "nom-greedyerror",
@@ -889,18 +889,18 @@ dependencies = [
 
 [[package]]
 name = "sv-parser-error"
-version = "0.7.0"
+version = "0.8.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "009e95b362eb2e357e80eca05ab0b0daf62c3b12004b6a5c7d8ce13bf074110d"
+checksum = "8e007d90fea16af0f0499628a45d82bbb99dc4fb1df03ab142faedba007f594a"
 dependencies = [
  "thiserror",
 ]
 
 [[package]]
 name = "sv-parser-macros"
-version = "0.7.0"
+version = "0.8.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "394b8699f9c677cf7501cc938ea8b6a6aa2c13f9a4679d467103520145e36863"
+checksum = "511a06853fd599aafc751dc9ee7405c6f7db17d12c35a640ce79ce061b95aee6"
 dependencies = [
  "quote",
  "syn",
@@ -908,9 +908,9 @@ dependencies = [
 
 [[package]]
 name = "sv-parser-parser"
-version = "0.7.0"
+version = "0.8.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1a3863e84fdfb034d6ea21d93397654a214f95659bbbb6d399e1ada87f163d82"
+checksum = "73b6f7957a0c8d01d8c919f3f7bae97052f2254991b7e11d5c9250a86365d777"
 dependencies = [
  "nom",
  "nom-greedyerror",
@@ -925,9 +925,9 @@ dependencies = [
 
 [[package]]
 name = "sv-parser-pp"
-version = "0.7.0"
+version = "0.8.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0591b2b87e3053d5ece69a080a2bb2415a4cce656725362cda9c98b1c7f8deb7"
+checksum = "7959a453c4cbc6cb7ac18c01b2c910eb7cdc6ff89a87efa450a8eb27e3ec9f7a"
 dependencies = [
  "nom",
  "nom-greedyerror",
@@ -938,9 +938,9 @@ dependencies = [
 
 [[package]]
 name = "sv-parser-syntaxtree"
-version = "0.7.0"
+version = "0.8.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "25929616d2ae86835b46376ae4f1bf207a99ac6d97b2149d93d68b386a320002"
+checksum = "2ae6740eea5f3f10563881ae874cc97082baf0709534f1e7bded77a944708bf5"
 dependencies = [
  "regex",
  "sv-parser-macros",
@@ -1071,9 +1071,9 @@ dependencies = [
 
 [[package]]
 name = "tower-lsp"
-version = "0.12.0"
+version = "0.13.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "94f950fdd36e245c997358d8c6f18eae3f7d6fa2dcd52391ba50ab4ca8b7d464"
+checksum = "a17297f73c118d71cde4c823100ec63fa0477fbd4e565a7e2ffd4d4f1c1fafda"
 dependencies = [
  "async-trait",
  "auto_impl",
@@ -1093,9 +1093,9 @@ dependencies = [
 
 [[package]]
 name = "tower-lsp-macros"
-version = "0.1.0"
+version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7d2f13c6b17d289189e44165c99721f39c7b330df83c5bf3ddbfc6028a3fb596"
+checksum = "5c51c24e3b5909be30d6ed472f934aa9b7d91abf2688013956b296b1d1e7b186"
 dependencies = [
  "heck",
  "proc-macro2",
@@ -1176,6 +1176,7 @@ dependencies = [
  "tokio",
  "tower-lsp",
  "verilogls_slang_wrapper",
+ "walkdir",
 ]
 
 [[package]]
