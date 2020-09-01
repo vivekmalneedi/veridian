@@ -273,7 +273,7 @@ pub fn keyword_completions(keywords: &[(&str, &str)]) -> Vec<CompletionItem> {
     items
 }
 
-pub fn sys_task_completions(tasks: &[&str]) -> Vec<CompletionItem> {
+pub fn other_completions(tasks: &[&str]) -> Vec<CompletionItem> {
     tasks
         .iter()
         .map(|x| CompletionItem {
@@ -432,4 +432,35 @@ pub const SYS_TASKS: &[&str] = &[
     "showvars",
     "sreadmemb",
     "sreadmemh",
+];
+
+pub const DIRECTIVES: &[&str] = &[
+    "__FILE__",
+    "__LINE__",
+    "begin_keywords",
+    "celldefine",
+    "default_nettype",
+    "define",
+    "else",
+    "elsif",
+    "end_keywords",
+    "endcelldefine",
+    "endif",
+    "ifdef",
+    "ifndef",
+    "include",
+    "line",
+    "nounconnected_drive",
+    "pragma",
+    "resetall",
+    "timescale",
+    "unconnected_drive",
+    "undef",
+    "undefineall",
+    "default_decay_time",
+    "default_trireg_strength",
+    "delay_mode_distributed",
+    "delay_mode_path",
+    "delay_mode_unit",
+    "delay_mode_zero",
 ];

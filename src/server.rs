@@ -1,6 +1,6 @@
 use crate::sources::*;
 
-use crate::completion::{get_keyword_completions, get_sys_task_completions};
+use crate::completion::keyword::*;
 use log::info;
 use tower_lsp::jsonrpc::Result;
 use tower_lsp::lsp_types::*;
@@ -10,14 +10,16 @@ pub struct LSPServer {
     pub srcs: Sources,
     pub key_comps: Vec<CompletionItem>,
     pub sys_tasks: Vec<CompletionItem>,
+    pub directives: Vec<CompletionItem>,
 }
 
 impl LSPServer {
     pub fn new() -> LSPServer {
         LSPServer {
             srcs: Sources::new(),
-            key_comps: get_keyword_completions(),
-            sys_tasks: get_sys_task_completions(),
+            key_comps: keyword_completions(KEYWORDS),
+            sys_tasks: other_completions(SYS_TASKS),
+            directives: other_completions(DIRECTIVES),
         }
     }
 }
@@ -55,7 +57,11 @@ impl LanguageServer for Backend {
                 )),
                 completion_provider: Some(CompletionOptions {
                     resolve_provider: Some(false),
-                    trigger_characters: Some(vec![".".to_string(), "$".to_string()]),
+                    trigger_characters: Some(vec![
+                        ".".to_string(),
+                        "$".to_string(),
+                        "`".to_string(),
+                    ]),
                     work_done_progress_options: WorkDoneProgressOptions {
                         work_done_progress: None,
                     },

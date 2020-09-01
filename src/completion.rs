@@ -9,7 +9,7 @@ use std::time::Instant;
 use sv_parser::*;
 use tower_lsp::lsp_types::*;
 
-mod keyword;
+pub mod keyword;
 use keyword::*;
 
 impl LSPServer {
@@ -36,6 +36,10 @@ impl LSPServer {
                         "$" => Some(CompletionList {
                             is_incomplete: false,
                             items: self.sys_tasks.clone(),
+                        }),
+                        "`" => Some(CompletionList {
+                            is_incomplete: false,
+                            items: self.directives.clone(),
                         }),
                         _ => None,
                     }
@@ -76,14 +80,6 @@ impl LSPServer {
         // eprintln!("comp response: {}", now.elapsed().as_millis());
         Some(CompletionResponse::List(response?))
     }
-}
-
-pub fn get_keyword_completions() -> Vec<CompletionItem> {
-    keyword_completions(KEYWORDS)
-}
-
-pub fn get_sys_task_completions() -> Vec<CompletionItem> {
-    sys_task_completions(SYS_TASKS)
 }
 
 macro_rules! scope_declaration {
