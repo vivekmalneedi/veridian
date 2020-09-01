@@ -2,7 +2,7 @@
 A WIP SystemVerilog Language Server
 
 ## Installation
-Dependencies (from [Slang](https://github.com/MikePopoloski/slang)): python 3, cmake (>=3.12), C++17 compatible compiler
+Dependencies (from [slang](https://github.com/MikePopoloski/slang)): python 3, cmake (>=3.12), C++17 compatible compiler
 
 ```
 # clone the repo
