@@ -14,3 +14,16 @@ cargo build --release
 # put veridian on your path
 sudo cp target/release/veridian /usr/local/bin
 ```
+## Usage
+### [coc.nvim](https://github.com/neoclide/coc.nvim)
+In `coc-settings.json`:
+```
+{
+  "languageserver": {
+    "veridian": {
+      "command": "veridian",
+      "filetypes": ["systemverilog", "verilog"]
+    }
+}
+
+```
