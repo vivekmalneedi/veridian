@@ -143,7 +143,7 @@ impl Scope {
 
         if !exists {
             //TODO: properly handle scope definitions
-            eprintln!("created {}", self.name);
+            // eprintln!("created {}", self.name);
             let mut def = GenericScope::new(&self.url);
             def.ident = self.name.clone();
             def.byte_idx = self.start;
@@ -306,7 +306,7 @@ impl Sources {
                 // eprintln!("parse write: {}", now.elapsed().as_millis());
                 file.syntax_tree = syntax_tree;
                 drop(file);
-                eprintln!("try write global scope");
+                // eprintln!("try write global scope");
                 let mut global_scope = scope_handle.write().unwrap();
                 match &mut *global_scope {
                     Some(scope) => match &mut scope_tree {
@@ -320,9 +320,9 @@ impl Sources {
                     },
                     None => *global_scope = scope_tree,
                 }
-                eprintln!("{:#?}", *global_scope);
+                // eprintln!("{:#?}", *global_scope);
                 drop(global_scope);
-                eprintln!("write global scope");
+                // eprintln!("write global scope");
                 // eprintln!("parse write complete: {}", now.elapsed().as_millis());
                 let mut valid = lock.lock().unwrap();
                 *valid = true;
@@ -414,7 +414,7 @@ impl Sources {
         byte_idx: usize,
         url: &Url,
     ) -> Option<CompletionList> {
-        eprintln!("get dot completions");
+        // eprintln!("get dot completions");
         let tree = self.scope_tree.read().ok()?;
         Some(CompletionList {
             is_incomplete: false,

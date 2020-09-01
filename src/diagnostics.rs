@@ -9,9 +9,9 @@ use walkdir::{DirEntry, WalkDir};
 
 pub fn get_diagnostics(uri: Url, files: Vec<Url>) -> PublishDiagnosticsParams {
     let paths = get_paths(files);
-    eprintln!("{:#?}", paths);
+    // eprintln!("{:#?}", paths);
     let diagnostics = slang_compile(paths).unwrap();
-    eprintln!("{}", diagnostics);
+    // eprintln!("{}", diagnostics);
     PublishDiagnosticsParams {
         uri: uri.clone(),
         diagnostics: parse_report(uri, diagnostics),

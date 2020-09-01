@@ -9,6 +9,9 @@ use std::time::Instant;
 use sv_parser::*;
 use tower_lsp::lsp_types::*;
 
+mod keyword;
+use keyword::*;
+
 impl LSPServer {
     pub fn completion(&self, params: CompletionParams) -> Option<CompletionResponse> {
         let doc = params.text_document_position;
@@ -30,25 +33,57 @@ impl LSPServer {
                             file.text.pos_to_byte(&doc.position),
                             &doc.text_document.uri,
                         )?),
+                        "$" => Some(CompletionList {
+                            is_incomplete: false,
+                            items: self.sys_tasks.clone(),
+                        }),
                         _ => None,
                     }
                 }
                 CompletionTriggerKind::TriggerForIncompleteCompletions => None,
-                CompletionTriggerKind::Invoked => Some(self.srcs.get_completions(
+                CompletionTriggerKind::Invoked => {
+                    let mut comps = self.srcs.get_completions(
+                        &token,
+                        file.text.pos_to_byte(&doc.position),
+                        &doc.text_document.uri,
+                    )?;
+                    comps.items.extend::<Vec<CompletionItem>>(
+                        self.key_comps
+                            .iter()
+                            .filter(|x| x.label.starts_with(&token))
+                            .map(|x| x.clone())
+                            .collect(),
+                    );
+                    Some(comps)
+                }
+            },
+            None => {
+                let mut comps = self.srcs.get_completions(
                     &token,
                     file.text.pos_to_byte(&doc.position),
                     &doc.text_document.uri,
-                )?),
-            },
-            None => Some(self.srcs.get_completions(
-                &token,
-                file.text.pos_to_byte(&doc.position),
-                &doc.text_document.uri,
-            )?),
+                )?;
+                comps.items.extend::<Vec<CompletionItem>>(
+                    self.key_comps
+                        .iter()
+                        .filter(|x| x.label.starts_with(&token))
+                        .map(|x| x.clone())
+                        .collect(),
+                );
+                Some(comps)
+            }
         };
         // eprintln!("comp response: {}", now.elapsed().as_millis());
         Some(CompletionResponse::List(response?))
     }
+}
+
+pub fn get_keyword_completions() -> Vec<CompletionItem> {
+    keyword_completions(KEYWORDS)
+}
+
+pub fn get_sys_task_completions() -> Vec<CompletionItem> {
+    sys_task_completions(SYS_TASKS)
 }
 
 macro_rules! scope_declaration {
