@@ -2,7 +2,6 @@ use bindgen;
 
 use cmake::Config;
 use std::env;
-use std::fs;
 use std::path::PathBuf;
 
 fn build_slang() {
@@ -17,13 +16,13 @@ fn build_slang() {
     println!("{}", dst.display());
 }
 
-fn build_slang_wrapper(fmt_include_dir: &str) {
+fn build_slang_wrapper() {
     cc::Build::new()
         .cpp(true)
         .flag("-std=c++17")
+        .flag("-Wno-type-limits")
         .static_flag(true)
         .include("slang_wrapper/include")
-        .include(fmt_include_dir)
         .file("slang_wrapper/src/slang_lib.cpp")
         .file("slang_wrapper/src/basic_client.cpp")
         .out_dir("slang_wrapper/lib")
@@ -37,20 +36,12 @@ fn main() {
 
     build_slang();
 
-    let conan_build_info =
-        fs::read_to_string(format!("{}/build/conanbuildinfo.txt", out_dir)).unwrap();
-    let mut lines = conan_build_info.lines();
-    while lines.next().unwrap() != "[libdirs_fmt]" {}
-    let fmt_lib_dir = lines.next().unwrap();
-    lines = conan_build_info.lines();
-    while lines.next().unwrap() != "[includedirs_fmt]" {}
-    let fmt_include_dir = lines.next().unwrap();
-
-    build_slang_wrapper(fmt_include_dir);
+    build_slang_wrapper();
 
     let bindings = bindgen::Builder::default()
         .clang_arg("-x")
         .clang_arg("c++")
+        .clang_arg("-Wno-type-limits")
         .header("slang_wrapper/src/slang_wrapper.h")
         .parse_callbacks(Box::new(bindgen::CargoCallbacks))
         .generate()
@@ -60,7 +51,6 @@ fn main() {
         "cargo:rustc-link-search=native={}/slang_wrapper/lib",
         env::var("CARGO_MANIFEST_DIR").unwrap()
     );
-    println!("cargo:rustc-link-search=native={}", fmt_lib_dir);
     // println!("cargo:rustc-link-search=native=/usr/lib");
 
     println!("cargo:rustc-link-lib=static=slangwrapper");
@@ -68,7 +58,7 @@ fn main() {
     println!("cargo:rustc-link-lib=static=slangruntime");
     println!("cargo:rustc-link-lib=static=slangparser");
     println!("cargo:rustc-link-lib=static=slangcore");
-    println!("cargo:rustc-link-lib=static=fmt");
+    // println!("cargo:rustc-link-lib=static=fmt");
     // println!("cargo:rustc-link-lib=static=stdc++");
 
     let out_path = PathBuf::from(out_dir);
