@@ -30,7 +30,7 @@ In `coc-settings.json`:
 
 ## LSP Support
 See the [LSP Specification](https://microsoft.github.io/language-server-protocol/specifications/specification-current/) for more details
-- [x] diagnostics
+- [x] diagnostics (using [slang](https://github.com/MikePopoloski/slang))
 - [x] completion
   * identifier completion
   * dot completion (partially implemented)
