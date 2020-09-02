@@ -41,7 +41,6 @@ fn main() {
     let bindings = bindgen::Builder::default()
         .clang_arg("-x")
         .clang_arg("c++")
-        .clang_arg("-Wno-type-limits")
         .header("slang_wrapper/src/slang_wrapper.h")
         .parse_callbacks(Box::new(bindgen::CargoCallbacks))
         .generate()

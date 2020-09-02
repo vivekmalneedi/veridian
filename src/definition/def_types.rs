@@ -485,6 +485,18 @@ impl Definition for GenericScope {
         }
     }
     fn dot_completion(&self, scope_tree: &Scope) -> Option<Vec<CompletionItem>> {
+        for scope in &scope_tree.scopes {
+            if &scope.name == &self.ident {
+                return Some(
+                    scope
+                        .defs
+                        .iter()
+                        .filter(|x| !x.starts_with(&scope.name))
+                        .map(|x| x.completion())
+                        .collect(),
+                );
+            }
+        }
         None
     }
 }

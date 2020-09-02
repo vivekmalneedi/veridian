@@ -205,13 +205,19 @@ impl Scope {
         url: &Url,
         scope_tree: &Scope,
     ) -> Option<Vec<CompletionItem>> {
+        // eprintln!("{:#?}", scope_tree);
         for scope in &self.scopes {
             if &scope.url == url && scope.start <= byte_idx && byte_idx <= scope.end {
-                return scope.dot_completion(token, byte_idx, url, scope_tree);
+                match scope.dot_completion(token, byte_idx, url, scope_tree) {
+                    Some(result) => return Some(result),
+                    None => (),
+                }
             }
         }
         for def in &self.defs {
+            // eprintln!("def: {:?}", def);
             if def.starts_with(token) {
+                // eprintln!("complete def: {:?}", def);
                 return def.dot_completion(scope_tree);
             }
         }

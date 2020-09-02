@@ -258,11 +258,22 @@ fn get_completion_token(line: RopeSlice, pos: Position) -> String {
     }
     let mut c = line_iter.prev();
     //TODO: make this a regex
-    while !c.is_none() && (c.unwrap().is_alphanumeric() || c.unwrap() == '_' || c.unwrap() == '.') {
+    while !c.is_none()
+        && (c.unwrap().is_alphanumeric()
+            || c.unwrap() == '_'
+            || c.unwrap() == '.'
+            || c.unwrap() == '['
+            || c.unwrap() == ']')
+    {
         token.push(c.unwrap());
         c = line_iter.prev();
     }
-    token.chars().rev().collect()
+    let mut result: String = token.chars().rev().collect();
+    if result.contains('[') {
+        let l_bracket_offset = result.find('[').unwrap_or(result.len());
+        result.replace_range(l_bracket_offset.., "");
+    }
+    result
 }
 
 #[cfg(test)]
@@ -273,7 +284,7 @@ mod tests {
 
     #[test]
     fn test_get_completion_token() {
-        let text = Rope::from_str("abc abc.cba de_fg");
+        let text = Rope::from_str("abc abc.cba de_fg cde[4]");
         let mut result = get_completion_token(
             text.line(0),
             Position {
@@ -298,6 +309,14 @@ mod tests {
             },
         );
         assert_eq!(&result, "de_f");
+        result = get_completion_token(
+            text.line(0),
+            Position {
+                line: 0,
+                character: 23,
+            },
+        );
+        assert_eq!(&result, "cde");
     }
 
     #[test]
@@ -542,6 +561,7 @@ module test(
     test_inter abc
 );
     abc.
+    test_inter.
 endmodule
 "#;
         let open_params = DidOpenTextDocumentParams {
@@ -589,6 +609,29 @@ endmodule
         };
         if let CompletionResponse::List(item) = response {
             // eprintln!("{:#?}", item);
+            assert!(item.items.contains(&item1));
+            assert!(item.items.len() == 1);
+        } else {
+            assert!(false);
+        }
+        let completion_params = CompletionParams {
+            text_document_position: TextDocumentPositionParams {
+                text_document: TextDocumentIdentifier { uri: uri.clone() },
+                position: Position {
+                    line: 7,
+                    character: 14,
+                },
+            },
+            work_done_progress_params: WorkDoneProgressParams::default(),
+            partial_result_params: PartialResultParams::default(),
+            context: Some(CompletionContext {
+                trigger_kind: CompletionTriggerKind::TriggerCharacter,
+                trigger_character: Some(".".to_string()),
+            }),
+        };
+        let response: CompletionResponse = server.completion(completion_params).unwrap();
+        if let CompletionResponse::List(item) = response {
+            eprintln!("{:#?}", item);
             assert!(item.items.contains(&item1));
             assert!(item.items.len() == 1);
         } else {
