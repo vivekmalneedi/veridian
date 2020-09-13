@@ -104,9 +104,15 @@ pub fn get_definitions(
                     }
                 }
                 RefNode::UdpDeclaration(n) => {
-                    let decs = udp_dec(syntax_tree, n, &mut event_iter, url);
-                    if decs.is_some() {
-                        definitions.push(Arc::new(decs?));
+                    let dec = udp_dec(syntax_tree, n, &mut event_iter, url);
+                    if dec.is_some() {
+                        definitions.push(Arc::new(dec?));
+                    }
+                }
+                RefNode::ProgramDeclaration(n) => {
+                    let dec = program_dec(syntax_tree, n, &mut event_iter, url);
+                    if dec.is_some() {
+                        definitions.push(Arc::new(dec?));
                     }
                 }
                 RefNode::PortDeclaration(n) => {
