@@ -1225,19 +1225,19 @@ pub fn module_dec(
                 if let Some(port_decs) = &list_port_decs.nodes.0.nodes.1 {
                     let mut port_decs_list: Vec<&AnsiPortDeclaration> = vec![&port_decs.nodes.0.1];
                     for port_dec in &port_decs.nodes.1 {
-                        port_decs_list.push(&port_dec.1.1);
+                        port_decs_list.push(&(port_dec.1).1);
                     }
                     for port_dec in port_decs_list {
-                    let ansi_dec = skip_until_enter!(
-                        tree,
-                        event_iter,
-                        RefNode::AnsiPortDeclaration,
-                        &AnsiPortDeclaration
-                    )?;
-                    scope
-                        .defs
-                        .push(Box::new(port_dec_ansi(tree, ansi_dec, event_iter, url)?))
-                    };
+                        let ansi_dec = skip_until_enter!(
+                            tree,
+                            event_iter,
+                            RefNode::AnsiPortDeclaration,
+                            &AnsiPortDeclaration
+                        )?;
+                        scope
+                            .defs
+                            .push(Box::new(port_dec_ansi(tree, ansi_dec, event_iter, url)?))
+                    }
                 }
             }
         }
@@ -1295,19 +1295,421 @@ pub fn module_dec(
                 if let Some(port_decs) = &list_port_decs.nodes.0.nodes.1 {
                     let mut port_decs_list: Vec<&AnsiPortDeclaration> = vec![&port_decs.nodes.0.1];
                     for port_dec in &port_decs.nodes.1 {
-                        port_decs_list.push(&port_dec.1.1);
+                        port_decs_list.push(&(port_dec.1).1);
                     }
                     for port_dec in port_decs_list {
-                    let ansi_dec = skip_until_enter!(
-                        tree,
-                        event_iter,
-                        RefNode::AnsiPortDeclaration,
-                        &AnsiPortDeclaration
-                    )?;
-                    scope
-                        .defs
-                        .push(Box::new(port_dec_ansi(tree, ansi_dec, event_iter, url)?))
-                    };
+                        let ansi_dec = skip_until_enter!(
+                            tree,
+                            event_iter,
+                            RefNode::AnsiPortDeclaration,
+                            &AnsiPortDeclaration
+                        )?;
+                        scope
+                            .defs
+                            .push(Box::new(port_dec_ansi(tree, ansi_dec, event_iter, url)?))
+                    }
+                }
+            }
+        }
+    }
+    Some(scope)
+}
+
+pub fn interface_dec(
+    tree: &SyntaxTree,
+    node: &InterfaceDeclaration,
+    event_iter: &mut EventIter,
+    url: &Url,
+) -> Option<GenericScope> {
+    let mut scope: GenericScope = GenericScope::new(url);
+    match node {
+        InterfaceDeclaration::Nonansi(x) => {
+            scope.start = get_loc(tree, RefNode::Keyword(&x.nodes.0.nodes.1));
+            scope.end = get_loc(tree, RefNode::Keyword(&x.nodes.3));
+            let ident = get_ident(tree, RefNode::InterfaceIdentifier(&x.nodes.0.nodes.3));
+            scope.ident = ident.0;
+            scope.byte_idx = ident.1;
+            let type_str = &mut scope.type_str;
+            advance_until_leave!(type_str, tree, event_iter, RefNode::InterfaceIdentifier);
+            for import_dec in &x.nodes.0.nodes.4 {
+                let imports = package_import(tree, &import_dec, event_iter, url)?;
+                for import in imports {
+                    scope.defs.push(Box::new(import));
+                }
+            }
+            if let Some(pport_list) = &x.nodes.0.nodes.5 {
+                let pports = param_port_list(tree, pport_list, event_iter, url)?;
+                for pport in pports {
+                    scope.defs.push(Box::new(pport));
+                }
+            }
+        }
+        InterfaceDeclaration::Ansi(x) => {
+            scope.start = get_loc(tree, RefNode::Keyword(&x.nodes.0.nodes.1));
+            scope.end = get_loc(tree, RefNode::Keyword(&x.nodes.3));
+            let ident = get_ident(tree, RefNode::InterfaceIdentifier(&x.nodes.0.nodes.3));
+            scope.ident = ident.0;
+            scope.byte_idx = ident.1;
+            let type_str = &mut scope.type_str;
+            advance_until_leave!(type_str, tree, event_iter, RefNode::InterfaceIdentifier);
+            for import_dec in &x.nodes.0.nodes.4 {
+                let imports = package_import(tree, &import_dec, event_iter, url)?;
+                for import in imports {
+                    scope.defs.push(Box::new(import));
+                }
+            }
+            if let Some(pport_list) = &x.nodes.0.nodes.5 {
+                let pports = param_port_list(tree, pport_list, event_iter, url)?;
+                for pport in pports {
+                    scope.defs.push(Box::new(pport));
+                }
+            }
+            if let Some(list_port_decs) = &x.nodes.0.nodes.6 {
+                if let Some(port_decs) = &list_port_decs.nodes.0.nodes.1 {
+                    let mut port_decs_list: Vec<&AnsiPortDeclaration> = vec![&port_decs.nodes.0.1];
+                    for port_dec in &port_decs.nodes.1 {
+                        port_decs_list.push(&(port_dec.1).1);
+                    }
+                    for port_dec in port_decs_list {
+                        let ansi_dec = skip_until_enter!(
+                            tree,
+                            event_iter,
+                            RefNode::AnsiPortDeclaration,
+                            &AnsiPortDeclaration
+                        )?;
+                        scope
+                            .defs
+                            .push(Box::new(port_dec_ansi(tree, ansi_dec, event_iter, url)?))
+                    }
+                }
+            }
+        }
+        InterfaceDeclaration::Wildcard(x) => {
+            scope.start = get_loc(tree, RefNode::Keyword(&x.nodes.1));
+            scope.end = get_loc(tree, RefNode::Keyword(&x.nodes.8));
+            let ident = get_ident(tree, RefNode::InterfaceIdentifier(&x.nodes.3));
+            scope.ident = ident.0;
+            scope.byte_idx = ident.1;
+            let type_str = &mut scope.type_str;
+            advance_until_leave!(type_str, tree, event_iter, RefNode::InterfaceIdentifier);
+        }
+        InterfaceDeclaration::ExternNonansi(x) => {
+            scope.start = get_loc(tree, RefNode::Keyword(&x.nodes.0));
+            scope.end = get_loc(tree, RefNode::Symbol(&x.nodes.1.nodes.7));
+            let ident = get_ident(tree, RefNode::InterfaceIdentifier(&x.nodes.1.nodes.3));
+            scope.ident = ident.0;
+            scope.byte_idx = ident.1;
+            let type_str = &mut scope.type_str;
+            advance_until_leave!(type_str, tree, event_iter, RefNode::InterfaceIdentifier);
+            for import_dec in &x.nodes.1.nodes.4 {
+                let imports = package_import(tree, &import_dec, event_iter, url)?;
+                for import in imports {
+                    scope.defs.push(Box::new(import));
+                }
+            }
+            if let Some(pport_list) = &x.nodes.1.nodes.5 {
+                let pports = param_port_list(tree, pport_list, event_iter, url)?;
+                for pport in pports {
+                    scope.defs.push(Box::new(pport));
+                }
+            }
+        }
+        InterfaceDeclaration::ExternAnsi(x) => {
+            scope.start = get_loc(tree, RefNode::Keyword(&x.nodes.0));
+            scope.end = get_loc(tree, RefNode::Symbol(&x.nodes.1.nodes.7));
+            let ident = get_ident(tree, RefNode::InterfaceIdentifier(&x.nodes.1.nodes.3));
+            scope.ident = ident.0;
+            scope.byte_idx = ident.1;
+            let type_str = &mut scope.type_str;
+            advance_until_leave!(type_str, tree, event_iter, RefNode::InterfaceIdentifier);
+            for import_dec in &x.nodes.1.nodes.4 {
+                let imports = package_import(tree, &import_dec, event_iter, url)?;
+                for import in imports {
+                    scope.defs.push(Box::new(import));
+                }
+            }
+            if let Some(pport_list) = &x.nodes.1.nodes.5 {
+                let pports = param_port_list(tree, pport_list, event_iter, url)?;
+                for pport in pports {
+                    scope.defs.push(Box::new(pport));
+                }
+            }
+            if let Some(list_port_decs) = &x.nodes.1.nodes.6 {
+                if let Some(port_decs) = &list_port_decs.nodes.0.nodes.1 {
+                    let mut port_decs_list: Vec<&AnsiPortDeclaration> = vec![&port_decs.nodes.0.1];
+                    for port_dec in &port_decs.nodes.1 {
+                        port_decs_list.push(&(port_dec.1).1);
+                    }
+                    for port_dec in port_decs_list {
+                        let ansi_dec = skip_until_enter!(
+                            tree,
+                            event_iter,
+                            RefNode::AnsiPortDeclaration,
+                            &AnsiPortDeclaration
+                        )?;
+                        scope
+                            .defs
+                            .push(Box::new(port_dec_ansi(tree, ansi_dec, event_iter, url)?))
+                    }
+                }
+            }
+        }
+    }
+    Some(scope)
+}
+
+fn list_udp_port_idents(
+    tree: &SyntaxTree,
+    node: &ListOfUdpPortIdentifiers,
+    event_iter: &mut EventIter,
+    url: &Url,
+) -> Option<Vec<PortDec>> {
+    let mut ports: Vec<PortDec> = Vec::new();
+    let mut port_list = vec![&node.nodes.0.nodes.0];
+    for port_def in &node.nodes.0.nodes.1 {
+        port_list.push(&port_def.1);
+    }
+    for port_def in port_list {
+        let mut port = PortDec::new(url);
+        let ident = get_ident(tree, RefNode::PortIdentifier(&port_def));
+        port.ident = ident.0;
+        port.byte_idx = ident.1;
+        ports.push(port);
+    }
+    Some(ports)
+}
+
+//non-ansi udp ports
+fn udp_port_dec(
+    tree: &SyntaxTree,
+    node: &UdpPortDeclaration,
+    event_iter: &mut EventIter,
+    url: &Url,
+) -> Option<Vec<PortDec>> {
+    match node {
+        UdpPortDeclaration::UdpOutputDeclaration(x) => match &x.0 {
+            UdpOutputDeclaration::Nonreg(x) => {
+                let mut port = PortDec::new(url);
+                let ident = get_ident(tree, RefNode::PortIdentifier(&x.nodes.2));
+                port.ident = ident.0;
+                port.byte_idx = ident.1;
+                skip_until_enter!(
+                    tree,
+                    event_iter,
+                    RefNode::UdpOutputDeclarationNonreg,
+                    &UdpOutputDeclarationNonreg
+                );
+                let type_str = &mut port.type_str;
+                advance_until_leave!(
+                    type_str,
+                    tree,
+                    event_iter,
+                    RefNode::UdpOutputDeclarationNonreg
+                );
+                Some(vec![port])
+            }
+            UdpOutputDeclaration::Reg(x) => {
+                let mut port = PortDec::new(url);
+                let ident = get_ident(tree, RefNode::PortIdentifier(&x.nodes.3));
+                port.ident = ident.0;
+                port.byte_idx = ident.1;
+                skip_until_enter!(
+                    tree,
+                    event_iter,
+                    RefNode::UdpOutputDeclarationReg,
+                    &UdpOutputDeclarationReg
+                );
+                let type_str = &mut port.type_str;
+                advance_until_leave!(type_str, tree, event_iter, RefNode::UdpOutputDeclarationReg);
+                Some(vec![port])
+            }
+        },
+        UdpPortDeclaration::UdpInputDeclaration(_) => {
+            skip_until_enter!(
+                tree,
+                event_iter,
+                RefNode::UdpInputDeclaration,
+                &UdpInputDeclaration
+            );
+            let mut type_str = String::new();
+            let list_udp_ports = advance_until_enter!(
+                type_str,
+                tree,
+                event_iter,
+                RefNode::ListOfUdpPortIdentifiers,
+                &ListOfUdpPortIdentifiers
+            )?;
+            let mut ports = list_udp_port_idents(tree, list_udp_ports, event_iter, url)?;
+            for port in &mut ports {
+                port.type_str = type_str.clone();
+            }
+            Some(ports)
+        }
+        UdpPortDeclaration::UdpRegDeclaration(x) => {
+            let udp_reg_dec = skip_until_enter!(
+                tree,
+                event_iter,
+                RefNode::UdpRegDeclaration,
+                &UdpRegDeclaration
+            )?;
+            let mut port = PortDec::new(url);
+            let type_str = &mut port.type_str;
+            advance_until_leave!(type_str, tree, event_iter, RefNode::Keyword);
+            let ident = get_ident(tree, RefNode::VariableIdentifier(&udp_reg_dec.nodes.2));
+            port.ident = ident.0;
+            port.byte_idx = ident.1;
+            Some(vec![port])
+        }
+    }
+}
+
+//ansi udp ports
+fn udp_port_list(
+    tree: &SyntaxTree,
+    node: &UdpDeclarationPortList,
+    event_iter: &mut EventIter,
+    url: &Url,
+) -> Option<Vec<PortDec>> {
+    let mut ports: Vec<PortDec> = Vec::new();
+    match &node.nodes.0 {
+        UdpOutputDeclaration::Nonreg(x) => {
+            let mut port = PortDec::new(url);
+            let ident = get_ident(tree, RefNode::PortIdentifier(&x.nodes.2));
+            port.ident = ident.0;
+            port.byte_idx = ident.1;
+            skip_until_enter!(
+                tree,
+                event_iter,
+                RefNode::UdpOutputDeclarationNonreg,
+                &UdpOutputDeclarationNonreg
+            );
+            let type_str = &mut port.type_str;
+            advance_until_leave!(
+                type_str,
+                tree,
+                event_iter,
+                RefNode::UdpOutputDeclarationNonreg
+            );
+            ports.push(port);
+        }
+        UdpOutputDeclaration::Reg(x) => {
+            let mut port = PortDec::new(url);
+            let ident = get_ident(tree, RefNode::PortIdentifier(&x.nodes.3));
+            port.ident = ident.0;
+            port.byte_idx = ident.1;
+            skip_until_enter!(
+                tree,
+                event_iter,
+                RefNode::UdpOutputDeclarationReg,
+                &UdpOutputDeclarationReg
+            );
+            let type_str = &mut port.type_str;
+            advance_until_leave!(type_str, tree, event_iter, RefNode::UdpOutputDeclarationReg);
+            ports.push(port);
+        }
+    }
+    let mut port_list = vec![&node.nodes.2.nodes.0];
+    for port_def in &node.nodes.2.nodes.1 {
+        port_list.push(&port_def.1);
+    }
+    for port_def in port_list {
+        skip_until_enter!(
+            tree,
+            event_iter,
+            RefNode::UdpInputDeclaration,
+            &UdpInputDeclaration
+        );
+        let mut type_str = String::new();
+        let list_udp_ports = advance_until_enter!(
+            type_str,
+            tree,
+            event_iter,
+            RefNode::ListOfUdpPortIdentifiers,
+            &ListOfUdpPortIdentifiers
+        )?;
+        let mut port_decs = list_udp_port_idents(tree, list_udp_ports, event_iter, url)?;
+        for port in &mut port_decs {
+            port.type_str = type_str.clone();
+        }
+        ports.append(&mut port_decs);
+    }
+    Some(ports)
+}
+
+pub fn udp_dec(
+    tree: &SyntaxTree,
+    node: &UdpDeclaration,
+    event_iter: &mut EventIter,
+    url: &Url,
+) -> Option<GenericScope> {
+    let mut scope: GenericScope = GenericScope::new(url);
+    match node {
+        UdpDeclaration::Nonansi(x) => {
+            scope.start = get_loc(tree, RefNode::Keyword(&x.nodes.0.nodes.1));
+            scope.end = get_loc(tree, RefNode::Keyword(&x.nodes.4));
+            let ident = get_ident(tree, RefNode::UdpIdentifier(&x.nodes.0.nodes.2));
+            scope.ident = ident.0;
+            scope.byte_idx = ident.1;
+            let type_str = &mut scope.type_str;
+            advance_until_leave!(type_str, tree, event_iter, RefNode::UdpIdentifier);
+            let mut port_decs = vec![&x.nodes.1];
+            for port_dec in &x.nodes.2 {
+                port_decs.push(port_dec);
+            }
+            for port in port_decs {
+                let ports = udp_port_dec(tree, port, event_iter, url)?;
+                for port_dec in ports {
+                    scope.defs.push(Box::new(port_dec));
+                }
+            }
+        }
+        UdpDeclaration::Ansi(x) => {
+            scope.start = get_loc(tree, RefNode::Keyword(&x.nodes.0.nodes.1));
+            scope.end = get_loc(tree, RefNode::Keyword(&x.nodes.2));
+            let ident = get_ident(tree, RefNode::UdpIdentifier(&x.nodes.0.nodes.2));
+            scope.ident = ident.0;
+            scope.byte_idx = ident.1;
+            let type_str = &mut scope.type_str;
+            advance_until_leave!(type_str, tree, event_iter, RefNode::UdpIdentifier);
+            let ports = udp_port_list(tree, &x.nodes.0.nodes.3.nodes.1, event_iter, url)?;
+            for port_dec in ports {
+                scope.defs.push(Box::new(port_dec));
+            }
+        }
+        UdpDeclaration::ExternNonansi(x) => {
+            scope.start = get_loc(tree, RefNode::Keyword(&x.nodes.0));
+            scope.end = get_loc(tree, RefNode::Symbol(&x.nodes.1.nodes.4));
+            let ident = get_ident(tree, RefNode::UdpIdentifier(&x.nodes.1.nodes.2));
+            scope.ident = ident.0;
+            scope.byte_idx = ident.1;
+            let type_str = &mut scope.type_str;
+            advance_until_leave!(type_str, tree, event_iter, RefNode::UdpIdentifier);
+        }
+        UdpDeclaration::ExternAnsi(x) => {
+            scope.start = get_loc(tree, RefNode::Keyword(&x.nodes.0));
+            scope.end = get_loc(tree, RefNode::Symbol(&x.nodes.1.nodes.4));
+            let ident = get_ident(tree, RefNode::UdpIdentifier(&x.nodes.1.nodes.2));
+            scope.ident = ident.0;
+            scope.byte_idx = ident.1;
+            let type_str = &mut scope.type_str;
+            advance_until_leave!(type_str, tree, event_iter, RefNode::UdpIdentifier);
+            let ports = udp_port_list(tree, &x.nodes.1.nodes.3.nodes.1, event_iter, url)?;
+            for port_dec in ports {
+                scope.defs.push(Box::new(port_dec));
+            }
+        }
+        UdpDeclaration::Wildcard(x) => {
+            scope.start = get_loc(tree, RefNode::Keyword(&x.nodes.1));
+            scope.end = get_loc(tree, RefNode::Keyword(&x.nodes.7));
+            let ident = get_ident(tree, RefNode::UdpIdentifier(&x.nodes.2));
+            scope.ident = ident.0;
+            scope.byte_idx = ident.1;
+            let type_str = &mut scope.type_str;
+            advance_until_leave!(type_str, tree, event_iter, RefNode::UdpIdentifier);
+            for port_dec in &x.nodes.5 {
+                let ports = udp_port_dec(tree, port_dec, event_iter, url)?;
+                for port in ports {
+                    scope.defs.push(Box::new(port));
                 }
             }
         }

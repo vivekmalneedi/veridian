@@ -97,6 +97,18 @@ pub fn get_definitions(
                         definitions.push(Arc::new(module?));
                     }
                 }
+                RefNode::InterfaceDeclaration(n) => {
+                    let interface = interface_dec(syntax_tree, n, &mut event_iter, url);
+                    if interface.is_some() {
+                        definitions.push(Arc::new(interface?));
+                    }
+                }
+                RefNode::UdpDeclaration(n) => {
+                    let decs = udp_dec(syntax_tree, n, &mut event_iter, url);
+                    if decs.is_some() {
+                        definitions.push(Arc::new(decs?));
+                    }
+                }
                 RefNode::PortDeclaration(n) => {
                     let ports = port_dec_non_ansi(syntax_tree, n, &mut event_iter, url);
                     if ports.is_some() {
@@ -238,6 +250,7 @@ mod tests {
                 assert_eq!(doc.byte_to_pos(def.byte_idx()), Position::new(3, 9))
             }
         }
+        assert!(false)
     }
 
     #[test]
