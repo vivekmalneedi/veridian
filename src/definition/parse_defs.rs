@@ -1860,3 +1860,103 @@ pub fn program_dec(
     }
     Some(scope)
 }
+
+pub fn package_dec(
+    tree: &SyntaxTree,
+    node: &PackageDeclaration,
+    event_iter: &mut EventIter,
+    url: &Url,
+) -> Option<GenericScope> {
+    let mut scope: GenericScope = GenericScope::new(url);
+    scope.start = get_loc(tree, RefNode::Keyword(&node.nodes.1));
+    scope.end = get_loc(tree, RefNode::Keyword(&node.nodes.7));
+    let ident = get_ident(tree, RefNode::PackageIdentifier(&node.nodes.3));
+    scope.ident = ident.0;
+    scope.byte_idx = ident.1;
+    let type_str = &mut scope.type_str;
+    advance_until_leave!(type_str, tree, event_iter, RefNode::PackageIdentifier);
+    Some(scope)
+}
+
+pub fn config_dec(
+    tree: &SyntaxTree,
+    node: &ConfigDeclaration,
+    event_iter: &mut EventIter,
+    url: &Url,
+) -> Option<GenericScope> {
+    let mut scope: GenericScope = GenericScope::new(url);
+    scope.start = get_loc(tree, RefNode::Keyword(&node.nodes.0));
+    scope.end = get_loc(tree, RefNode::Keyword(&node.nodes.6));
+    let ident = get_ident(tree, RefNode::ConfigIdentifier(&node.nodes.1));
+    scope.ident = ident.0;
+    scope.byte_idx = ident.1;
+    let type_str = &mut scope.type_str;
+    advance_until_leave!(type_str, tree, event_iter, RefNode::ConfigIdentifier);
+    for localparam in &node.nodes.3 {
+        let params = localparam_dec(tree, &localparam.0, event_iter, url)?;
+        for param in params {
+            scope.defs.push(Box::new(param));
+        }
+    }
+    Some(scope)
+}
+
+pub fn class_dec(
+    tree: &SyntaxTree,
+    node: &ClassDeclaration,
+    event_iter: &mut EventIter,
+    url: &Url,
+) -> Option<ClassDec> {
+    let mut scope: ClassDec = ClassDec::new(url);
+    scope.start = get_loc(tree, RefNode::Keyword(&node.nodes.1));
+    scope.end = get_loc(tree, RefNode::Keyword(&node.nodes.9));
+    let ident = get_ident(tree, RefNode::ClassIdentifier(&node.nodes.3));
+    scope.ident = ident.0;
+    scope.byte_idx = ident.1;
+    let type_str = &mut scope.type_str;
+    advance_until_leave!(type_str, tree, event_iter, RefNode::ClassIdentifier);
+    if let Some(pport_list) = &node.nodes.4 {
+        let pports = param_port_list(tree, pport_list, event_iter, url)?;
+        for pport in pports {
+            scope.defs.push(Box::new(pport));
+        }
+    }
+    if let Some(extend) = &node.nodes.5 {
+        if let Some(package_scope) = &extend.1.nodes.0.nodes.0 {
+            match package_scope {
+                PackageScope::Package(x) => {
+                    let ident = get_ident(tree, RefNode::PackageIdentifier(&x.nodes.0));
+                    scope.extends.1 = Some(ident.0);
+                }
+                PackageScope::Unit(_) => {}
+            }
+        }
+        let ident = get_ident(tree, RefNode::ClassIdentifier(&extend.1.nodes.0.nodes.1));
+        scope.extends.0.push(ident.0);
+        for class in &extend.1.nodes.2 {
+            let ident = get_ident(tree, RefNode::ClassIdentifier(&class.1));
+            scope.extends.0.push(ident.0);
+        }
+    }
+    if let Some(interfaces) = &node.nodes.6 {
+        let mut idecs = vec![&interfaces.1.nodes.0];
+        for idec in &interfaces.1.nodes.1 {
+            idecs.push(&idec.1);
+        }
+        for idec in idecs {
+            let ident = get_ident(tree, RefNode::ClassIdentifier(&idec.nodes.0.nodes.1));
+            let mut interface: (String, Option<String>) = (ident.0, None);
+            if let Some(package_scope) = &idec.nodes.0.nodes.0 {
+                match package_scope {
+                    PackageScope::Package(x) => {
+                        let ident = get_ident(tree, RefNode::PackageIdentifier(&x.nodes.0));
+                        interface.1 = Some(ident.0);
+                    }
+                    PackageScope::Unit(_) => {}
+                }
+            }
+            scope.implements.push(interface);
+        }
+    }
+    Some(scope)
+}

@@ -37,6 +37,7 @@ pub enum DefinitionType {
     Subroutine,
     ModuleInstantiation,
     GenericScope,
+    Class,
 }
 
 #[derive(Debug)]
@@ -463,6 +464,90 @@ impl GenericScope {
 }
 
 impl Definition for GenericScope {
+    fn ident(&self) -> String {
+        self.ident.clone()
+    }
+    fn byte_idx(&self) -> usize {
+        self.byte_idx
+    }
+    fn url(&self) -> Url {
+        self.url.clone()
+    }
+    fn type_str(&self) -> String {
+        self.type_str.clone()
+    }
+    fn kind(&self) -> CompletionItemKind {
+        self.kind.clone()
+    }
+    fn def_type(&self) -> &DefinitionType {
+        &self.def_type
+    }
+    fn starts_with(&self, token: &str) -> bool {
+        self.ident.starts_with(token)
+    }
+    fn completion(&self) -> CompletionItem {
+        CompletionItem {
+            label: self.ident.clone(),
+            detail: Some(clean_type_str(&self.type_str, &self.ident)),
+            kind: Some(self.kind.clone()),
+            ..CompletionItem::default()
+        }
+    }
+    fn dot_completion(&self, scope_tree: &Scope) -> Option<Vec<CompletionItem>> {
+        for scope in &scope_tree.scopes {
+            if &scope.name == &self.ident {
+                return Some(
+                    scope
+                        .defs
+                        .iter()
+                        .filter(|x| !x.starts_with(&scope.name))
+                        .map(|x| x.completion())
+                        .collect(),
+                );
+            }
+        }
+        None
+    }
+}
+
+#[derive(Debug)]
+pub struct ClassDec {
+    pub ident: String,
+    pub byte_idx: usize,
+    pub start: usize,
+    pub end: usize,
+    pub url: Url,
+    pub type_str: String,
+    pub kind: CompletionItemKind,
+    def_type: DefinitionType,
+    pub defs: Vec<Box<dyn Definition>>,
+    // class, package
+    pub extends: (Vec<String>, Option<String>),
+    // class, package
+    pub implements: Vec<(String, Option<String>)>,
+    pub interface: bool,
+}
+
+impl ClassDec {
+    pub fn new(url: &Url) -> Self {
+        Self {
+            ident: String::new(),
+            byte_idx: 0,
+            start: 0,
+            end: 0,
+            url: url.clone(),
+            type_str: String::new(),
+            kind: CompletionItemKind::Class,
+            def_type: DefinitionType::Class,
+            defs: Vec::new(),
+            extends: (Vec::new(), None),
+            implements: Vec::new(),
+            interface: false,
+        }
+    }
+}
+
+impl Definition for ClassDec {
     fn ident(&self) -> String {
         self.ident.clone()
     }

@@ -115,6 +115,25 @@ pub fn get_definitions(
                         definitions.push(Arc::new(dec?));
                     }
                 }
+
+                RefNode::PackageDeclaration(n) => {
+                    let dec = package_dec(syntax_tree, n, &mut event_iter, url);
+                    if dec.is_some() {
+                        definitions.push(Arc::new(dec?));
+                    }
+                }
+                RefNode::ConfigDeclaration(n) => {
+                    let dec = config_dec(syntax_tree, n, &mut event_iter, url);
+                    if dec.is_some() {
+                        definitions.push(Arc::new(dec?));
+                    }
+                }
+                RefNode::ClassDeclaration(n) => {
+                    let dec = class_dec(syntax_tree, n, &mut event_iter, url);
+                    if dec.is_some() {
+                        definitions.push(Arc::new(dec?));
+                    }
+                }
                 RefNode::PortDeclaration(n) => {
                     let ports = port_dec_non_ansi(syntax_tree, n, &mut event_iter, url);
                     if ports.is_some() {
