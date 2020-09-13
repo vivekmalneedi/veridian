@@ -124,7 +124,7 @@ impl Definition for PortDec {
 }
 
 #[derive(Debug)]
-pub struct NetDec {
+pub struct GenericDec {
     pub ident: String,
     pub byte_idx: usize,
     pub url: Url,
@@ -133,7 +133,7 @@ pub struct NetDec {
     def_type: DefinitionType,
 }
 
-impl NetDec {
+impl GenericDec {
     pub fn new(url: &Url) -> Self {
         Self {
             ident: String::new(),
@@ -146,7 +146,7 @@ impl NetDec {
     }
 }
 
-impl Definition for NetDec {
+impl Definition for GenericDec {
     fn ident(&self) -> String {
         self.ident.clone()
     }
@@ -182,17 +182,18 @@ impl Definition for NetDec {
 }
 
 #[derive(Debug)]
-pub struct DataDec {
+pub struct PackageImport {
     pub ident: String,
     pub byte_idx: usize,
     pub url: Url,
     pub type_str: String,
     pub kind: CompletionItemKind,
     def_type: DefinitionType,
+    pub asterisk: bool,
     pub import_ident: Option<String>,
 }
 
-impl DataDec {
+impl PackageImport {
     pub fn new(url: &Url) -> Self {
         Self {
             ident: String::new(),
@@ -201,12 +202,13 @@ impl DataDec {
             type_str: String::new(),
             kind: CompletionItemKind::Variable,
             def_type: DefinitionType::Data,
+            asterisk: false,
             import_ident: None,
         }
     }
 }
 
-impl Definition for DataDec {
+impl Definition for PackageImport {
     fn ident(&self) -> String {
         self.ident.clone()
     }
@@ -231,7 +233,7 @@ impl Definition for DataDec {
     fn completion(&self) -> CompletionItem {
         CompletionItem {
             label: self.ident.clone(),
-            detail: Some(clean_type_str(&self.type_str, &self.ident)),
+            detail: Some(clean_type_str(&self.type_str, &self.ident.clone())),
             kind: Some(self.kind.clone()),
             ..CompletionItem::default()
         }
@@ -435,10 +437,13 @@ impl Definition for ModInst {
 pub struct GenericScope {
     pub ident: String,
     pub byte_idx: usize,
+    pub start: usize,
+    pub end: usize,
     pub url: Url,
     pub type_str: String,
     pub kind: CompletionItemKind,
     def_type: DefinitionType,
+    pub defs: Vec<Box<dyn Definition>>,
 }
 
 impl GenericScope {
@@ -446,10 +451,13 @@ impl GenericScope {
         Self {
             ident: String::new(),
             byte_idx: 0,
+            start: 0,
+            end: 0,
             url: url.clone(),
             type_str: String::new(),
             kind: CompletionItemKind::Module,
             def_type: DefinitionType::GenericScope,
+            defs: Vec::new(),
         }
     }
 }

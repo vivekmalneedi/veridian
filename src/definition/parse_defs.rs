@@ -10,6 +10,11 @@ fn get_ident(tree: &SyntaxTree, node: RefNode) -> (String, usize) {
     (ident_str, byte_idx)
 }
 
+fn get_loc(tree: &SyntaxTree, node: RefNode) -> usize {
+    let loc = unwrap_locate!(node).unwrap();
+    tree.get_origin(loc).unwrap().1
+}
+
 macro_rules! advance_until_leave {
     ($tokens:ident, $tree:ident, $event_iter:ident, $node:path) => {{
         let mut result: Option<RefNode> = None;
@@ -313,14 +318,14 @@ pub fn list_net_decl(
     node: &ListOfNetDeclAssignments,
     event_iter: &mut EventIter,
     url: &Url,
-) -> Option<Vec<NetDec>> {
-    let mut nets: Vec<NetDec> = Vec::new();
+) -> Option<Vec<GenericDec>> {
+    let mut nets: Vec<GenericDec> = Vec::new();
     let mut net_list = vec![&node.nodes.0.nodes.0];
     for net_def in &node.nodes.0.nodes.1 {
         net_list.push(&net_def.1);
     }
     for net_def in net_list {
-        let mut net = NetDec::new(url);
+        let mut net = GenericDec::new(url);
         let ident = get_ident(tree, RefNode::NetIdentifier(&net_def.nodes.0));
         net.ident = ident.0;
         net.byte_idx = ident.1;
@@ -338,8 +343,8 @@ pub fn net_dec(
     node: &NetDeclaration,
     event_iter: &mut EventIter,
     url: &Url,
-) -> Option<Vec<NetDec>> {
-    let mut nets: Vec<NetDec>;
+) -> Option<Vec<GenericDec>> {
+    let mut nets: Vec<GenericDec>;
     let mut common = String::new();
     match node {
         NetDeclaration::NetType(x) => {
@@ -363,7 +368,7 @@ pub fn net_dec(
             nets = list_net_decl(tree, net_list, event_iter, url)?;
         }
         NetDeclaration::Interconnect(x) => {
-            let mut net = NetDec::new(url);
+            let mut net = GenericDec::new(url);
             let ident = get_ident(tree, RefNode::NetIdentifier(&x.nodes.3));
             net.ident = ident.0;
             net.byte_idx = ident.1;
@@ -391,14 +396,14 @@ pub fn list_var_decl(
     node: &ListOfVariableDeclAssignments,
     event_iter: &mut EventIter,
     url: &Url,
-) -> Option<Vec<DataDec>> {
-    let mut vars: Vec<DataDec> = Vec::new();
+) -> Option<Vec<GenericDec>> {
+    let mut vars: Vec<GenericDec> = Vec::new();
     let mut var_list = vec![&node.nodes.0.nodes.0];
     for var_def in &node.nodes.0.nodes.1 {
         var_list.push(&var_def.1);
     }
     for var_def in var_list {
-        let mut var = DataDec::new(url);
+        let mut var = GenericDec::new(url);
         match &var_def {
             VariableDeclAssignment::Variable(node) => {
                 let ident = get_ident(tree, RefNode::VariableIdentifier(&node.nodes.0));
@@ -429,13 +434,49 @@ pub fn list_var_decl(
     Some(vars)
 }
 
+pub fn package_import(
+    tree: &SyntaxTree,
+    node: &PackageImportDeclaration,
+    event_iter: &mut EventIter,
+    url: &Url,
+) -> Option<Vec<PackageImport>> {
+    let mut import_list = vec![&node.nodes.1.nodes.0];
+    for import_def in &node.nodes.1.nodes.1 {
+        import_list.push(&import_def.1);
+    }
+    let mut imports = Vec::new();
+    for import_def in import_list {
+        let mut import = PackageImport::new(url);
+        match import_def {
+            PackageImportItem::Identifier(y) => {
+                let ident = get_ident(tree, RefNode::PackageIdentifier(&y.nodes.0));
+                import.ident = ident.0;
+                import.byte_idx = ident.1;
+                let import_loc = match &y.nodes.2 {
+                    Identifier::SimpleIdentifier(id) => id.nodes.0,
+                    Identifier::EscapedIdentifier(id) => id.nodes.0,
+                };
+                import.import_ident = Some(tree.get_str(&import_loc)?.to_string());
+            }
+            PackageImportItem::Asterisk(y) => {
+                let ident = get_ident(tree, RefNode::PackageIdentifier(&y.nodes.0));
+                import.ident = ident.0;
+                import.byte_idx = ident.1;
+                import.asterisk = true;
+            }
+        }
+        imports.push(import);
+    }
+    Some(imports)
+}
+
 pub fn data_dec(
     tree: &SyntaxTree,
     node: &DataDeclaration,
     event_iter: &mut EventIter,
     url: &Url,
-) -> Option<Vec<DataDec>> {
-    let mut data: Vec<DataDec>;
+) -> Option<Vec<Arc<dyn Definition>>> {
+    let mut data: Vec<Arc<dyn Definition>>;
     let mut common = String::new();
     match node {
         DataDeclaration::Variable(x) => {
@@ -446,11 +487,18 @@ pub fn data_dec(
                 RefNode::ListOfVariableDeclAssignments,
                 &ListOfVariableDeclAssignments
             )?;
-            data = list_var_decl(tree, var_list, event_iter, url)?;
+            let mut decs = list_var_decl(tree, var_list, event_iter, url)?;
+            data = Vec::new();
+            for var in &mut decs {
+                var.type_str = format!("{} {}", common, var.type_str);
+            }
+            for var in decs {
+                data.push(Arc::new(var));
+            }
         }
         DataDeclaration::TypeDeclaration(x) => match &**x {
             TypeDeclaration::DataType(y) => {
-                let mut var = DataDec::new(url);
+                let mut var = GenericDec::new(url);
                 let ident = get_ident(tree, RefNode::TypeIdentifier(&y.nodes.2));
                 var.ident = ident.0;
                 var.byte_idx = ident.1;
@@ -458,10 +506,11 @@ pub fn data_dec(
                     let tokens = &mut var.type_str;
                     advance_until_leave!(tokens, tree, event_iter, RefNode::VariableDimension);
                 }
-                data = vec![var];
+                var.type_str = format!("{} {}", common, var.type_str);
+                data = vec![Arc::new(var)];
             }
             TypeDeclaration::Interface(y) => {
-                let mut var = DataDec::new(url);
+                let mut var = GenericDec::new(url);
                 let ident = get_ident(tree, RefNode::TypeIdentifier(&y.nodes.5));
                 var.ident = ident.0;
                 var.byte_idx = ident.1;
@@ -481,10 +530,11 @@ pub fn data_dec(
                     &TypeIdentifier
                 );
                 var.type_str = tokens;
-                data = vec![var];
+                var.type_str = format!("{} {}", common, var.type_str);
+                data = vec![Arc::new(var)];
             }
             TypeDeclaration::Reserved(y) => {
-                let mut var = DataDec::new(url);
+                let mut var = GenericDec::new(url);
                 let ident = get_ident(tree, RefNode::TypeIdentifier(&y.nodes.2));
                 var.ident = ident.0;
                 var.byte_idx = ident.1;
@@ -497,40 +547,20 @@ pub fn data_dec(
                     &TypeIdentifier
                 );
                 var.type_str = tokens;
-                data = vec![var];
+                var.type_str = format!("{} {}", common, var.type_str);
+                data = vec![Arc::new(var)];
             }
         },
         DataDeclaration::PackageImportDeclaration(x) => {
-            let mut import_list = vec![&x.nodes.1.nodes.0];
-            for import_def in &x.nodes.1.nodes.1 {
-                import_list.push(&import_def.1);
-            }
             data = Vec::new();
-            for import_def in import_list {
-                let mut import = DataDec::new(url);
-                match import_def {
-                    PackageImportItem::Identifier(y) => {
-                        let ident = get_ident(tree, RefNode::PackageIdentifier(&y.nodes.0));
-                        import.ident = ident.0;
-                        import.byte_idx = ident.1;
-                        let import_loc = match &y.nodes.2 {
-                            Identifier::SimpleIdentifier(id) => id.nodes.0,
-                            Identifier::EscapedIdentifier(id) => id.nodes.0,
-                        };
-                        import.import_ident = Some(tree.get_str(&import_loc)?.to_string());
-                    }
-                    PackageImportItem::Asterisk(y) => {
-                        let ident = get_ident(tree, RefNode::PackageIdentifier(&y.nodes.0));
-                        import.ident = ident.0;
-                        import.byte_idx = ident.1;
-                    }
-                }
-                data.push(import);
+            let imports = package_import(tree, x, event_iter, url)?;
+            for import in imports {
+                data.push(Arc::new(import));
             }
         }
         DataDeclaration::NetTypeDeclaration(x) => match &**x {
             NetTypeDeclaration::DataType(y) => {
-                let mut var = DataDec::new(url);
+                let mut var = GenericDec::new(url);
                 let ident = get_ident(tree, RefNode::NetTypeIdentifier(&y.nodes.2));
                 var.ident = ident.0;
                 var.byte_idx = ident.1;
@@ -543,22 +573,21 @@ pub fn data_dec(
                     &NetTypeIdentifier
                 );
                 var.type_str = tokens;
-                data = vec![var];
+                var.type_str = format!("{} {}", common, var.type_str);
+                data = vec![Arc::new(var)];
             }
             NetTypeDeclaration::NetType(y) => {
-                let mut var = DataDec::new(url);
+                let mut var = GenericDec::new(url);
                 let ident = get_ident(tree, RefNode::NetTypeIdentifier(&y.nodes.2));
                 var.ident = ident.0;
                 var.byte_idx = ident.1;
                 let mut tokens = String::new();
                 advance_until_leave!(tokens, tree, event_iter, RefNode::NetTypeIdentifier);
                 var.type_str = tokens;
-                data = vec![var];
+                var.type_str = format!("{} {}", common, var.type_str);
+                data = vec![Arc::new(var)];
             }
         },
-    }
-    for var in &mut data {
-        var.type_str = format!("{} {}", common, var.type_str);
     }
     Some(data)
 }
@@ -926,4 +955,362 @@ pub fn module_inst(
         defs.push(instance);
     }
     Some(defs)
+}
+
+fn param_assignment(
+    tree: &SyntaxTree,
+    node: &ParamAssignment,
+    event_iter: &mut EventIter,
+    url: &Url,
+) -> Option<GenericDec> {
+    let param_assign =
+        skip_until_enter!(tree, event_iter, RefNode::ParamAssignment, &ParamAssignment)?;
+    let mut def = GenericDec::new(url);
+    let ident = get_ident(tree, RefNode::ParameterIdentifier(&param_assign.nodes.0));
+    def.ident = ident.0;
+    def.byte_idx = ident.1;
+    let type_str = &mut def.type_str;
+    advance_until_leave!(type_str, tree, event_iter, RefNode::ParamAssignment);
+    Some(def)
+}
+
+fn list_param_assignment(
+    tree: &SyntaxTree,
+    node: &ListOfParamAssignments,
+    event_iter: &mut EventIter,
+    url: &Url,
+) -> Option<Vec<GenericDec>> {
+    let mut defs: Vec<GenericDec> = Vec::new();
+    let p_a_list = skip_until_enter!(
+        tree,
+        event_iter,
+        RefNode::ListOfParamAssignments,
+        &ListOfParamAssignments
+    )?;
+    let mut param_assigns = vec![&p_a_list.nodes.0.nodes.0];
+    for param_assign in &p_a_list.nodes.0.nodes.1 {
+        param_assigns.push(&param_assign.1);
+    }
+    for param_assign in param_assigns {
+        defs.push(param_assignment(tree, param_assign, event_iter, url)?);
+    }
+    Some(defs)
+}
+
+fn type_assignment(
+    tree: &SyntaxTree,
+    node: &TypeAssignment,
+    event_iter: &mut EventIter,
+    url: &Url,
+) -> Option<GenericDec> {
+    let type_assign =
+        skip_until_enter!(tree, event_iter, RefNode::TypeAssignment, &TypeAssignment)?;
+    let mut def = GenericDec::new(url);
+    let ident = get_ident(tree, RefNode::TypeIdentifier(&type_assign.nodes.0));
+    def.ident = ident.0;
+    def.byte_idx = ident.1;
+    let type_str = &mut def.type_str;
+    advance_until_leave!(type_str, tree, event_iter, RefNode::TypeAssignment);
+    Some(def)
+}
+
+fn list_type_assignment(
+    tree: &SyntaxTree,
+    node: &ListOfTypeAssignments,
+    event_iter: &mut EventIter,
+    url: &Url,
+) -> Option<Vec<GenericDec>> {
+    let mut defs: Vec<GenericDec> = Vec::new();
+    let p_a_list = skip_until_enter!(
+        tree,
+        event_iter,
+        RefNode::ListOfTypeAssignments,
+        &ListOfTypeAssignments
+    )?;
+    let mut type_assigns = vec![&p_a_list.nodes.0.nodes.0];
+    for type_assign in &p_a_list.nodes.0.nodes.1 {
+        type_assigns.push(&type_assign.1);
+    }
+    for type_assign in type_assigns {
+        defs.push(type_assignment(tree, type_assign, event_iter, url)?);
+    }
+    Some(defs)
+}
+
+fn param_dec(
+    tree: &SyntaxTree,
+    node: &ParameterDeclaration,
+    event_iter: &mut EventIter,
+    url: &Url,
+) -> Option<Vec<GenericDec>> {
+    let param_dec = skip_until_enter!(
+        tree,
+        event_iter,
+        RefNode::ParameterDeclaration,
+        &ParameterDeclaration
+    )?;
+    match param_dec {
+        ParameterDeclaration::Param(x) => {
+            let mut prepend = String::new();
+            advance_until_leave!(prepend, tree, event_iter, RefNode::DataTypeOrImplicit);
+            let mut defs = list_param_assignment(tree, &x.nodes.2, event_iter, url)?;
+            for def in &mut defs {
+                def.type_str = format!("{} {}", prepend, def.type_str);
+            }
+            Some(defs)
+        }
+        ParameterDeclaration::Type(x) => {
+            let mut prepend = String::new();
+            advance_until_leave!(prepend, tree, event_iter, RefNode::Keyword);
+            advance_until_leave!(prepend, tree, event_iter, RefNode::Keyword);
+            let mut defs = list_type_assignment(tree, &x.nodes.2, event_iter, url)?;
+            for def in &mut defs {
+                def.type_str = format!("{} {}", prepend, def.type_str);
+            }
+            Some(defs)
+        }
+    }
+}
+
+fn localparam_dec(
+    tree: &SyntaxTree,
+    node: &LocalParameterDeclaration,
+    event_iter: &mut EventIter,
+    url: &Url,
+) -> Option<Vec<GenericDec>> {
+    let localparam_dec = skip_until_enter!(
+        tree,
+        event_iter,
+        RefNode::LocalParameterDeclaration,
+        &LocalParameterDeclaration
+    )?;
+    match localparam_dec {
+        LocalParameterDeclaration::Param(x) => {
+            let mut prepend = String::new();
+            advance_until_leave!(prepend, tree, event_iter, RefNode::DataTypeOrImplicit);
+            let mut defs = list_param_assignment(tree, &x.nodes.2, event_iter, url)?;
+            for def in &mut defs {
+                def.type_str = format!("{} {}", prepend, def.type_str);
+            }
+            Some(defs)
+        }
+        LocalParameterDeclaration::Type(x) => {
+            let mut prepend = String::new();
+            advance_until_leave!(prepend, tree, event_iter, RefNode::Keyword);
+            advance_until_leave!(prepend, tree, event_iter, RefNode::Keyword);
+            let mut defs = list_type_assignment(tree, &x.nodes.2, event_iter, url)?;
+            for def in &mut defs {
+                def.type_str = format!("{} {}", prepend, def.type_str);
+            }
+            Some(defs)
+        }
+    }
+}
+
+fn param_port_dec(
+    tree: &SyntaxTree,
+    node: &ParameterPortDeclaration,
+    event_iter: &mut EventIter,
+    url: &Url,
+) -> Option<Vec<GenericDec>> {
+    match node {
+        ParameterPortDeclaration::ParameterDeclaration(x) => param_dec(tree, x, event_iter, url),
+        ParameterPortDeclaration::LocalParameterDeclaration(x) => {
+            localparam_dec(tree, x, event_iter, url)
+        }
+        ParameterPortDeclaration::ParamList(x) => {
+            let mut prepend = String::new();
+            advance_until_leave!(prepend, tree, event_iter, RefNode::DataType);
+            let mut defs = list_param_assignment(tree, &x.nodes.1, event_iter, url)?;
+            for def in &mut defs {
+                def.type_str = format!("{} {}", prepend, def.type_str);
+            }
+            Some(defs)
+        }
+        ParameterPortDeclaration::TypeList(x) => {
+            let mut prepend = String::new();
+            advance_until_leave!(prepend, tree, event_iter, RefNode::Keyword);
+            let mut defs = list_type_assignment(tree, &x.nodes.1, event_iter, url)?;
+            for def in &mut defs {
+                def.type_str = format!("{} {}", prepend, def.type_str);
+            }
+            Some(defs)
+        }
+    }
+}
+
+pub fn param_port_list(
+    tree: &SyntaxTree,
+    node: &ParameterPortList,
+    event_iter: &mut EventIter,
+    url: &Url,
+) -> Option<Vec<GenericDec>> {
+    let mut defs: Vec<GenericDec> = Vec::new();
+    match node {
+        ParameterPortList::Assignment(x) => {
+            defs.append(&mut list_param_assignment(
+                tree,
+                &(x.nodes.1.nodes.1).0,
+                event_iter,
+                url,
+            )?);
+            for port_dec in &(x.nodes.1.nodes.1).1 {
+                defs.append(&mut param_port_dec(tree, &port_dec.1, event_iter, url)?);
+            }
+        }
+        ParameterPortList::Declaration(x) => {
+            let mut param_port_decs = vec![&x.nodes.1.nodes.1.nodes.0];
+            for param_port_dec in &x.nodes.1.nodes.1.nodes.1 {
+                param_port_decs.push(&param_port_dec.1);
+            }
+            for port_dec in param_port_decs {
+                defs.append(&mut param_port_dec(tree, port_dec, event_iter, url)?);
+            }
+        }
+        ParameterPortList::Empty(_) => {}
+    }
+    Some(defs)
+}
+
+pub fn module_dec(
+    tree: &SyntaxTree,
+    node: &ModuleDeclaration,
+    event_iter: &mut EventIter,
+    url: &Url,
+) -> Option<GenericScope> {
+    let mut scope: GenericScope = GenericScope::new(url);
+    match node {
+        ModuleDeclaration::Nonansi(x) => {
+            scope.start = get_loc(tree, RefNode::ModuleKeyword(&x.nodes.0.nodes.1));
+            scope.end = get_loc(tree, RefNode::Keyword(&x.nodes.3));
+            let ident = get_ident(tree, RefNode::ModuleIdentifier(&x.nodes.0.nodes.3));
+            scope.ident = ident.0;
+            scope.byte_idx = ident.1;
+            let type_str = &mut scope.type_str;
+            advance_until_leave!(type_str, tree, event_iter, RefNode::ModuleIdentifier);
+            for import_dec in &x.nodes.0.nodes.4 {
+                let imports = package_import(tree, &import_dec, event_iter, url)?;
+                for import in imports {
+                    scope.defs.push(Box::new(import));
+                }
+            }
+            if let Some(pport_list) = &x.nodes.0.nodes.5 {
+                let pports = param_port_list(tree, pport_list, event_iter, url)?;
+                for pport in pports {
+                    scope.defs.push(Box::new(pport));
+                }
+            }
+        }
+        ModuleDeclaration::Ansi(x) => {
+            scope.start = get_loc(tree, RefNode::ModuleKeyword(&x.nodes.0.nodes.1));
+            scope.end = get_loc(tree, RefNode::Keyword(&x.nodes.3));
+            let ident = get_ident(tree, RefNode::ModuleIdentifier(&x.nodes.0.nodes.3));
+            scope.ident = ident.0;
+            scope.byte_idx = ident.1;
+            let type_str = &mut scope.type_str;
+            advance_until_leave!(type_str, tree, event_iter, RefNode::ModuleIdentifier);
+            for import_dec in &x.nodes.0.nodes.4 {
+                let imports = package_import(tree, &import_dec, event_iter, url)?;
+                for import in imports {
+                    scope.defs.push(Box::new(import));
+                }
+            }
+            if let Some(pport_list) = &x.nodes.0.nodes.5 {
+                let pports = param_port_list(tree, pport_list, event_iter, url)?;
+                for pport in pports {
+                    scope.defs.push(Box::new(pport));
+                }
+            }
+            if let Some(list_port_decs) = &x.nodes.0.nodes.6 {
+                if let Some(port_decs) = &list_port_decs.nodes.0.nodes.1 {
+                    let mut port_decs_list: Vec<&AnsiPortDeclaration> = vec![&port_decs.nodes.0.1];
+                    for port_dec in &port_decs.nodes.1 {
+                        port_decs_list.push(&port_dec.1.1);
+                    }
+                    for port_dec in port_decs_list {
+                    let ansi_dec = skip_until_enter!(
+                        tree,
+                        event_iter,
+                        RefNode::AnsiPortDeclaration,
+                        &AnsiPortDeclaration
+                    )?;
+                    scope
+                        .defs
+                        .push(Box::new(port_dec_ansi(tree, ansi_dec, event_iter, url)?))
+                    };
+                }
+            }
+        }
+        ModuleDeclaration::Wildcard(x) => {
+            scope.start = get_loc(tree, RefNode::ModuleKeyword(&x.nodes.1));
+            scope.end = get_loc(tree, RefNode::Keyword(&x.nodes.8));
+            let ident = get_ident(tree, RefNode::ModuleIdentifier(&x.nodes.3));
+            scope.ident = ident.0;
+            scope.byte_idx = ident.1;
+            let type_str = &mut scope.type_str;
+            advance_until_leave!(type_str, tree, event_iter, RefNode::ModuleIdentifier);
+        }
+        ModuleDeclaration::ExternNonansi(x) => {
+            scope.start = get_loc(tree, RefNode::Keyword(&x.nodes.0));
+            scope.end = get_loc(tree, RefNode::Symbol(&x.nodes.1.nodes.7));
+            let ident = get_ident(tree, RefNode::ModuleIdentifier(&x.nodes.1.nodes.3));
+            scope.ident = ident.0;
+            scope.byte_idx = ident.1;
+            let type_str = &mut scope.type_str;
+            advance_until_leave!(type_str, tree, event_iter, RefNode::ModuleIdentifier);
+            for import_dec in &x.nodes.1.nodes.4 {
+                let imports = package_import(tree, &import_dec, event_iter, url)?;
+                for import in imports {
+                    scope.defs.push(Box::new(import));
+                }
+            }
+            if let Some(pport_list) = &x.nodes.1.nodes.5 {
+                let pports = param_port_list(tree, pport_list, event_iter, url)?;
+                for pport in pports {
+                    scope.defs.push(Box::new(pport));
+                }
+            }
+        }
+        ModuleDeclaration::ExternAnsi(x) => {
+            scope.start = get_loc(tree, RefNode::Keyword(&x.nodes.0));
+            scope.end = get_loc(tree, RefNode::Symbol(&x.nodes.1.nodes.7));
+            let ident = get_ident(tree, RefNode::ModuleIdentifier(&x.nodes.1.nodes.3));
+            scope.ident = ident.0;
+            scope.byte_idx = ident.1;
+            let type_str = &mut scope.type_str;
+            advance_until_leave!(type_str, tree, event_iter, RefNode::ModuleIdentifier);
+            for import_dec in &x.nodes.1.nodes.4 {
+                let imports = package_import(tree, &import_dec, event_iter, url)?;
+                for import in imports {
+                    scope.defs.push(Box::new(import));
+                }
+            }
+            if let Some(pport_list) = &x.nodes.1.nodes.5 {
+                let pports = param_port_list(tree, pport_list, event_iter, url)?;
+                for pport in pports {
+                    scope.defs.push(Box::new(pport));
+                }
+            }
+            if let Some(list_port_decs) = &x.nodes.1.nodes.6 {
+                if let Some(port_decs) = &list_port_decs.nodes.0.nodes.1 {
+                    let mut port_decs_list: Vec<&AnsiPortDeclaration> = vec![&port_decs.nodes.0.1];
+                    for port_dec in &port_decs.nodes.1 {
+                        port_decs_list.push(&port_dec.1.1);
+                    }
+                    for port_dec in port_decs_list {
+                    let ansi_dec = skip_until_enter!(
+                        tree,
+                        event_iter,
+                        RefNode::AnsiPortDeclaration,
+                        &AnsiPortDeclaration
+                    )?;
+                    scope
+                        .defs
+                        .push(Box::new(port_dec_ansi(tree, ansi_dec, event_iter, url)?))
+                    };
+                }
+            }
+        }
+    }
+    Some(scope)
 }

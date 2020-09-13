@@ -91,10 +91,10 @@ pub fn get_definitions(
     while let Some(event) = event_iter.next() {
         match event {
             NodeEvent::Enter(node) => match node {
-                RefNode::AnsiPortDeclaration(n) => {
-                    let port = port_dec_ansi(syntax_tree, n, &mut event_iter, url);
-                    if port.is_some() {
-                        definitions.push(Arc::new(port?));
+                RefNode::ModuleDeclaration(n) => {
+                    let module = module_dec(syntax_tree, n, &mut event_iter, url);
+                    if module.is_some() {
+                        definitions.push(Arc::new(module?));
                     }
                 }
                 RefNode::PortDeclaration(n) => {
@@ -116,9 +116,7 @@ pub fn get_definitions(
                 RefNode::DataDeclaration(n) => {
                     let vars = data_dec(syntax_tree, n, &mut event_iter, url);
                     if vars.is_some() {
-                        for var in vars? {
-                            definitions.push(Arc::new(var));
-                        }
+                        definitions.append(&mut vars?);
                     }
                 }
                 RefNode::FunctionDeclaration(n) => {
