@@ -27,3 +27,36 @@ In `coc-settings.json`:
 }
 
 ```
+
+## LSP Support
+See the [LSP Specification](https://microsoft.github.io/language-server-protocol/specifications/specification-current/) for more details
+- [x] diagnostics (using [slang](https://github.com/MikePopoloski/slang))
+- [x] completion
+  * identifier completion
+  * dot completion (partially implemented)
+  * keywords & keyword snippets
+  * system task/function and compiler directives
+- [ ] completion resolve
+- [x] hover (documentation)
+- [ ] signatureHelp
+- [ ] declaration
+- [x] definition
+- [ ] typeDefinition
+- [ ] implementation
+- [ ] references
+- [ ] documentHighlight
+- [ ] documentSymbol
+- [ ] codeAction
+- [ ] codeLens
+- [ ] codeLens resolve
+- [ ] documentLink
+- [ ] documentLink resolve
+- [ ] documentColor
+- [ ] colorPresentation
+- [ ] formatting
+- [ ] rangeFormatting
+- [ ] onTypeFormatting
+- [ ] rename
+- [ ] prepareRename
+- [ ] foldingRange
+- [ ] selectionRange
