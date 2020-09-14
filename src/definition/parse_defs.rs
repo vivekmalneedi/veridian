@@ -2020,3 +2020,25 @@ pub fn class_dec(
     scope.defs.append(&mut defs);
     Some(scope)
 }
+
+// `define definition
+pub fn text_macro_def(
+    tree: &SyntaxTree,
+    node: &TextMacroDefinition,
+    event_iter: &mut EventIter,
+    url: &Url,
+) -> Option<GenericDec> {
+    let mut text_macro = GenericDec::new(url);
+    let ident = get_ident(tree, RefNode::TextMacroIdentifier(&node.nodes.2.nodes.0));
+    text_macro.ident = ident.0;
+    text_macro.byte_idx = ident.1;
+    let type_str = &mut text_macro.type_str;
+    advance_until_enter!(
+        type_str,
+        tree,
+        event_iter,
+        RefNode::TextMacroIdentifier,
+        &TextMacroIdentifier
+    );
+    Some(text_macro)
+}

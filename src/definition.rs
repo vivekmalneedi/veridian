@@ -181,6 +181,12 @@ pub fn match_definitions(
                 }
             }
         }
+        RefNode::TextMacroDefinition(n) => {
+            let dec = text_macro_def(syntax_tree, n, event_iter, url);
+            if dec.is_some() {
+                definitions.push(Box::new(dec?));
+            }
+        }
         _ => (),
     }
     Some((scopes, definitions))
