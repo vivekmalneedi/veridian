@@ -1,5 +1,5 @@
 use crate::definition::def_types::*;
-use std::sync::Arc;
+use crate::definition::match_definitions;
 use sv_parser::*;
 use tower_lsp::lsp_types::*;
 
@@ -77,6 +77,31 @@ macro_rules! skip_until_enter {
             }
         }
         result
+    }};
+}
+
+macro_rules! match_until_leave {
+    ($tree:ident, $event_iter:ident, $url:ident, $node:path) => {{
+        let mut scopes: Vec<Box<dyn Scope>> = Vec::new();
+        let mut definitions: Vec<Box<dyn Definition>> = Vec::new();
+        let mut global_scope: GenericScope = GenericScope::new($url);
+        global_scope.ident = "global".to_string();
+        while let Some(event) = $event_iter.next() {
+            match event {
+                NodeEvent::Enter(node) => {
+                    let mut result = match_definitions($tree, $event_iter, node, $url)?;
+                    definitions.append(&mut result.1);
+                    scopes.append(&mut result.0);
+                }
+                NodeEvent::Leave(node) => match node {
+                    $node(n) => {
+                        break;
+                    }
+                    _ => {}
+                },
+            }
+        }
+        Some((scopes, definitions))
     }};
 }
 
@@ -475,8 +500,8 @@ pub fn data_dec(
     node: &DataDeclaration,
     event_iter: &mut EventIter,
     url: &Url,
-) -> Option<Vec<Arc<dyn Definition>>> {
-    let mut data: Vec<Arc<dyn Definition>>;
+) -> Option<Vec<Box<dyn Definition>>> {
+    let mut data: Vec<Box<dyn Definition>>;
     let mut common = String::new();
     match node {
         DataDeclaration::Variable(x) => {
@@ -493,7 +518,7 @@ pub fn data_dec(
                 var.type_str = format!("{} {}", common, var.type_str);
             }
             for var in decs {
-                data.push(Arc::new(var));
+                data.push(Box::new(var));
             }
         }
         DataDeclaration::TypeDeclaration(x) => match &**x {
@@ -507,7 +532,7 @@ pub fn data_dec(
                     advance_until_leave!(tokens, tree, event_iter, RefNode::VariableDimension);
                 }
                 var.type_str = format!("{} {}", common, var.type_str);
-                data = vec![Arc::new(var)];
+                data = vec![Box::new(var)];
             }
             TypeDeclaration::Interface(y) => {
                 let mut var = GenericDec::new(url);
@@ -531,7 +556,7 @@ pub fn data_dec(
                 );
                 var.type_str = tokens;
                 var.type_str = format!("{} {}", common, var.type_str);
-                data = vec![Arc::new(var)];
+                data = vec![Box::new(var)];
             }
             TypeDeclaration::Reserved(y) => {
                 let mut var = GenericDec::new(url);
@@ -548,14 +573,14 @@ pub fn data_dec(
                 );
                 var.type_str = tokens;
                 var.type_str = format!("{} {}", common, var.type_str);
-                data = vec![Arc::new(var)];
+                data = vec![Box::new(var)];
             }
         },
         DataDeclaration::PackageImportDeclaration(x) => {
             data = Vec::new();
             let imports = package_import(tree, x, event_iter, url)?;
             for import in imports {
-                data.push(Arc::new(import));
+                data.push(Box::new(import));
             }
         }
         DataDeclaration::NetTypeDeclaration(x) => match &**x {
@@ -574,7 +599,7 @@ pub fn data_dec(
                 );
                 var.type_str = tokens;
                 var.type_str = format!("{} {}", common, var.type_str);
-                data = vec![Arc::new(var)];
+                data = vec![Box::new(var)];
             }
             NetTypeDeclaration::NetType(y) => {
                 let mut var = GenericDec::new(url);
@@ -585,7 +610,7 @@ pub fn data_dec(
                 advance_until_leave!(tokens, tree, event_iter, RefNode::NetTypeIdentifier);
                 var.type_str = tokens;
                 var.type_str = format!("{} {}", common, var.type_str);
-                data = vec![Arc::new(var)];
+                data = vec![Box::new(var)];
             }
         },
     }
@@ -628,11 +653,12 @@ pub fn function_dec(
     node: &FunctionDeclaration,
     event_iter: &mut EventIter,
     url: &Url,
-) -> Option<Vec<Arc<dyn Definition>>> {
-    let mut defs: Vec<Arc<dyn Definition>>;
+) -> Option<SubDec> {
+    let mut func: SubDec = SubDec::new(url);
+    func.start = get_loc(tree, RefNode::Keyword(&node.nodes.0));
     match &node.nodes.2 {
         FunctionBodyDeclaration::WithoutPort(x) => {
-            let mut func = SubDec::new(url);
+            func.end = get_loc(tree, RefNode::Keyword(&x.nodes.6));
             let ident = get_ident(tree, RefNode::FunctionIdentifier(&x.nodes.2));
             func.ident = ident.0;
             func.byte_idx = ident.1;
@@ -646,10 +672,9 @@ pub fn function_dec(
             );
             func.type_str = tokens;
             func.kind = CompletionItemKind::Function;
-            defs = vec![Arc::new(func)];
         }
         FunctionBodyDeclaration::WithPort(x) => {
-            let mut func = SubDec::new(url);
+            func.end = get_loc(tree, RefNode::Keyword(&x.nodes.7));
             let ident = get_ident(tree, RefNode::FunctionIdentifier(&x.nodes.2));
             func.ident = ident.0;
             func.byte_idx = ident.1;
@@ -663,20 +688,23 @@ pub fn function_dec(
             );
             func.type_str = tokens;
             func.kind = CompletionItemKind::Function;
-            defs = vec![Arc::new(func)];
             match &x.nodes.3.nodes.1 {
                 Some(tfports) => {
                     skip_until_enter!(tree, event_iter, RefNode::TfPortList, &TfPortList);
                     let ports = tfport_list(tree, tfports, event_iter, url)?;
                     for port in ports {
-                        defs.push(Arc::new(port));
+                        func.defs.push(Box::new(port));
                     }
                 }
                 None => (),
             }
         }
     }
-    Some(defs)
+    let (scopes, mut defs) =
+        match_until_leave!(tree, event_iter, url, RefNode::FunctionDeclaration)?;
+    func.scopes = scopes;
+    func.defs.append(&mut defs);
+    Some(func)
 }
 
 pub fn task_dec(
@@ -684,11 +712,12 @@ pub fn task_dec(
     node: &TaskDeclaration,
     event_iter: &mut EventIter,
     url: &Url,
-) -> Option<Vec<Arc<dyn Definition>>> {
-    let mut defs: Vec<Arc<dyn Definition>>;
+) -> Option<SubDec> {
+    let mut task = SubDec::new(url);
+    task.start = get_loc(tree, RefNode::Keyword(&node.nodes.0));
     match &node.nodes.2 {
         TaskBodyDeclaration::WithoutPort(x) => {
-            let mut task = SubDec::new(url);
+            task.end = get_loc(tree, RefNode::Keyword(&x.nodes.5));
             let ident = get_ident(tree, RefNode::TaskIdentifier(&x.nodes.1));
             task.ident = ident.0;
             task.byte_idx = ident.1;
@@ -702,9 +731,9 @@ pub fn task_dec(
             );
             task.type_str = tokens;
             task.kind = CompletionItemKind::Function;
-            defs = vec![Arc::new(task)];
         }
         TaskBodyDeclaration::WithPort(x) => {
+            task.end = get_loc(tree, RefNode::Keyword(&x.nodes.6));
             let mut task = SubDec::new(url);
             let ident = get_ident(tree, RefNode::TaskIdentifier(&x.nodes.1));
             task.ident = ident.0;
@@ -719,20 +748,22 @@ pub fn task_dec(
             );
             task.type_str = tokens;
             task.kind = CompletionItemKind::Function;
-            defs = vec![Arc::new(task)];
             match &x.nodes.2.nodes.1 {
                 Some(tfports) => {
                     skip_until_enter!(tree, event_iter, RefNode::TfPortList, &TfPortList);
                     let ports = tfport_list(tree, tfports, event_iter, url)?;
                     for port in ports {
-                        defs.push(Arc::new(port));
+                        task.defs.push(Box::new(port));
                     }
                 }
                 None => (),
             }
         }
     }
-    Some(defs)
+    let (scopes, mut defs) = match_until_leave!(tree, event_iter, url, RefNode::TaskDeclaration)?;
+    task.scopes = scopes;
+    task.defs.append(&mut defs);
+    Some(task)
 }
 
 pub fn modport_dec(
@@ -790,7 +821,7 @@ pub fn modport_dec(
                                 port.byte_idx = ident.1;
                                 port.kind = CompletionItemKind::Property;
                                 port.type_str = prepend.clone();
-                                modport.ports.push(Arc::new(port));
+                                modport.ports.push(Box::new(port));
                             }
                             ModportSimplePort::Named(y) => {
                                 let port_ident = skip_until_enter!(
@@ -812,7 +843,7 @@ pub fn modport_dec(
                                     RefNode::ModportSimplePortNamed
                                 );
                                 port.type_str = format!("{} {}", prepend, append);
-                                modport.ports.push(Arc::new(port));
+                                modport.ports.push(Box::new(port));
                             }
                         }
                     }
@@ -858,7 +889,7 @@ pub fn modport_dec(
                                         event_iter,
                                         RefNode::TaskPrototype
                                     );
-                                    modport.ports.push(Arc::new(port));
+                                    modport.ports.push(Box::new(port));
                                 }
                                 MethodPrototype::FunctionPrototype(z) => {
                                     let mut port = SubDec::new(url);
@@ -879,7 +910,7 @@ pub fn modport_dec(
                                         event_iter,
                                         RefNode::FunctionIdentifier
                                     );
-                                    modport.ports.push(Arc::new(port));
+                                    modport.ports.push(Box::new(port));
                                 }
                             },
                             ModportTfPort::TfIdentifier(y) => {
@@ -888,7 +919,7 @@ pub fn modport_dec(
                                 port.ident = ident.0;
                                 port.byte_idx = ident.1;
                                 port.type_str = prepend.clone();
-                                modport.ports.push(Arc::new(port));
+                                modport.ports.push(Box::new(port));
                             }
                         }
                     }
@@ -913,7 +944,7 @@ pub fn modport_dec(
                     port.ident = ident.0;
                     port.byte_idx = ident.1;
                     port.type_str = tokens;
-                    modport.ports.push(Arc::new(port));
+                    modport.ports.push(Box::new(port));
                 }
             }
         }
@@ -1312,6 +1343,9 @@ pub fn module_dec(
             }
         }
     }
+    let (scopes, mut defs) = match_until_leave!(tree, event_iter, url, RefNode::ModuleDeclaration)?;
+    scope.scopes = scopes;
+    scope.defs.append(&mut defs);
     Some(scope)
 }
 
@@ -1455,6 +1489,10 @@ pub fn interface_dec(
             }
         }
     }
+    let (scopes, mut defs) =
+        match_until_leave!(tree, event_iter, url, RefNode::InterfaceDeclaration)?;
+    scope.scopes = scopes;
+    scope.defs.append(&mut defs);
     Some(scope)
 }
 
@@ -1714,6 +1752,10 @@ pub fn udp_dec(
             }
         }
     }
+
+    let (scopes, mut defs) = match_until_leave!(tree, event_iter, url, RefNode::UdpDeclaration)?;
+    scope.scopes = scopes;
+    scope.defs.append(&mut defs);
     Some(scope)
 }
 
@@ -1858,6 +1900,11 @@ pub fn program_dec(
             }
         }
     }
+
+    let (scopes, mut defs) =
+        match_until_leave!(tree, event_iter, url, RefNode::ProgramDeclaration)?;
+    scope.scopes = scopes;
+    scope.defs.append(&mut defs);
     Some(scope)
 }
 
@@ -1875,6 +1922,11 @@ pub fn package_dec(
     scope.byte_idx = ident.1;
     let type_str = &mut scope.type_str;
     advance_until_leave!(type_str, tree, event_iter, RefNode::PackageIdentifier);
+
+    let (scopes, mut defs) =
+        match_until_leave!(tree, event_iter, url, RefNode::PackageDeclaration)?;
+    scope.scopes = scopes;
+    scope.defs.append(&mut defs);
     Some(scope)
 }
 
@@ -1898,6 +1950,10 @@ pub fn config_dec(
             scope.defs.push(Box::new(param));
         }
     }
+
+    let (scopes, mut defs) = match_until_leave!(tree, event_iter, url, RefNode::ConfigDeclaration)?;
+    scope.scopes = scopes;
+    scope.defs.append(&mut defs);
     Some(scope)
 }
 
@@ -1958,5 +2014,9 @@ pub fn class_dec(
             scope.implements.push(interface);
         }
     }
+
+    let (scopes, mut defs) = match_until_leave!(tree, event_iter, url, RefNode::ClassDeclaration)?;
+    scope.scopes = scopes;
+    scope.defs.append(&mut defs);
     Some(scope)
 }

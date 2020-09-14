@@ -1,6 +1,6 @@
-use crate::definition::{get_definitions, Definition};
+use crate::definition::Definition;
 use crate::server::LSPServer;
-use crate::sources::{LSPSupport, Scope};
+use crate::sources::LSPSupport;
 use log::info;
 use ropey::RopeSlice;
 use std::collections::HashSet;
@@ -80,174 +80,6 @@ impl LSPServer {
         // eprintln!("comp response: {}", now.elapsed().as_millis());
         Some(CompletionResponse::List(response?))
     }
-}
-
-macro_rules! scope_declaration {
-    ($tree:ident, $dec:ident, $scopes:ident, ($($a:tt),*), ($($b:tt),*), ($($c:tt),*)) => {
-        let start = $tree.get_origin(&$dec$(.nodes.$a)*.nodes.0).unwrap().1;
-        let end = $tree.get_origin(&$dec$(.nodes.$b)*.nodes.0).unwrap().1;
-        let name = match &$dec$(.nodes.$c)*.nodes.0 {
-            Identifier::EscapedIdentifier(id) => $tree.get_str(&id.nodes.0).unwrap().to_owned(),
-            Identifier::SimpleIdentifier(id) => $tree.get_str(&id.nodes.0).unwrap().to_owned(),
-        };
-        $scopes.push((name, start, end));
-    };
-}
-
-// same as scope_declaration but handles Module/Macromodule keyword
-macro_rules! scope_declaration_module {
-    ($tree:ident, $dec:ident, $scopes:ident, ($($a:tt),*), ($($b:tt),*), ($($c:tt),*)) => {
-        let start = match &$dec$(.nodes.$a)* {
-            ModuleKeyword::Module(x) | ModuleKeyword::Macromodule(x) => x.nodes.0,
-        };
-        let start = $tree.get_origin(&start).unwrap().1;
-        let end = $tree.get_origin(&$dec$(.nodes.$b)*.nodes.0).unwrap().1;
-        let name = match &$dec$(.nodes.$c)*.nodes.0 {
-            Identifier::EscapedIdentifier(id) => $tree.get_str(&id.nodes.0).unwrap().to_owned(),
-            Identifier::SimpleIdentifier(id) => $tree.get_str(&id.nodes.0).unwrap().to_owned(),
-        };
-        $scopes.push((name, start, end));
-    };
-}
-
-pub fn get_scope_idents(syntax_tree: &SyntaxTree) -> Vec<(String, usize, usize)> {
-    let mut scope_idents: Vec<(String, usize, usize)> = Vec::new();
-    for node in syntax_tree {
-        match node {
-            RefNode::ModuleDeclarationAnsi(x) => {
-                scope_declaration_module!(syntax_tree, x, scope_idents, (0, 1), (3), (0, 3));
-            }
-            RefNode::ModuleDeclarationNonansi(x) => {
-                scope_declaration_module!(syntax_tree, x, scope_idents, (0, 1), (3), (0, 3));
-            }
-            RefNode::ModuleDeclarationWildcard(x) => {
-                scope_declaration_module!(syntax_tree, x, scope_idents, (1), (8), (3));
-            }
-            RefNode::UdpDeclarationAnsi(x) => {
-                scope_declaration!(syntax_tree, x, scope_idents, (0, 1), (2), (0, 2));
-            }
-            RefNode::UdpDeclarationNonansi(x) => {
-                scope_declaration!(syntax_tree, x, scope_idents, (0, 1), (4), (0, 2));
-            }
-            RefNode::UdpDeclarationWildcard(x) => {
-                scope_declaration!(syntax_tree, x, scope_idents, (1), (7), (2));
-            }
-            RefNode::InterfaceDeclarationNonansi(x) => {
-                scope_declaration!(syntax_tree, x, scope_idents, (0, 1), (3), (0, 3));
-            }
-            RefNode::InterfaceDeclarationAnsi(x) => {
-                scope_declaration!(syntax_tree, x, scope_idents, (0, 1), (3), (0, 3));
-            }
-            RefNode::InterfaceDeclarationWildcard(x) => {
-                scope_declaration!(syntax_tree, x, scope_idents, (1), (8), (3));
-            }
-            RefNode::ProgramDeclarationNonansi(x) => {
-                scope_declaration!(syntax_tree, x, scope_idents, (0, 1), (3), (0, 3));
-            }
-            RefNode::ProgramDeclarationAnsi(x) => {
-                scope_declaration!(syntax_tree, x, scope_idents, (0, 1), (3), (0, 3));
-            }
-            RefNode::ProgramDeclarationWildcard(x) => {
-                scope_declaration!(syntax_tree, x, scope_idents, (1), (7), (2));
-            }
-            RefNode::PackageDeclaration(x) => {
-                scope_declaration!(syntax_tree, x, scope_idents, (1), (7), (3));
-            }
-            RefNode::ConfigDeclaration(x) => {
-                scope_declaration!(syntax_tree, x, scope_idents, (0), (6), (1));
-            }
-            RefNode::ClassDeclaration(x) => {
-                scope_declaration!(syntax_tree, x, scope_idents, (1), (9), (3));
-            }
-            RefNode::FunctionDeclaration(x) => {
-                let start = syntax_tree.get_origin(&x.nodes.0.nodes.0).unwrap().1;
-                let end = match &x.nodes.2 {
-                    FunctionBodyDeclaration::WithoutPort(node) => {
-                        syntax_tree.get_origin(&node.nodes.6.nodes.0).unwrap().1
-                    }
-                    FunctionBodyDeclaration::WithPort(node) => {
-                        syntax_tree.get_origin(&node.nodes.7.nodes.0).unwrap().1
-                    }
-                };
-                let ident = match &x.nodes.2 {
-                    FunctionBodyDeclaration::WithoutPort(node) => &node.nodes.2.nodes.0,
-                    FunctionBodyDeclaration::WithPort(node) => &node.nodes.2.nodes.0,
-                };
-                let name = match ident {
-                    Identifier::EscapedIdentifier(id) => {
-                        syntax_tree.get_str(&id.nodes.0).unwrap().to_owned()
-                    }
-                    Identifier::SimpleIdentifier(id) => {
-                        syntax_tree.get_str(&id.nodes.0).unwrap().to_owned()
-                    }
-                };
-                scope_idents.push((name, start, end));
-            }
-            RefNode::TaskDeclaration(x) => {
-                let start = syntax_tree.get_origin(&x.nodes.0.nodes.0).unwrap().1;
-                let end = match &x.nodes.2 {
-                    TaskBodyDeclaration::WithoutPort(node) => {
-                        syntax_tree.get_origin(&node.nodes.5.nodes.0).unwrap().1
-                    }
-                    TaskBodyDeclaration::WithPort(node) => {
-                        syntax_tree.get_origin(&node.nodes.6.nodes.0).unwrap().1
-                    }
-                };
-                let ident = match &x.nodes.2 {
-                    TaskBodyDeclaration::WithoutPort(node) => &node.nodes.1.nodes.0,
-                    TaskBodyDeclaration::WithPort(node) => &node.nodes.1.nodes.0,
-                };
-                let name = match ident {
-                    Identifier::EscapedIdentifier(id) => {
-                        syntax_tree.get_str(&id.nodes.0).unwrap().to_owned()
-                    }
-                    Identifier::SimpleIdentifier(id) => {
-                        syntax_tree.get_str(&id.nodes.0).unwrap().to_owned()
-                    }
-                };
-                scope_idents.push((name, start, end));
-            }
-            _ => (),
-        }
-    }
-    scope_idents
-}
-
-fn get_identifiers(syntax_tree: &SyntaxTree) -> Vec<(String, usize)> {
-    let mut idents: Vec<(String, usize)> = Vec::new();
-    for node in syntax_tree {
-        match node {
-            RefNode::Identifier(x) => {
-                let id = match x {
-                    Identifier::SimpleIdentifier(x) => x.nodes.0,
-                    Identifier::EscapedIdentifier(x) => x.nodes.0,
-                };
-                let id_str = syntax_tree.get_str(&id).unwrap();
-                let idb = syntax_tree.get_origin(&id).unwrap().1;
-                idents.push((id_str.to_owned(), idb));
-            }
-            _ => (),
-        }
-    }
-    idents
-}
-
-pub fn get_scopes(syntax_tree: &SyntaxTree, file_len: usize, url: &Url) -> Scope {
-    let mut global_scope: Scope = Scope::new(("global".to_string(), 0, file_len), url);
-    let identifiers = get_identifiers(&syntax_tree);
-    let scope_idents = get_scope_idents(&syntax_tree);
-    let defs = get_definitions(&syntax_tree, &scope_idents, url).unwrap();
-    for scope in scope_idents {
-        global_scope.insert_scope(scope, url);
-    }
-    for def in defs {
-        global_scope.insert_def(def);
-    }
-    global_scope.lift_nested_scope_defs();
-    for ident in identifiers {
-        global_scope.insert_ident(ident);
-    }
-    global_scope
 }
 
 fn get_completion_token(line: RopeSlice, pos: Position) -> String {
@@ -540,6 +372,7 @@ endmodule
             ..CompletionItem::default()
         };
         if let CompletionResponse::List(item) = response {
+            eprintln!("{:#?}", item);
             assert!(item.items.contains(&item1));
             for comp in &item.items {
                 assert!(comp.label != "abcd");
@@ -608,7 +441,7 @@ endmodule
             ..CompletionItem::default()
         };
         if let CompletionResponse::List(item) = response {
-            // eprintln!("{:#?}", item);
+            eprintln!("{:#?}", item);
             assert!(item.items.contains(&item1));
             assert!(item.items.len() == 1);
         } else {

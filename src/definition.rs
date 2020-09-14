@@ -79,117 +79,131 @@ fn get_definition_token(line: RopeSlice, pos: Position) -> String {
     token
 }
 
-pub fn get_definitions(
+pub fn match_definitions(
     syntax_tree: &SyntaxTree,
-    scope_idents: &Vec<(String, usize, usize)>,
+    event_iter: &mut EventIter,
+    node: RefNode,
     url: &Url,
-) -> Option<Vec<Arc<dyn Definition>>> {
-    // eprintln!("{}", syntax_tree);
+) -> Option<(Vec<Box<dyn Scope>>, Vec<Box<dyn Definition>>)> {
+    let mut definitions: Vec<Box<dyn Definition>> = Vec::new();
+    let mut scopes: Vec<Box<dyn Scope>> = Vec::new();
+    match node {
+        RefNode::ModuleDeclaration(n) => {
+            let module = module_dec(syntax_tree, n, event_iter, url);
+            if module.is_some() {
+                scopes.push(Box::new(module?));
+            }
+        }
+        RefNode::InterfaceDeclaration(n) => {
+            let interface = interface_dec(syntax_tree, n, event_iter, url);
+            if interface.is_some() {
+                scopes.push(Box::new(interface?));
+            }
+        }
+        RefNode::UdpDeclaration(n) => {
+            let dec = udp_dec(syntax_tree, n, event_iter, url);
+            if dec.is_some() {
+                scopes.push(Box::new(dec?));
+            }
+        }
+        RefNode::ProgramDeclaration(n) => {
+            let dec = program_dec(syntax_tree, n, event_iter, url);
+            if dec.is_some() {
+                scopes.push(Box::new(dec?));
+            }
+        }
 
-    let mut definitions: Vec<Arc<dyn Definition>> = Vec::new();
+        RefNode::PackageDeclaration(n) => {
+            let dec = package_dec(syntax_tree, n, event_iter, url);
+            if dec.is_some() {
+                scopes.push(Box::new(dec?));
+            }
+        }
+        RefNode::ConfigDeclaration(n) => {
+            let dec = config_dec(syntax_tree, n, event_iter, url);
+            if dec.is_some() {
+                scopes.push(Box::new(dec?));
+            }
+        }
+        RefNode::ClassDeclaration(n) => {
+            let dec = class_dec(syntax_tree, n, event_iter, url);
+            if dec.is_some() {
+                scopes.push(Box::new(dec?));
+            }
+        }
+        RefNode::PortDeclaration(n) => {
+            let ports = port_dec_non_ansi(syntax_tree, n, event_iter, url);
+            if ports.is_some() {
+                for port in ports? {
+                    definitions.push(Box::new(port));
+                }
+            }
+        }
+        RefNode::NetDeclaration(n) => {
+            let nets = net_dec(syntax_tree, n, event_iter, url);
+            if nets.is_some() {
+                for net in nets? {
+                    definitions.push(Box::new(net));
+                }
+            }
+        }
+        RefNode::DataDeclaration(n) => {
+            let vars = data_dec(syntax_tree, n, event_iter, url);
+            if vars.is_some() {
+                definitions.append(&mut vars?);
+            }
+        }
+        RefNode::FunctionDeclaration(n) => {
+            let dec = function_dec(syntax_tree, n, event_iter, url);
+            if dec.is_some() {
+                scopes.push(Box::new(dec?));
+            }
+        }
+        RefNode::TaskDeclaration(n) => {
+            let dec = task_dec(syntax_tree, n, event_iter, url);
+            if dec.is_some() {
+                scopes.push(Box::new(dec?));
+            }
+        }
+        RefNode::ModportDeclaration(n) => {
+            let decs = modport_dec(syntax_tree, n, event_iter, url);
+            if decs.is_some() {
+                for dec in decs? {
+                    definitions.push(Box::new(dec));
+                }
+            }
+        }
+        RefNode::ModuleInstantiation(n) => {
+            let decs = module_inst(syntax_tree, n, event_iter, url);
+            if decs.is_some() {
+                for dec in decs? {
+                    definitions.push(Box::new(dec));
+                }
+            }
+        }
+        _ => (),
+    }
+    Some((scopes, definitions))
+}
+
+pub fn get_scopes(syntax_tree: &SyntaxTree, url: &Url) -> Option<GenericScope> {
+    // eprintln!("{}", syntax_tree);
+    let mut scopes: Vec<Box<dyn Scope>> = Vec::new();
+    let mut global_scope: GenericScope = GenericScope::new(url);
+    global_scope.ident = "global".to_string();
     let mut event_iter = syntax_tree.into_iter().event();
     while let Some(event) = event_iter.next() {
         match event {
-            NodeEvent::Enter(node) => match node {
-                RefNode::ModuleDeclaration(n) => {
-                    let module = module_dec(syntax_tree, n, &mut event_iter, url);
-                    if module.is_some() {
-                        definitions.push(Arc::new(module?));
-                    }
-                }
-                RefNode::InterfaceDeclaration(n) => {
-                    let interface = interface_dec(syntax_tree, n, &mut event_iter, url);
-                    if interface.is_some() {
-                        definitions.push(Arc::new(interface?));
-                    }
-                }
-                RefNode::UdpDeclaration(n) => {
-                    let dec = udp_dec(syntax_tree, n, &mut event_iter, url);
-                    if dec.is_some() {
-                        definitions.push(Arc::new(dec?));
-                    }
-                }
-                RefNode::ProgramDeclaration(n) => {
-                    let dec = program_dec(syntax_tree, n, &mut event_iter, url);
-                    if dec.is_some() {
-                        definitions.push(Arc::new(dec?));
-                    }
-                }
-
-                RefNode::PackageDeclaration(n) => {
-                    let dec = package_dec(syntax_tree, n, &mut event_iter, url);
-                    if dec.is_some() {
-                        definitions.push(Arc::new(dec?));
-                    }
-                }
-                RefNode::ConfigDeclaration(n) => {
-                    let dec = config_dec(syntax_tree, n, &mut event_iter, url);
-                    if dec.is_some() {
-                        definitions.push(Arc::new(dec?));
-                    }
-                }
-                RefNode::ClassDeclaration(n) => {
-                    let dec = class_dec(syntax_tree, n, &mut event_iter, url);
-                    if dec.is_some() {
-                        definitions.push(Arc::new(dec?));
-                    }
-                }
-                RefNode::PortDeclaration(n) => {
-                    let ports = port_dec_non_ansi(syntax_tree, n, &mut event_iter, url);
-                    if ports.is_some() {
-                        for port in ports? {
-                            definitions.push(Arc::new(port));
-                        }
-                    }
-                }
-                RefNode::NetDeclaration(n) => {
-                    let nets = net_dec(syntax_tree, n, &mut event_iter, url);
-                    if nets.is_some() {
-                        for net in nets? {
-                            definitions.push(Arc::new(net));
-                        }
-                    }
-                }
-                RefNode::DataDeclaration(n) => {
-                    let vars = data_dec(syntax_tree, n, &mut event_iter, url);
-                    if vars.is_some() {
-                        definitions.append(&mut vars?);
-                    }
-                }
-                RefNode::FunctionDeclaration(n) => {
-                    let decs = function_dec(syntax_tree, n, &mut event_iter, url);
-                    if decs.is_some() {
-                        definitions.append(&mut decs?);
-                    }
-                }
-                RefNode::TaskDeclaration(n) => {
-                    let decs = task_dec(syntax_tree, n, &mut event_iter, url);
-                    if decs.is_some() {
-                        definitions.append(&mut decs?);
-                    }
-                }
-                RefNode::ModportDeclaration(n) => {
-                    let decs = modport_dec(syntax_tree, n, &mut event_iter, url);
-                    if decs.is_some() {
-                        for dec in decs? {
-                            definitions.push(Arc::new(dec));
-                        }
-                    }
-                }
-                RefNode::ModuleInstantiation(n) => {
-                    let decs = module_inst(syntax_tree, n, &mut event_iter, url);
-                    if decs.is_some() {
-                        for dec in decs? {
-                            definitions.push(Arc::new(dec));
-                        }
-                    }
-                }
-                _ => (),
-            },
+            NodeEvent::Enter(node) => {
+                let mut result = match_definitions(syntax_tree, &mut event_iter, node, url)?;
+                global_scope.defs.append(&mut result.1);
+                scopes.append(&mut result.0);
+            }
             NodeEvent::Leave(_) => (),
         }
     }
-    Some(definitions)
+    global_scope.scopes.append(&mut scopes);
+    Some(global_scope)
 }
 
 fn get_hover(doc: &Rope, line: usize) -> String {
@@ -242,7 +256,6 @@ fn get_hover(doc: &Rope, line: usize) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::completion::get_scope_idents;
     use crate::sources::{parse, LSPSupport};
     use ropey::Rope;
     use std::collections::HashMap;
@@ -264,18 +277,16 @@ mod tests {
         let doc = Rope::from_str(&text);
         let url = Url::parse("file:///tests_rtl/definition_test.sv").unwrap();
         let syntax_tree = parse(&doc.clone(), &url, &None).unwrap();
-        let scope_idents = get_scope_idents(&syntax_tree);
-        let defs = get_definitions(&syntax_tree, &scope_idents, &url).unwrap();
-        for def in &defs {
+        let scope_tree = get_scopes(&syntax_tree, &url).unwrap();
+        for def in &scope_tree.defs {
             println!("{:?} {:?}", def, doc.byte_to_pos(def.byte_idx()));
         }
         let token = get_definition_token(doc.line(3), Position::new(3, 13));
-        for def in defs {
+        for def in scope_tree.defs {
             if token == def.ident() {
                 assert_eq!(doc.byte_to_pos(def.byte_idx()), Position::new(3, 9))
             }
         }
-        assert!(false)
     }
 
     #[test]

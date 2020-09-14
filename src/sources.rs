@@ -1,6 +1,5 @@
-use crate::completion::get_scopes;
 use crate::definition::def_types::*;
-use crate::definition::Definition;
+use crate::definition::{get_scopes, Definition};
 use crate::diagnostics::get_diagnostics;
 use crate::server::LSPServer;
 use log::info;
@@ -78,175 +77,6 @@ impl LSPServer {
     }
 }
 
-#[derive(Debug)]
-pub struct Scope {
-    pub name: String,
-    pub start: usize,
-    pub end: usize,
-    pub url: Url,
-    pub idents: HashSet<String>,
-    pub defs: Vec<Arc<dyn Definition>>,
-    pub scopes: Vec<Scope>,
-}
-
-impl Scope {
-    pub fn new(scope_info: (String, usize, usize), url: &Url) -> Scope {
-        Scope {
-            name: scope_info.0,
-            start: scope_info.1,
-            end: scope_info.2,
-            url: url.clone(),
-            idents: HashSet::new(),
-            defs: Vec::new(),
-            scopes: Vec::new(),
-        }
-    }
-    pub fn insert_scope(&mut self, scope_info: (String, usize, usize), url: &Url) {
-        for scope in &mut self.scopes {
-            if scope.start <= scope_info.1 && scope_info.2 <= scope.end {
-                scope.insert_scope(scope_info, url);
-                return;
-            }
-        }
-        self.scopes.push(Scope::new(scope_info, url));
-    }
-    pub fn insert_ident(&mut self, ident: (String, usize)) {
-        for scope in &mut self.scopes {
-            if scope.start <= ident.1 && ident.1 <= scope.end {
-                scope.insert_ident(ident);
-                return;
-            }
-        }
-        for def in &self.defs {
-            if def.starts_with(&ident.0) {
-                return;
-            }
-        }
-        self.idents.insert(ident.0.to_string());
-    }
-    pub fn insert_def(&mut self, def: Arc<dyn Definition>) {
-        for scope in &mut self.scopes {
-            if scope.start <= def.byte_idx() && def.byte_idx() <= scope.end {
-                scope.insert_def(def);
-                return;
-            }
-        }
-        self.defs.push(def);
-    }
-    pub fn lift_nested_scope_defs(&mut self) {
-        let mut exists = false;
-        for def in &self.defs {
-            if def.ident() == self.name {
-                exists = true;
-            }
-        }
-
-        if !exists {
-            //TODO: properly handle scope definitions
-            // eprintln!("created {}", self.name);
-            let mut def = GenericScope::new(&self.url);
-            def.ident = self.name.clone();
-            def.byte_idx = self.start;
-            self.defs.push(Arc::new(def));
-        }
-
-        'outer: for scope in &mut self.scopes {
-            scope.lift_nested_scope_defs();
-            for def in &scope.defs {
-                if def.ident() == scope.name.clone() {
-                    self.defs.push(def.clone());
-                    // eprintln!("lifted {} to {}: {:#?}", scope.name, self.name, self.defs);
-                    continue 'outer;
-                }
-            }
-        }
-    }
-    #[cfg(test)]
-    pub fn contains_scope(&self, scope_ident: &str) -> bool {
-        if self.name == scope_ident {
-            return true;
-        }
-        for scope in &self.scopes {
-            if scope.contains_scope(scope_ident) {
-                return true;
-            }
-        }
-        false
-    }
-    pub fn complete(&self, token: &str, byte_idx: usize, url: &Url) -> Vec<CompletionItem> {
-        let mut completions: Vec<CompletionItem> = Vec::new();
-        for scope in &self.scopes {
-            if &scope.url == url && scope.start <= byte_idx && byte_idx <= scope.end {
-                completions = scope.complete(token, byte_idx, url);
-                break;
-            }
-        }
-        let completion_idents: Vec<String> = completions.iter().map(|x| x.label.clone()).collect();
-        for def in &self.defs {
-            if !completion_idents.contains(&def.ident()) && def.starts_with(token) {
-                completions.push(def.completion());
-            }
-        }
-        let completion_idents: Vec<String> = completions.iter().map(|x| x.label.clone()).collect();
-        for ident in &self.idents {
-            if !completion_idents.contains(&&ident) & ident.starts_with(token) {
-                completions.push(CompletionItem {
-                    label: ident.clone(),
-                    ..CompletionItem::default()
-                });
-            }
-        }
-        completions
-    }
-    pub fn dot_completion(
-        &self,
-        token: &str,
-        byte_idx: usize,
-        url: &Url,
-        scope_tree: &Scope,
-    ) -> Option<Vec<CompletionItem>> {
-        // eprintln!("{:#?}", scope_tree);
-        for scope in &self.scopes {
-            if &scope.url == url && scope.start <= byte_idx && byte_idx <= scope.end {
-                match scope.dot_completion(token, byte_idx, url, scope_tree) {
-                    Some(result) => return Some(result),
-                    None => (),
-                }
-            }
-        }
-        for def in &self.defs {
-            // eprintln!("def: {:?}", def);
-            if def.starts_with(token) {
-                // eprintln!("complete def: {:?}", def);
-                return def.dot_completion(scope_tree);
-            }
-        }
-        None
-    }
-    pub fn get_definition(
-        &self,
-        token: &str,
-        byte_idx: usize,
-        url: &Url,
-    ) -> Option<&dyn Definition> {
-        let mut definition: Option<&dyn Definition> = None;
-        for scope in &self.scopes {
-            if &scope.url == url && scope.start <= byte_idx && byte_idx <= scope.end {
-                definition = scope.get_definition(token, byte_idx, url);
-                break;
-            }
-        }
-        if definition.is_none() {
-            for def in &self.defs {
-                if def.ident() == token {
-                    return Some(&**def);
-                }
-            }
-        }
-        definition
-    }
-}
-
 pub struct Source {
     pub id: usize,
     pub uri: Url,
@@ -266,7 +96,7 @@ pub struct Sources {
     pub files: Arc<RwLock<Vec<Arc<RwLock<Source>>>>>,
     pub names: Arc<RwLock<HashMap<Url, usize>>>,
     pub meta: Arc<RwLock<Vec<Arc<RwLock<SourceMeta>>>>>,
-    pub scope_tree: Arc<RwLock<Option<Scope>>>,
+    pub scope_tree: Arc<RwLock<Option<GenericScope>>>,
 }
 
 impl Sources {
@@ -304,7 +134,7 @@ impl Sources {
                 // eprintln!("parse read: {}", now.elapsed().as_millis());
                 let syntax_tree = parse(&text, &uri, &range);
                 let mut scope_tree = match &syntax_tree {
-                    Some(tree) => Some(get_scopes(tree, text.len_bytes(), uri)),
+                    Some(tree) => get_scopes(tree, uri),
                     None => None,
                 };
                 // eprintln!("parse read complete: {}", now.elapsed().as_millis());
@@ -318,7 +148,7 @@ impl Sources {
                     Some(scope) => match &mut scope_tree {
                         Some(tree) => {
                             scope.defs.retain(|x| &x.url() != uri);
-                            scope.scopes.retain(|x| &x.url != uri);
+                            scope.scopes.retain(|x| &x.url() != uri);
                             scope.defs.append(&mut tree.defs);
                             scope.scopes.append(&mut tree.scopes);
                         }
@@ -410,7 +240,7 @@ impl Sources {
                 .read()
                 .ok()?
                 .as_ref()?
-                .complete(token, byte_idx, url),
+                .get_completion(token, byte_idx, url),
         })
     }
 
@@ -426,7 +256,7 @@ impl Sources {
             is_incomplete: false,
             items: tree
                 .as_ref()?
-                .dot_completion(token, byte_idx, url, tree.as_ref()?)?,
+                .get_dot_completion(token, byte_idx, url, tree.as_ref()?),
         })
     }
 }
