@@ -31,6 +31,16 @@ pub trait Scope: std::fmt::Debug + Definition + Sync + Send {
     fn end(&self) -> usize;
     fn defs(&self) -> &Vec<Box<dyn Definition>>;
     fn scopes(&self) -> &Vec<Box<dyn Scope>>;
+    fn definition(&self) -> GenericDec {
+        GenericDec {
+            ident: self.ident(),
+            byte_idx: self.byte_idx(),
+            url: self.url(),
+            type_str: self.type_str(),
+            kind: self.kind(),
+            def_type: DefinitionType::GenericScope,
+        }
+    }
     fn get_completion(&self, token: &str, byte_idx: usize, url: &Url) -> Vec<CompletionItem> {
         let mut completions: Vec<CompletionItem> = Vec::new();
         for scope in self.scopes() {
@@ -80,13 +90,8 @@ pub trait Scope: std::fmt::Debug + Definition + Sync + Send {
         }
         Vec::new()
     }
-    fn get_definition(
-        &self,
-        token: &str,
-        byte_idx: usize,
-        url: &Url,
-    ) -> Option<&Box<dyn Definition>> {
-        let mut definition: Option<&Box<dyn Definition>> = None;
+    fn get_definition(&self, token: &str, byte_idx: usize, url: &Url) -> Option<GenericDec> {
+        let mut definition: Option<GenericDec> = None;
         for scope in self.scopes() {
             if &scope.url() == url && scope.start() <= byte_idx && byte_idx <= scope.end() {
                 definition = scope.get_definition(token, byte_idx, url);
@@ -96,7 +101,19 @@ pub trait Scope: std::fmt::Debug + Definition + Sync + Send {
         if definition.is_none() {
             for def in self.defs() {
                 if def.ident() == token {
-                    return Some(def);
+                    return Some(GenericDec {
+                        ident: def.ident(),
+                        byte_idx: def.byte_idx(),
+                        url: def.url(),
+                        type_str: def.type_str(),
+                        kind: def.kind(),
+                        def_type: DefinitionType::Net,
+                    });
+                }
+            }
+            for scope in self.scopes() {
+                if scope.ident() == token {
+                    return Some(scope.definition());
                 }
             }
         }
