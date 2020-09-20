@@ -2,6 +2,13 @@ use crate::sources::*;
 
 use crate::completion::keyword::*;
 use log::info;
+use path_clean::PathClean;
+use serde::{Deserialize, Serialize};
+use std::env::current_dir;
+use std::fs::File;
+use std::io::Read;
+use std::path::PathBuf;
+use std::sync::{Arc, RwLock};
 use tower_lsp::jsonrpc::Result;
 use tower_lsp::lsp_types::*;
 use tower_lsp::{Client, LanguageServer};
@@ -38,9 +45,62 @@ impl Backend {
     }
 }
 
+#[derive(Debug, Serialize, Deserialize)]
+pub struct ProjectConfig {
+    pub include_dirs: Vec<String>,
+    pub source_dirs: Vec<String>,
+}
+
+fn read_config(root_uri: Option<Url>) -> anyhow::Result<ProjectConfig> {
+    let path = root_uri
+        .ok_or(anyhow::anyhow!("config error"))?
+        .to_file_path()
+        .map_err(|x| anyhow::anyhow!("config error"))?;
+    let mut config: Option<PathBuf> = None;
+    for dir in path.ancestors() {
+        let config_path = dir.join("veridian.yaml");
+        if config_path.exists() {
+            config = Some(config_path);
+            break;
+        }
+        let config_path = dir.join("veridian.yml");
+        if config_path.exists() {
+            config = Some(config_path);
+            break;
+        }
+    }
+    let mut contents = String::new();
+    File::open(config.ok_or(anyhow::anyhow!("config error"))?)?.read_to_string(&mut contents)?;
+    Ok(serde_yaml::from_str(&contents)?)
+}
+
+// convert string path to absolute path
+fn absolute_path(path_str: &str) -> Option<PathBuf> {
+    let path = PathBuf::from(path_str);
+    if !path.exists() {
+        return None;
+    }
+    if !path.has_root() {
+        Some(current_dir().unwrap().join(path).clean())
+    } else {
+        Some(path)
+    }
+}
+
 #[tower_lsp::async_trait]
 impl LanguageServer for Backend {
-    async fn initialize(&self, _: InitializeParams) -> Result<InitializeResult> {
+    async fn initialize(&self, params: InitializeParams) -> Result<InitializeResult> {
+        // grab include dirs and source dirs from config, and convert to abs path
+        let mut inc_dirs = self.server.srcs.include_dirs.write().unwrap();
+        let mut src_dirs = self.server.srcs.source_dirs.write().unwrap();
+        if let Ok(conf) = read_config(params.root_uri) {
+            inc_dirs.extend(conf.include_dirs.iter().filter_map(|x| absolute_path(x)));
+            src_dirs.extend(conf.source_dirs.iter().filter_map(|x| absolute_path(x)));
+        }
+        drop(inc_dirs);
+        drop(src_dirs);
+        // parse all source files found from walking source dirs and include dirs
+        self.server.srcs.init();
         Ok(InitializeResult {
             server_info: None,
             capabilities: ServerCapabilities {

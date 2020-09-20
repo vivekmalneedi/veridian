@@ -1,13 +1,14 @@
 use crate::definition::def_types::*;
 use crate::definition::{get_scopes, Definition};
-use crate::diagnostics::get_diagnostics;
-use crate::server::LSPServer;
+use crate::diagnostics::{get_diagnostics, is_hidden};
+use crate::server::{LSPServer, ProjectConfig};
 use log::info;
 use pathdiff::diff_paths;
 use ropey::{Rope, RopeSlice};
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::env::current_dir;
+use std::fs;
 use std::io;
 use std::ops::Range as StdRange;
 use std::path::PathBuf;
@@ -16,6 +17,7 @@ use std::{thread, time::Instant};
 use sv_parser::*;
 use thread::JoinHandle;
 use tower_lsp::lsp_types::*;
+use walkdir::{DirEntry, WalkDir};
 
 impl LSPServer {
     pub fn did_open(&self, params: DidOpenTextDocumentParams) -> PublishDiagnosticsParams {
@@ -92,20 +94,69 @@ pub struct SourceMeta {
     pub parse_handle: JoinHandle<()>,
 }
 
+fn find_src_paths(dirs: &Vec<PathBuf>) -> Vec<PathBuf> {
+    let mut paths: Vec<PathBuf> = Vec::new();
+
+    for dir in dirs {
+        let walker = WalkDir::new(dir).into_iter();
+        for entry in walker.filter_entry(|e| !is_hidden(e)) {
+            let entry = entry.unwrap();
+            if entry.file_type().is_file() && entry.path().extension().is_some() {
+                let extension = entry.path().extension().unwrap();
+
+                if extension == "sv" || extension == "svh" || extension == "v" || extension == "vh"
+                {
+                    let entry_path = entry.path().to_path_buf();
+                    if !paths.contains(&entry_path) {
+                        paths.push(entry_path);
+                    }
+                }
+            }
+        }
+    }
+    paths
+}
+
 pub struct Sources {
     pub files: Arc<RwLock<Vec<Arc<RwLock<Source>>>>>,
     pub names: Arc<RwLock<HashMap<Url, usize>>>,
     pub meta: Arc<RwLock<Vec<Arc<RwLock<SourceMeta>>>>>,
     pub scope_tree: Arc<RwLock<Option<GenericScope>>>,
+    pub include_dirs: Arc<RwLock<Vec<PathBuf>>>,
+    pub source_dirs: Arc<RwLock<Vec<PathBuf>>>,
 }
 
 impl Sources {
-    pub fn new() -> Sources {
-        Sources {
+    pub fn new() -> Self {
+        Self {
             files: Arc::new(RwLock::new(Vec::new())),
             names: Arc::new(RwLock::new(HashMap::new())),
             meta: Arc::new(RwLock::new(Vec::new())),
             scope_tree: Arc::new(RwLock::new(None)),
+            include_dirs: Arc::new(RwLock::new(Vec::new())),
+            source_dirs: Arc::new(RwLock::new(Vec::new())),
+        }
+    }
+    pub fn init(&self) {
+        let mut paths: Vec<PathBuf> = Vec::new();
+        for path in &*self.include_dirs.read().unwrap() {
+            paths.push(path.clone());
+        }
+        for path in &*self.source_dirs.read().unwrap() {
+            paths.push(path.clone());
+        }
+        let src_paths = find_src_paths(&paths);
+        for path in src_paths {
+            if let Ok(url) = Url::from_file_path(&path) {
+                if let Ok(text) = fs::read_to_string(&path) {
+                    self.add(TextDocumentItem::new(
+                        url,
+                        "systemverilog".to_string(),
+                        -1,
+                        text,
+                    ));
+                }
+            }
         }
     }
     pub fn add(&self, doc: TextDocumentItem) {
@@ -122,6 +173,7 @@ impl Sources {
         }));
         let source_handle = source.clone();
         let scope_handle = self.scope_tree.clone();
+        let inc_dirs = self.include_dirs.clone();
         let parse_handle = thread::spawn(move || {
             let (lock, cvar) = &*valid_parse2;
             loop {
@@ -132,7 +184,7 @@ impl Sources {
                 let range = &file.last_change_range.clone();
                 drop(file);
                 // eprintln!("parse read: {}", now.elapsed().as_millis());
-                let syntax_tree = parse(&text, &uri, &range);
+                let syntax_tree = parse(&text, &uri, &range, &*inc_dirs.read().unwrap());
                 let mut scope_tree = match &syntax_tree {
                     Some(tree) => get_scopes(tree, uri),
                     None => None,
@@ -262,10 +314,15 @@ impl Sources {
 }
 
 //TODO: show all unrecoverable parse errors to user
-pub fn parse(doc: &Rope, uri: &Url, last_change_range: &Option<Range>) -> Option<SyntaxTree> {
+pub fn parse(
+    doc: &Rope,
+    uri: &Url,
+    last_change_range: &Option<Range>,
+    inc_paths: &Vec<PathBuf>,
+) -> Option<SyntaxTree> {
     let mut parse_iterations = 1;
     let mut i = 0;
-    let mut includes: Vec<PathBuf> = Vec::new();
+    let mut includes: Vec<PathBuf> = inc_paths.clone();
     let before = Instant::now();
     let mut reverted_change = false;
     let mut text = doc.clone();
@@ -518,7 +575,13 @@ endmodule"#;
         d.push("tests_rtl/lab6/src/fp_add.sv");
         let text = read_to_string(&d).unwrap();
         let doc = Rope::from_str(&text);
-        assert!(parse(&doc.clone(), &Url::from_file_path(d).unwrap(), &None).is_some());
+        assert!(parse(
+            &doc.clone(),
+            &Url::from_file_path(d).unwrap(),
+            &None,
+            &Vec::new()
+        )
+        .is_some(),);
         // TODO: add missing header test
     }
 }

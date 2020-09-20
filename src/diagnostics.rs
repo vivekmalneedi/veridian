@@ -59,7 +59,7 @@ fn get_paths(files: Vec<Url>) -> Vec<PathBuf> {
     paths
 }
 
-fn is_hidden(entry: &DirEntry) -> bool {
+pub fn is_hidden(entry: &DirEntry) -> bool {
     entry
         .file_name()
         .to_str()
@@ -99,6 +99,7 @@ fn slang_severity(severity: &str) -> Option<DiagnosticSeverity> {
     }
 }
 
+// convert relative path to absolute
 fn absolute_path(path_str: &str) -> io::Result<PathBuf> {
     let path = Path::new(path_str);
     Ok(current_dir().unwrap().join(path).clean())

@@ -282,7 +282,7 @@ mod tests {
         let text = read_to_string(d).unwrap();
         let doc = Rope::from_str(&text);
         let url = Url::parse("file:///tests_rtl/definition_test.sv").unwrap();
-        let syntax_tree = parse(&doc.clone(), &url, &None).unwrap();
+        let syntax_tree = parse(&doc.clone(), &url, &None, &Vec::new()).unwrap();
         let scope_tree = get_scopes(&syntax_tree, &url).unwrap();
         for def in &scope_tree.defs {
             println!("{:?} {:?}", def, doc.byte_to_pos(def.byte_idx()));
