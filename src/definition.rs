@@ -53,6 +53,17 @@ impl LSPServer {
             range: None,
         })
     }
+
+    pub fn document_symbol(&self, params: DocumentSymbolParams) -> Option<DocumentSymbolResponse> {
+        let uri = params.text_document.uri;
+        let file_id = self.srcs.get_id(&uri).to_owned();
+        let file = self.srcs.get_file(file_id)?;
+        let file = file.read().ok()?;
+        let scope_tree = self.srcs.scope_tree.read().ok()?;
+        Some(DocumentSymbolResponse::Nested(
+            scope_tree.as_ref()?.document_symbols(&uri, &file.text),
+        ))
+    }
 }
 
 fn get_definition_token(line: RopeSlice, pos: Position) -> String {
@@ -325,5 +336,30 @@ module test;"#
 logic b;"#
                 .to_owned()
         );
+    }
+
+    #[test]
+    fn test_symbols() {
+        let text = r#"
+module test;
+  logic a;
+  logic b;
+endmodule"#;
+        let doc = Rope::from_str(&text);
+        let url = Url::parse("file:///test.sv").unwrap();
+        let syntax_tree = parse(&doc.clone(), &url, &None, &Vec::new()).unwrap();
+        let scope_tree = get_scopes(&syntax_tree, &url).unwrap();
+        let symbol = scope_tree.document_symbols(&url, &doc);
+        let symbol = symbol.get(0).unwrap();
+        assert_eq!(&symbol.name, "test");
+        let names: Vec<String> = symbol
+            .children
+            .as_ref()
+            .unwrap()
+            .iter()
+            .map(|x| x.name.clone())
+            .collect();
+        assert!(names.contains(&"a".to_string()));
+        assert!(names.contains(&"b".to_string()));
     }
 }

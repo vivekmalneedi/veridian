@@ -1,3 +1,5 @@
+use crate::sources::LSPSupport;
+use ropey::Rope;
 use tower_lsp::lsp_types::*;
 
 fn clean_type_str(type_str: &str, ident: &str) -> String {
@@ -19,7 +21,8 @@ pub trait Definition: std::fmt::Debug + Sync + Send {
     fn byte_idx(&self) -> usize;
     fn url(&self) -> Url;
     fn type_str(&self) -> String;
-    fn kind(&self) -> CompletionItemKind;
+    fn completion_kind(&self) -> CompletionItemKind;
+    fn symbol_kind(&self) -> SymbolKind;
     fn def_type(&self) -> &DefinitionType;
     fn starts_with(&self, token: &str) -> bool;
     fn completion(&self) -> CompletionItem;
@@ -37,7 +40,8 @@ pub trait Scope: std::fmt::Debug + Definition + Sync + Send {
             byte_idx: self.byte_idx(),
             url: self.url(),
             type_str: self.type_str(),
-            kind: self.kind(),
+            completion_kind: self.completion_kind(),
+            symbol_kind: self.symbol_kind(),
             def_type: DefinitionType::GenericScope,
         }
     }
@@ -106,7 +110,8 @@ pub trait Scope: std::fmt::Debug + Definition + Sync + Send {
                         byte_idx: def.byte_idx(),
                         url: def.url(),
                         type_str: def.type_str(),
-                        kind: def.kind(),
+                        completion_kind: def.completion_kind(),
+                        symbol_kind: def.symbol_kind(),
                         def_type: DefinitionType::Net,
                     });
                 }
@@ -118,6 +123,45 @@ pub trait Scope: std::fmt::Debug + Definition + Sync + Send {
             }
         }
         definition
+    }
+    fn document_symbols(&self, uri: &Url, doc: &Rope) -> Vec<DocumentSymbol> {
+        let mut symbols: Vec<DocumentSymbol> = Vec::new();
+        for scope in self.scopes() {
+            if &scope.url() == uri {
+                #[allow(deprecated)]
+                symbols.push(DocumentSymbol {
+                    name: scope.ident(),
+                    detail: Some(scope.type_str()),
+                    kind: scope.symbol_kind(),
+                    deprecated: None,
+                    range: Range::new(doc.byte_to_pos(scope.start()), doc.byte_to_pos(scope.end())),
+                    selection_range: Range::new(
+                        doc.byte_to_pos(scope.byte_idx()),
+                        doc.byte_to_pos(scope.byte_idx() + scope.ident().len()),
+                    ),
+                    children: Some(scope.document_symbols(uri, doc)),
+                })
+            }
+        }
+        for def in self.defs() {
+            #[allow(deprecated)]
+            symbols.push(DocumentSymbol {
+                name: def.ident(),
+                detail: Some(def.type_str()),
+                kind: def.symbol_kind(),
+                deprecated: None,
+                range: Range::new(
+                    doc.byte_to_pos(def.byte_idx()),
+                    doc.byte_to_pos(def.byte_idx() + def.ident().len()),
+                ),
+                selection_range: Range::new(
+                    doc.byte_to_pos(def.byte_idx()),
+                    doc.byte_to_pos(def.byte_idx() + def.ident().len()),
+                ),
+                children: None,
+            })
+        }
+        symbols
     }
 }
 
@@ -139,7 +183,8 @@ pub struct PortDec {
     pub byte_idx: usize,
     pub url: Url,
     pub type_str: String,
-    pub kind: CompletionItemKind,
+    pub completion_kind: CompletionItemKind,
+    pub symbol_kind: SymbolKind,
     def_type: DefinitionType,
     pub interface: Option<String>,
     pub modport: Option<String>,
@@ -151,7 +196,8 @@ impl PortDec {
             ident: String::new(),
             byte_idx: 0,
             type_str: String::new(),
-            kind: CompletionItemKind::Property,
+            completion_kind: CompletionItemKind::Property,
+            symbol_kind: SymbolKind::Property,
             def_type: DefinitionType::Port,
             interface: None,
             modport: None,
@@ -173,8 +219,11 @@ impl Definition for PortDec {
     fn type_str(&self) -> String {
         self.type_str.clone()
     }
-    fn kind(&self) -> CompletionItemKind {
-        self.kind.clone()
+    fn completion_kind(&self) -> CompletionItemKind {
+        self.completion_kind.clone()
+    }
+    fn symbol_kind(&self) -> SymbolKind {
+        self.symbol_kind.clone()
     }
     fn def_type(&self) -> &DefinitionType {
         &self.def_type
@@ -186,7 +235,7 @@ impl Definition for PortDec {
         CompletionItem {
             label: self.ident.clone(),
             detail: Some(clean_type_str(&self.type_str, &self.ident)),
-            kind: Some(self.kind.clone()),
+            kind: Some(self.completion_kind.clone()),
             ..CompletionItem::default()
         }
     }
@@ -223,7 +272,8 @@ pub struct GenericDec {
     pub byte_idx: usize,
     pub url: Url,
     pub type_str: String,
-    pub kind: CompletionItemKind,
+    pub completion_kind: CompletionItemKind,
+    pub symbol_kind: SymbolKind,
     def_type: DefinitionType,
 }
 
@@ -234,7 +284,8 @@ impl GenericDec {
             byte_idx: 0,
             url: url.clone(),
             type_str: String::new(),
-            kind: CompletionItemKind::Variable,
+            completion_kind: CompletionItemKind::Variable,
+            symbol_kind: SymbolKind::Unknown,
             def_type: DefinitionType::Net,
         }
     }
@@ -253,8 +304,11 @@ impl Definition for GenericDec {
     fn type_str(&self) -> String {
         self.type_str.clone()
     }
-    fn kind(&self) -> CompletionItemKind {
-        self.kind.clone()
+    fn completion_kind(&self) -> CompletionItemKind {
+        self.completion_kind.clone()
+    }
+    fn symbol_kind(&self) -> SymbolKind {
+        self.symbol_kind.clone()
     }
     fn def_type(&self) -> &DefinitionType {
         &self.def_type
@@ -266,7 +320,7 @@ impl Definition for GenericDec {
         CompletionItem {
             label: self.ident.clone(),
             detail: Some(clean_type_str(&self.type_str, &self.ident)),
-            kind: Some(self.kind.clone()),
+            kind: Some(self.completion_kind.clone()),
             ..CompletionItem::default()
         }
     }
@@ -281,7 +335,8 @@ pub struct PackageImport {
     pub byte_idx: usize,
     pub url: Url,
     pub type_str: String,
-    pub kind: CompletionItemKind,
+    pub completion_kind: CompletionItemKind,
+    pub symbol_kind: SymbolKind,
     def_type: DefinitionType,
     pub asterisk: bool,
     pub import_ident: Option<String>,
@@ -294,7 +349,8 @@ impl PackageImport {
             byte_idx: 0,
             url: url.clone(),
             type_str: String::new(),
-            kind: CompletionItemKind::Variable,
+            completion_kind: CompletionItemKind::Text,
+            symbol_kind: SymbolKind::Namespace,
             def_type: DefinitionType::Data,
             asterisk: false,
             import_ident: None,
@@ -315,8 +371,11 @@ impl Definition for PackageImport {
     fn type_str(&self) -> String {
         self.type_str.clone()
     }
-    fn kind(&self) -> CompletionItemKind {
-        self.kind.clone()
+    fn completion_kind(&self) -> CompletionItemKind {
+        self.completion_kind.clone()
+    }
+    fn symbol_kind(&self) -> SymbolKind {
+        self.symbol_kind.clone()
     }
     fn def_type(&self) -> &DefinitionType {
         &self.def_type
@@ -328,7 +387,7 @@ impl Definition for PackageImport {
         CompletionItem {
             label: self.ident.clone(),
             detail: Some(clean_type_str(&self.type_str, &self.ident.clone())),
-            kind: Some(self.kind.clone()),
+            kind: Some(self.completion_kind.clone()),
             ..CompletionItem::default()
         }
     }
@@ -343,7 +402,8 @@ pub struct SubDec {
     pub byte_idx: usize,
     pub url: Url,
     pub type_str: String,
-    pub kind: CompletionItemKind,
+    pub completion_kind: CompletionItemKind,
+    pub symbol_kind: SymbolKind,
     def_type: DefinitionType,
     pub start: usize,
     pub end: usize,
@@ -358,7 +418,8 @@ impl SubDec {
             byte_idx: 0,
             url: url.clone(),
             type_str: String::new(),
-            kind: CompletionItemKind::Function,
+            completion_kind: CompletionItemKind::Function,
+            symbol_kind: SymbolKind::Function,
             def_type: DefinitionType::Subroutine,
             start: 0,
             end: 0,
@@ -381,8 +442,11 @@ impl Definition for SubDec {
     fn type_str(&self) -> String {
         self.type_str.clone()
     }
-    fn kind(&self) -> CompletionItemKind {
-        self.kind.clone()
+    fn completion_kind(&self) -> CompletionItemKind {
+        self.completion_kind.clone()
+    }
+    fn symbol_kind(&self) -> SymbolKind {
+        self.symbol_kind.clone()
     }
     fn def_type(&self) -> &DefinitionType {
         &self.def_type
@@ -394,7 +458,7 @@ impl Definition for SubDec {
         CompletionItem {
             label: self.ident.clone(),
             detail: Some(clean_type_str(&self.type_str, &self.ident)),
-            kind: Some(self.kind.clone()),
+            kind: Some(self.completion_kind.clone()),
             ..CompletionItem::default()
         }
     }
@@ -411,7 +475,6 @@ impl Scope for SubDec {
     fn end(&self) -> usize {
         self.end
     }
-
     fn defs(&self) -> &Vec<Box<dyn Definition>> {
         &self.defs
     }
@@ -427,7 +490,8 @@ pub struct ModportDec {
     pub byte_idx: usize,
     pub url: Url,
     pub type_str: String,
-    pub kind: CompletionItemKind,
+    pub completion_kind: CompletionItemKind,
+    pub symbol_kind: SymbolKind,
     def_type: DefinitionType,
     pub ports: Vec<Box<dyn Definition>>,
 }
@@ -439,7 +503,8 @@ impl ModportDec {
             byte_idx: 0,
             url: url.clone(),
             type_str: String::new(),
-            kind: CompletionItemKind::Interface,
+            completion_kind: CompletionItemKind::Interface,
+            symbol_kind: SymbolKind::Interface,
             def_type: DefinitionType::Modport,
             ports: Vec::new(),
         }
@@ -459,8 +524,11 @@ impl Definition for ModportDec {
     fn type_str(&self) -> String {
         self.type_str.clone()
     }
-    fn kind(&self) -> CompletionItemKind {
-        self.kind.clone()
+    fn completion_kind(&self) -> CompletionItemKind {
+        self.completion_kind.clone()
+    }
+    fn symbol_kind(&self) -> SymbolKind {
+        self.symbol_kind.clone()
     }
     fn def_type(&self) -> &DefinitionType {
         &self.def_type
@@ -472,7 +540,7 @@ impl Definition for ModportDec {
         CompletionItem {
             label: self.ident.clone(),
             detail: Some(clean_type_str(&self.type_str, &self.ident)),
-            kind: Some(self.kind.clone()),
+            kind: Some(self.completion_kind.clone()),
             ..CompletionItem::default()
         }
     }
@@ -487,7 +555,8 @@ pub struct ModInst {
     pub byte_idx: usize,
     pub url: Url,
     pub type_str: String,
-    pub kind: CompletionItemKind,
+    pub completion_kind: CompletionItemKind,
+    pub symbol_kind: SymbolKind,
     def_type: DefinitionType,
     pub mod_ident: String,
 }
@@ -499,7 +568,8 @@ impl ModInst {
             byte_idx: 0,
             url: url.clone(),
             type_str: String::new(),
-            kind: CompletionItemKind::Variable,
+            completion_kind: CompletionItemKind::Module,
+            symbol_kind: SymbolKind::Module,
             def_type: DefinitionType::ModuleInstantiation,
             mod_ident: String::new(),
         }
@@ -519,8 +589,11 @@ impl Definition for ModInst {
     fn type_str(&self) -> String {
         self.type_str.clone()
     }
-    fn kind(&self) -> CompletionItemKind {
-        self.kind.clone()
+    fn completion_kind(&self) -> CompletionItemKind {
+        self.completion_kind.clone()
+    }
+    fn symbol_kind(&self) -> SymbolKind {
+        self.symbol_kind.clone()
     }
     fn def_type(&self) -> &DefinitionType {
         &self.def_type
@@ -532,7 +605,7 @@ impl Definition for ModInst {
         CompletionItem {
             label: self.ident.clone(),
             detail: Some(clean_type_str(&self.type_str, &self.ident)),
-            kind: Some(self.kind.clone()),
+            kind: Some(self.completion_kind.clone()),
             ..CompletionItem::default()
         }
     }
@@ -559,7 +632,8 @@ pub struct GenericScope {
     pub end: usize,
     pub url: Url,
     pub type_str: String,
-    pub kind: CompletionItemKind,
+    pub completion_kind: CompletionItemKind,
+    pub symbol_kind: SymbolKind,
     def_type: DefinitionType,
     pub defs: Vec<Box<dyn Definition>>,
     pub scopes: Vec<Box<dyn Scope>>,
@@ -574,7 +648,8 @@ impl GenericScope {
             end: 0,
             url: url.clone(),
             type_str: String::new(),
-            kind: CompletionItemKind::Module,
+            completion_kind: CompletionItemKind::Module,
+            symbol_kind: SymbolKind::Module,
             def_type: DefinitionType::GenericScope,
             defs: Vec::new(),
             scopes: Vec::new(),
@@ -604,8 +679,11 @@ impl Definition for GenericScope {
     fn type_str(&self) -> String {
         self.type_str.clone()
     }
-    fn kind(&self) -> CompletionItemKind {
-        self.kind.clone()
+    fn completion_kind(&self) -> CompletionItemKind {
+        self.completion_kind.clone()
+    }
+    fn symbol_kind(&self) -> SymbolKind {
+        self.symbol_kind.clone()
     }
     fn def_type(&self) -> &DefinitionType {
         &self.def_type
@@ -617,7 +695,7 @@ impl Definition for GenericScope {
         CompletionItem {
             label: self.ident.clone(),
             detail: Some(clean_type_str(&self.type_str, &self.ident)),
-            kind: Some(self.kind.clone()),
+            kind: Some(self.completion_kind.clone()),
             ..CompletionItem::default()
         }
     }
@@ -662,7 +740,8 @@ pub struct ClassDec {
     pub end: usize,
     pub url: Url,
     pub type_str: String,
-    pub kind: CompletionItemKind,
+    pub completion_kind: CompletionItemKind,
+    pub symbol_kind: SymbolKind,
     def_type: DefinitionType,
     pub defs: Vec<Box<dyn Definition>>,
     pub scopes: Vec<Box<dyn Scope>>,
@@ -682,7 +761,8 @@ impl ClassDec {
             end: 0,
             url: url.clone(),
             type_str: String::new(),
-            kind: CompletionItemKind::Class,
+            completion_kind: CompletionItemKind::Class,
+            symbol_kind: SymbolKind::Class,
             def_type: DefinitionType::Class,
             defs: Vec::new(),
             scopes: Vec::new(),
@@ -706,8 +786,11 @@ impl Definition for ClassDec {
     fn type_str(&self) -> String {
         self.type_str.clone()
     }
-    fn kind(&self) -> CompletionItemKind {
-        self.kind.clone()
+    fn completion_kind(&self) -> CompletionItemKind {
+        self.completion_kind.clone()
+    }
+    fn symbol_kind(&self) -> SymbolKind {
+        self.symbol_kind.clone()
     }
     fn def_type(&self) -> &DefinitionType {
         &self.def_type
@@ -719,7 +802,7 @@ impl Definition for ClassDec {
         CompletionItem {
             label: self.ident.clone(),
             detail: Some(clean_type_str(&self.type_str, &self.ident)),
-            kind: Some(self.kind.clone()),
+            kind: Some(self.completion_kind.clone()),
             ..CompletionItem::default()
         }
     }

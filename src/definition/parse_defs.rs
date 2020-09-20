@@ -156,7 +156,6 @@ pub fn port_dec_ansi(
 
     advance_until_leave!(tokens, tree, event_iter, RefNode::AnsiPortDeclaration);
     port.type_str = tokens;
-    port.kind = CompletionItemKind::Property;
     Some(port)
 }
 
@@ -333,7 +332,6 @@ pub fn port_dec_non_ansi(
     }
     for port in &mut ports {
         port.type_str = format!("{} {}", common, port.type_str);
-        port.kind = CompletionItemKind::Property;
     }
     Some(ports)
 }
@@ -411,6 +409,8 @@ pub fn net_dec(
         }
     }
     for net in &mut nets {
+        net.completion_kind = CompletionItemKind::Variable;
+        net.symbol_kind = SymbolKind::Variable;
         net.type_str = format!("{} {}", common, net.type_str);
     }
     Some(nets)
@@ -516,6 +516,8 @@ pub fn data_dec(
             data = Vec::new();
             for var in &mut decs {
                 var.type_str = format!("{} {}", common, var.type_str);
+                var.completion_kind = CompletionItemKind::Variable;
+                var.symbol_kind = SymbolKind::Variable;
             }
             for var in decs {
                 data.push(Box::new(var));
@@ -532,6 +534,8 @@ pub fn data_dec(
                     advance_until_leave!(tokens, tree, event_iter, RefNode::VariableDimension);
                 }
                 var.type_str = format!("{} {}", common, var.type_str);
+                var.completion_kind = CompletionItemKind::Variable;
+                var.symbol_kind = SymbolKind::Variable;
                 data = vec![Box::new(var)];
             }
             TypeDeclaration::Interface(y) => {
@@ -556,6 +560,8 @@ pub fn data_dec(
                 );
                 var.type_str = tokens;
                 var.type_str = format!("{} {}", common, var.type_str);
+                var.completion_kind = CompletionItemKind::Interface;
+                var.symbol_kind = SymbolKind::Interface;
                 data = vec![Box::new(var)];
             }
             TypeDeclaration::Reserved(y) => {
@@ -573,6 +579,8 @@ pub fn data_dec(
                 );
                 var.type_str = tokens;
                 var.type_str = format!("{} {}", common, var.type_str);
+                var.completion_kind = CompletionItemKind::Variable;
+                var.symbol_kind = SymbolKind::Variable;
                 data = vec![Box::new(var)];
             }
         },
@@ -599,6 +607,8 @@ pub fn data_dec(
                 );
                 var.type_str = tokens;
                 var.type_str = format!("{} {}", common, var.type_str);
+                var.completion_kind = CompletionItemKind::Variable;
+                var.symbol_kind = SymbolKind::Variable;
                 data = vec![Box::new(var)];
             }
             NetTypeDeclaration::NetType(y) => {
@@ -610,6 +620,8 @@ pub fn data_dec(
                 advance_until_leave!(tokens, tree, event_iter, RefNode::NetTypeIdentifier);
                 var.type_str = tokens;
                 var.type_str = format!("{} {}", common, var.type_str);
+                var.completion_kind = CompletionItemKind::Variable;
+                var.symbol_kind = SymbolKind::Variable;
                 data = vec![Box::new(var)];
             }
         },
@@ -635,7 +647,6 @@ pub fn tfport_list(
                 let ident = get_ident(tree, RefNode::PortIdentifier(&def.0));
                 tfport.ident = ident.0;
                 tfport.byte_idx = ident.1;
-                tfport.kind = CompletionItemKind::Property;
                 for variable_dim in &def.1 {
                     let tokens = &mut tfport.type_str;
                     advance_until_leave!(tokens, tree, event_iter, RefNode::UnpackedDimension);
@@ -671,7 +682,6 @@ pub fn function_dec(
                 &FunctionIdentifier
             );
             func.type_str = tokens;
-            func.kind = CompletionItemKind::Function;
         }
         FunctionBodyDeclaration::WithPort(x) => {
             func.end = get_loc(tree, RefNode::Keyword(&x.nodes.7));
@@ -687,7 +697,6 @@ pub fn function_dec(
                 &FunctionIdentifier
             );
             func.type_str = tokens;
-            func.kind = CompletionItemKind::Function;
             match &x.nodes.3.nodes.1 {
                 Some(tfports) => {
                     skip_until_enter!(tree, event_iter, RefNode::TfPortList, &TfPortList);
@@ -730,7 +739,6 @@ pub fn task_dec(
                 &TaskIdentifier
             );
             task.type_str = tokens;
-            task.kind = CompletionItemKind::Function;
         }
         TaskBodyDeclaration::WithPort(x) => {
             task.end = get_loc(tree, RefNode::Keyword(&x.nodes.6));
@@ -747,7 +755,6 @@ pub fn task_dec(
                 &TaskIdentifier
             );
             task.type_str = tokens;
-            task.kind = CompletionItemKind::Function;
             match &x.nodes.2.nodes.1 {
                 Some(tfports) => {
                     skip_until_enter!(tree, event_iter, RefNode::TfPortList, &TfPortList);
@@ -785,7 +792,6 @@ pub fn modport_dec(
         modport.ident = ident.0;
         modport.byte_idx = ident.1;
         modport.type_str = common.clone();
-        modport.kind = CompletionItemKind::Interface;
 
         let mut mp_port_decs = vec![&modport_def.nodes.1.nodes.1.nodes.0];
         for mp_port_def in &modport_def.nodes.1.nodes.1.nodes.1 {
@@ -819,7 +825,6 @@ pub fn modport_dec(
                                 let ident = get_ident(tree, RefNode::PortIdentifier(&y.nodes.0));
                                 port.ident = ident.0;
                                 port.byte_idx = ident.1;
-                                port.kind = CompletionItemKind::Property;
                                 port.type_str = prepend.clone();
                                 modport.ports.push(Box::new(port));
                             }
@@ -834,7 +839,6 @@ pub fn modport_dec(
                                 let ident = get_ident(tree, RefNode::PortIdentifier(port_ident));
                                 port.ident = ident.0;
                                 port.byte_idx = ident.1;
-                                port.kind = CompletionItemKind::Property;
                                 let mut append = String::new();
                                 advance_until_leave!(
                                     append,
@@ -1001,6 +1005,8 @@ fn param_assignment(
     def.ident = ident.0;
     def.byte_idx = ident.1;
     let type_str = &mut def.type_str;
+    def.completion_kind = CompletionItemKind::TypeParameter;
+    def.symbol_kind = SymbolKind::TypeParameter;
     advance_until_leave!(type_str, tree, event_iter, RefNode::ParamAssignment);
     Some(def)
 }
@@ -1040,6 +1046,8 @@ fn type_assignment(
     let ident = get_ident(tree, RefNode::TypeIdentifier(&type_assign.nodes.0));
     def.ident = ident.0;
     def.byte_idx = ident.1;
+    def.completion_kind = CompletionItemKind::TypeParameter;
+    def.symbol_kind = SymbolKind::TypeParameter;
     let type_str = &mut def.type_str;
     advance_until_leave!(type_str, tree, event_iter, RefNode::TypeAssignment);
     Some(def)
@@ -1087,6 +1095,8 @@ fn param_dec(
             let mut defs = list_param_assignment(tree, &x.nodes.2, event_iter, url)?;
             for def in &mut defs {
                 def.type_str = format!("{} {}", prepend, def.type_str);
+                def.completion_kind = CompletionItemKind::TypeParameter;
+                def.symbol_kind = SymbolKind::TypeParameter;
             }
             Some(defs)
         }
@@ -1097,6 +1107,8 @@ fn param_dec(
             let mut defs = list_type_assignment(tree, &x.nodes.2, event_iter, url)?;
             for def in &mut defs {
                 def.type_str = format!("{} {}", prepend, def.type_str);
+                def.completion_kind = CompletionItemKind::TypeParameter;
+                def.symbol_kind = SymbolKind::TypeParameter;
             }
             Some(defs)
         }
@@ -1122,6 +1134,8 @@ fn localparam_dec(
             let mut defs = list_param_assignment(tree, &x.nodes.2, event_iter, url)?;
             for def in &mut defs {
                 def.type_str = format!("{} {}", prepend, def.type_str);
+                def.completion_kind = CompletionItemKind::TypeParameter;
+                def.symbol_kind = SymbolKind::TypeParameter;
             }
             Some(defs)
         }
@@ -1132,6 +1146,8 @@ fn localparam_dec(
             let mut defs = list_type_assignment(tree, &x.nodes.2, event_iter, url)?;
             for def in &mut defs {
                 def.type_str = format!("{} {}", prepend, def.type_str);
+                def.completion_kind = CompletionItemKind::TypeParameter;
+                def.symbol_kind = SymbolKind::TypeParameter;
             }
             Some(defs)
         }
@@ -1155,6 +1171,8 @@ fn param_port_dec(
             let mut defs = list_param_assignment(tree, &x.nodes.1, event_iter, url)?;
             for def in &mut defs {
                 def.type_str = format!("{} {}", prepend, def.type_str);
+                def.completion_kind = CompletionItemKind::TypeParameter;
+                def.symbol_kind = SymbolKind::TypeParameter;
             }
             Some(defs)
         }
@@ -1164,6 +1182,8 @@ fn param_port_dec(
             let mut defs = list_type_assignment(tree, &x.nodes.1, event_iter, url)?;
             for def in &mut defs {
                 def.type_str = format!("{} {}", prepend, def.type_str);
+                def.completion_kind = CompletionItemKind::TypeParameter;
+                def.symbol_kind = SymbolKind::TypeParameter;
             }
             Some(defs)
         }
@@ -1346,6 +1366,8 @@ pub fn module_dec(
     let (scopes, mut defs) = match_until_leave!(tree, event_iter, url, RefNode::ModuleDeclaration)?;
     scope.scopes = scopes;
     scope.defs.append(&mut defs);
+    scope.completion_kind = CompletionItemKind::Module;
+    scope.symbol_kind = SymbolKind::Module;
     Some(scope)
 }
 
@@ -1493,6 +1515,8 @@ pub fn interface_dec(
         match_until_leave!(tree, event_iter, url, RefNode::InterfaceDeclaration)?;
     scope.scopes = scopes;
     scope.defs.append(&mut defs);
+    scope.completion_kind = CompletionItemKind::Interface;
+    scope.symbol_kind = SymbolKind::Interface;
     Some(scope)
 }
 
@@ -1756,6 +1780,8 @@ pub fn udp_dec(
     let (scopes, mut defs) = match_until_leave!(tree, event_iter, url, RefNode::UdpDeclaration)?;
     scope.scopes = scopes;
     scope.defs.append(&mut defs);
+    scope.completion_kind = CompletionItemKind::Module;
+    scope.symbol_kind = SymbolKind::Module;
     Some(scope)
 }
 
@@ -1905,6 +1931,8 @@ pub fn program_dec(
         match_until_leave!(tree, event_iter, url, RefNode::ProgramDeclaration)?;
     scope.scopes = scopes;
     scope.defs.append(&mut defs);
+    scope.completion_kind = CompletionItemKind::Module;
+    scope.symbol_kind = SymbolKind::Module;
     Some(scope)
 }
 
@@ -1927,6 +1955,8 @@ pub fn package_dec(
         match_until_leave!(tree, event_iter, url, RefNode::PackageDeclaration)?;
     scope.scopes = scopes;
     scope.defs.append(&mut defs);
+    scope.completion_kind = CompletionItemKind::Module;
+    scope.symbol_kind = SymbolKind::Package;
     Some(scope)
 }
 
@@ -1954,6 +1984,8 @@ pub fn config_dec(
     let (scopes, mut defs) = match_until_leave!(tree, event_iter, url, RefNode::ConfigDeclaration)?;
     scope.scopes = scopes;
     scope.defs.append(&mut defs);
+    scope.completion_kind = CompletionItemKind::Module;
+    scope.symbol_kind = SymbolKind::Module;
     Some(scope)
 }
 
@@ -2040,5 +2072,7 @@ pub fn text_macro_def(
         RefNode::TextMacroIdentifier,
         &TextMacroIdentifier
     );
+    text_macro.completion_kind = CompletionItemKind::Function;
+    text_macro.symbol_kind = SymbolKind::Function;
     Some(text_macro)
 }

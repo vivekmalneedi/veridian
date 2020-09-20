@@ -61,3 +61,4 @@ See the [LSP Specification](https://microsoft.github.io/language-server-protocol
   - system task/function and compiler directives
 - hover (documentation)
 - definition
+- documentSymbol

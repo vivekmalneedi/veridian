@@ -128,6 +128,7 @@ impl LanguageServer for Backend {
                 }),
                 definition_provider: Some(true),
                 hover_provider: Some(HoverProviderCapability::Simple(true)),
+                document_symbol_provider: Some(true),
                 ..ServerCapabilities::default()
             },
         })
@@ -173,11 +174,15 @@ impl LanguageServer for Backend {
         &self,
         params: GotoDefinitionParams,
     ) -> Result<Option<GotoDefinitionResponse>> {
-        let definition = self.server.goto_definition(params);
-        Ok(definition)
+        Ok(self.server.goto_definition(params))
     }
     async fn hover(&self, params: HoverParams) -> Result<Option<Hover>> {
-        let hover = self.server.hover(params);
-        Ok(hover)
+        Ok(self.server.hover(params))
+    }
+    async fn document_symbol(
+        &self,
+        params: DocumentSymbolParams,
+    ) -> Result<Option<DocumentSymbolResponse>> {
+        Ok(self.server.document_symbol(params))
     }
 }
