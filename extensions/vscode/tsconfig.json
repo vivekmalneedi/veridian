@@ -7,14 +7,6 @@
 		"rootDir": "src",
 		"sourceMap": true
 	},
-	"include": [
-		"src"
-	],
-	"exclude": [
-		"node_modules",
-		".vscode-test"
-	],
-	"references": [
-		{ "path": "./client" }
-	]
+	"include": ["src"],
+	"exclude": ["node_modules", ".vscode-test"]
 }
