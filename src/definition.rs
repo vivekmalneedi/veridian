@@ -17,6 +17,7 @@ impl LSPServer {
         let doc = params.text_document_position_params.text_document.uri;
         let pos = params.text_document_position_params.position;
         let file_id = self.srcs.get_id(&doc).to_owned();
+        self.srcs.wait_parse_ready(file_id, false);
         let file = self.srcs.get_file(file_id)?;
         let file = file.read().ok()?;
         let token = get_definition_token(file.text.line(pos.line as usize), pos);
@@ -37,6 +38,7 @@ impl LSPServer {
         let doc = params.text_document_position_params.text_document.uri;
         let pos = params.text_document_position_params.position;
         let file_id = self.srcs.get_id(&doc).to_owned();
+        self.srcs.wait_parse_ready(file_id, false);
         let file = self.srcs.get_file(file_id)?;
         let file = file.read().ok()?;
         let token = get_definition_token(file.text.line(pos.line as usize), pos);
@@ -57,6 +59,7 @@ impl LSPServer {
     pub fn document_symbol(&self, params: DocumentSymbolParams) -> Option<DocumentSymbolResponse> {
         let uri = params.text_document.uri;
         let file_id = self.srcs.get_id(&uri).to_owned();
+        self.srcs.wait_parse_ready(file_id, false);
         let file = self.srcs.get_file(file_id)?;
         let file = file.read().ok()?;
         let scope_tree = self.srcs.scope_tree.read().ok()?;
@@ -69,6 +72,7 @@ impl LSPServer {
 fn get_definition_token(line: RopeSlice, pos: Position) -> String {
     let mut token = String::new();
     let mut line_iter = line.chars();
+    //TODO: fix panic here: Attempt to index past end of slice: utf16 code unit index 5, slice utf16 code unit length
     for _ in 0..(line.utf16_cu_to_char(pos.character as usize)) {
         line_iter.next();
     }

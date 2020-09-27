@@ -22,20 +22,30 @@ use walkdir::{DirEntry, WalkDir};
 impl LSPServer {
     pub fn did_open(&self, params: DidOpenTextDocumentParams) -> PublishDiagnosticsParams {
         let document: TextDocumentItem = params.text_document;
-        // let diagnostics = get_diagnostics(document.uri.clone());
         let uri = document.uri.clone();
-        self.srcs.add(document);
-        // diagnostics
-        PublishDiagnosticsParams {
-            uri,
-            diagnostics: Vec::new(),
-            version: Some(1),
+        // check if doc is already added
+        if self.srcs.names.read().unwrap().contains_key(&document.uri) {
+            self.did_change(DidChangeTextDocumentParams {
+                text_document: VersionedTextDocumentIdentifier::new(document.uri, document.version),
+                content_changes: vec![TextDocumentContentChangeEvent {
+                    range: None,
+                    range_length: None,
+                    text: document.text,
+                }],
+            });
+        } else {
+            self.srcs.add(document);
         }
-    }
-
-    pub fn did_close(&self, params: DidCloseTextDocumentParams) {
-        let document: TextDocumentIdentifier = params.text_document;
-        self.srcs.remove(document);
+        // diagnostics
+        let urls = self
+            .srcs
+            .names
+            .read()
+            .unwrap()
+            .keys()
+            .map(|x| x.clone())
+            .collect();
+        get_diagnostics(uri, urls)
     }
 
     pub fn did_change(&self, params: DidChangeTextDocumentParams) {
@@ -231,12 +241,6 @@ impl Sources {
                 parse_handle,
             })));
         self.names.write().unwrap().insert(doc.uri.clone(), fid);
-    }
-
-    pub fn remove(&self, doc: TextDocumentIdentifier) {
-        let mut files = self.files.write().unwrap();
-        let fid = self.get_id(&doc.uri);
-        files.retain(|x| x.read().unwrap().id != fid);
     }
 
     pub fn get_file(&self, id: usize) -> Option<Arc<RwLock<Source>>> {

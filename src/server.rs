@@ -151,9 +151,6 @@ impl LanguageServer for Backend {
             )
             .await;
     }
-    async fn did_close(&self, params: DidCloseTextDocumentParams) {
-        self.server.did_close(params);
-    }
     async fn did_change(&self, params: DidChangeTextDocumentParams) {
         self.server.did_change(params);
     }

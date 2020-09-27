@@ -71,6 +71,13 @@ pub trait Scope: std::fmt::Debug + Definition + Sync + Send {
         eprintln!("dot entering: {}, token: {}", self.ident(), token);
         eprintln!("{:?}", self.scopes());
         for scope in self.scopes() {
+            eprintln!(
+                "{}, {}, {}, {}",
+                scope.ident(),
+                byte_idx,
+                scope.start(),
+                scope.end()
+            );
             if &scope.url() == url && scope.start() <= byte_idx && byte_idx <= scope.end() {
                 eprintln!("checking dot completion: {}", scope.ident());
                 let result = scope.get_dot_completion(token, byte_idx, url, scope_tree);
@@ -80,9 +87,9 @@ pub trait Scope: std::fmt::Debug + Definition + Sync + Send {
             }
         }
         for def in self.defs() {
-            // eprintln!("def: {:?}", def);
+            eprintln!("def: {:?}", def);
             if def.starts_with(token) {
-                // eprintln!("complete def: {:?}", def);
+                eprintln!("complete def: {:?}", def);
                 return def.dot_completion(scope_tree);
             }
         }

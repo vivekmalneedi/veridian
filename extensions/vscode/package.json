@@ -6,12 +6,18 @@
   "license": "MIT",
   "version": "0.1.0",
   "categories": [],
-  "keywords": ["SystemVerilog", "Verilog"],
+  "keywords": [
+    "SystemVerilog",
+    "Verilog"
+  ],
   "repository": {
     "type": "git",
     "url": "https://github.com/vivekmalneedi/veridian"
   },
-  "activationEvents": ["onLanguage:systemverilog", "onLanguage:verilog"],
+  "activationEvents": [
+    "onLanguage:systemverilog",
+    "onLanguage:verilog"
+  ],
   "main": "./out/extension",
   "scripts": {
     "vscode:prepublish": "npm run compile",
@@ -22,7 +28,17 @@
     "languages": [
       {
         "id": "systemverilog",
-        "extensions": [".sv", ".svh", ".v", ".vh"]
+        "extensions": [
+          ".sv",
+          ".svh",
+          ".v",
+          ".vh"
+        ],
+        "aliases": [
+          "SystemVerilog",
+          "verilog",
+          "Verilog"
+        ]
       }
     ],
     "grammars": [
@@ -45,7 +61,11 @@
         "VeridianClient.trace.server": {
           "scope": "window",
           "type": "string",
-          "enum": ["off", "messages", "verbose"],
+          "enum": [
+            "off",
+            "messages",
+            "verbose"
+          ],
           "default": "off",
           "description": "Traces the communication between VS Code and the language server."
         }
