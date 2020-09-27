@@ -471,4 +471,66 @@ endmodule
             assert!(false);
         }
     }
+
+    #[test]
+    fn test_inter_file_completion() {
+        let server = LSPServer::new();
+        let uri = Url::parse("file:///test.sv").unwrap();
+        let uri2 = Url::parse("file:///test2.sv").unwrap();
+        let text = r#"module test;
+    s
+endmodule
+"#;
+        let text2 = r#"interface simple_bus;
+    logic clk;
+endinterface"#;
+        let open_params = DidOpenTextDocumentParams {
+            text_document: TextDocumentItem {
+                uri: uri.clone(),
+                language_id: "systemverilog".to_owned(),
+                version: 0,
+                text: text.to_owned(),
+            },
+        };
+        let open_params2 = DidOpenTextDocumentParams {
+            text_document: TextDocumentItem {
+                uri: uri2.clone(),
+                language_id: "systemverilog".to_owned(),
+                version: 0,
+                text: text2.to_owned(),
+            },
+        };
+        server.did_open(open_params);
+        server.did_open(open_params2);
+        let fid = server.srcs.get_id(&uri);
+        let fid2 = server.srcs.get_id(&uri2);
+        server.srcs.wait_parse_ready(fid, true);
+        server.srcs.wait_parse_ready(fid2, true);
+
+        let completion_params = CompletionParams {
+            text_document_position: TextDocumentPositionParams {
+                text_document: TextDocumentIdentifier { uri: uri.clone() },
+                position: Position {
+                    line: 1,
+                    character: 5,
+                },
+            },
+            work_done_progress_params: WorkDoneProgressParams::default(),
+            partial_result_params: PartialResultParams::default(),
+            context: Some(CompletionContext {
+                trigger_kind: CompletionTriggerKind::Invoked,
+                trigger_character: None,
+            }),
+        };
+        let response: CompletionResponse = server.completion(completion_params).unwrap();
+        let scope_tree = server.srcs.scope_tree.read().unwrap();
+        dbg!(scope_tree.as_ref().unwrap());
+        if let CompletionResponse::List(item) = response {
+            // eprintln!("{:#?}", item);
+            let names: Vec<&String> = item.items.iter().map(|x| &x.label).collect();
+            assert!(names.contains(&&"simple_bus".to_string()));
+        } else {
+            assert!(false);
+        }
+    }
 }

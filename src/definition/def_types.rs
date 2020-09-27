@@ -59,6 +59,11 @@ pub trait Scope: std::fmt::Debug + Definition + Sync + Send {
                 completions.push(def.completion());
             }
         }
+        for scope in self.scopes() {
+            if scope.starts_with(token) {
+                completions.push(scope.completion());
+            }
+        }
         completions
     }
     fn get_dot_completion(

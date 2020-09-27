@@ -8,7 +8,7 @@ use veridian_slang::slang_compile;
 use walkdir::{DirEntry, WalkDir};
 
 pub fn get_diagnostics(uri: Url, files: Vec<Url>) -> PublishDiagnosticsParams {
-    if !(cfg!(test) && (uri == Url::parse("file:///test.sv").unwrap())) {
+    if !(cfg!(test) && (uri.to_string().starts_with("file:///test"))) {
         let paths = get_paths(files);
         // eprintln!("{:#?}", paths);
         let diagnostics = slang_compile(paths).unwrap();
