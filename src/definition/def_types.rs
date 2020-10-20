@@ -4,7 +4,7 @@ use tower_lsp::lsp_types::*;
 
 fn clean_type_str(type_str: &str, ident: &str) -> String {
     let endings: &[_] = &[';', ','];
-    let eq_offset = type_str.find('=').unwrap_or(type_str.len());
+    let eq_offset = type_str.find('=').unwrap_or_else(|| type_str.len());
     let mut result = type_str.to_string();
     result.replace_range(eq_offset.., "");
     result
@@ -86,7 +86,7 @@ pub trait Scope: std::fmt::Debug + Definition + Sync + Send {
             if &scope.url() == url && scope.start() <= byte_idx && byte_idx <= scope.end() {
                 eprintln!("checking dot completion: {}", scope.ident());
                 let result = scope.get_dot_completion(token, byte_idx, url, scope_tree);
-                if result.len() > 0 {
+                if !result.is_empty() {
                     return result;
                 }
             }

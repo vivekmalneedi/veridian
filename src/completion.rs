@@ -29,7 +29,7 @@ impl LSPServer {
                 CompletionTriggerKind::TriggerCharacter => {
                     match context.trigger_character?.as_str() {
                         "." => Some(self.srcs.get_dot_completions(
-                            token.trim_end_matches("."),
+                            token.trim_end_matches('.'),
                             file.text.pos_to_byte(&doc.position),
                             &doc.text_document.uri,
                         )?),
@@ -55,7 +55,7 @@ impl LSPServer {
                         self.key_comps
                             .iter()
                             .filter(|x| x.label.starts_with(&token))
-                            .map(|x| x.clone())
+                            .cloned()
                             .collect(),
                     );
                     Some(comps)
@@ -71,7 +71,7 @@ impl LSPServer {
                     self.key_comps
                         .iter()
                         .filter(|x| x.label.starts_with(&token))
-                        .map(|x| x.clone())
+                        .cloned()
                         .collect(),
                 );
                 Some(comps)
@@ -90,7 +90,7 @@ fn get_completion_token(line: RopeSlice, pos: Position) -> String {
     }
     let mut c = line_iter.prev();
     //TODO: make this a regex
-    while !c.is_none()
+    while c.is_some()
         && (c.unwrap().is_alphanumeric()
             || c.unwrap() == '_'
             || c.unwrap() == '.'
@@ -102,7 +102,7 @@ fn get_completion_token(line: RopeSlice, pos: Position) -> String {
     }
     let mut result: String = token.chars().rev().collect();
     if result.contains('[') {
-        let l_bracket_offset = result.find('[').unwrap_or(result.len());
+        let l_bracket_offset = result.find('[').unwrap_or_else(|| result.len());
         result.replace_range(l_bracket_offset.., "");
     }
     result
@@ -228,7 +228,7 @@ endmodule
 
         let completion_params = CompletionParams {
             text_document_position: TextDocumentPositionParams {
-                text_document: TextDocumentIdentifier { uri: uri.clone() },
+                text_document: TextDocumentIdentifier { uri },
                 position: Position {
                     line: 4,
                     character: 3,
@@ -258,7 +258,7 @@ endmodule
             assert!(item.items.contains(&item1));
             assert!(item.items.contains(&item2));
         } else {
-            assert!(false);
+            panic!();
         }
     }
 
@@ -345,7 +345,7 @@ endmodule
 
         let completion_params = CompletionParams {
             text_document_position: TextDocumentPositionParams {
-                text_document: TextDocumentIdentifier { uri: uri.clone() },
+                text_document: TextDocumentIdentifier { uri },
                 position: Position {
                     line: 4,
                     character: 3,
@@ -379,7 +379,7 @@ endmodule
             }
             assert!(item.items.contains(&item3));
         } else {
-            assert!(false);
+            panic!();
         }
     }
 
@@ -445,11 +445,11 @@ endmodule
             assert!(item.items.contains(&item1));
             assert!(item.items.len() == 1);
         } else {
-            assert!(false);
+            panic!();
         }
         let completion_params = CompletionParams {
             text_document_position: TextDocumentPositionParams {
-                text_document: TextDocumentIdentifier { uri: uri.clone() },
+                text_document: TextDocumentIdentifier { uri },
                 position: Position {
                     line: 7,
                     character: 14,
@@ -468,7 +468,7 @@ endmodule
             assert!(item.items.contains(&item1));
             assert!(item.items.len() == 1);
         } else {
-            assert!(false);
+            panic!();
         }
     }
 
@@ -509,7 +509,7 @@ endinterface"#;
 
         let completion_params = CompletionParams {
             text_document_position: TextDocumentPositionParams {
-                text_document: TextDocumentIdentifier { uri: uri.clone() },
+                text_document: TextDocumentIdentifier { uri },
                 position: Position {
                     line: 1,
                     character: 5,
@@ -530,7 +530,7 @@ endinterface"#;
             let names: Vec<&String> = item.items.iter().map(|x| &x.label).collect();
             assert!(names.contains(&&"simple_bus".to_string()));
         } else {
-            assert!(false);
+            panic!();
         }
     }
 }

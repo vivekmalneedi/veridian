@@ -351,7 +351,7 @@ module test;
 endmodule"#;
         let doc = Rope::from_str(&text);
         let url = Url::parse("file:///test.sv").unwrap();
-        let syntax_tree = parse(&doc.clone(), &url, &None, &Vec::new()).unwrap();
+        let syntax_tree = parse(&doc, &url, &None, &Vec::new()).unwrap();
         let scope_tree = get_scopes(&syntax_tree, &url).unwrap();
         let symbol = scope_tree.document_symbols(&url, &doc);
         let symbol = symbol.get(0).unwrap();
