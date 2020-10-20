@@ -232,10 +232,10 @@ impl Definition for PortDec {
         self.type_str.clone()
     }
     fn completion_kind(&self) -> CompletionItemKind {
-        self.completion_kind.clone()
+        self.completion_kind
     }
     fn symbol_kind(&self) -> SymbolKind {
-        self.symbol_kind.clone()
+        self.symbol_kind
     }
     fn def_type(&self) -> &DefinitionType {
         &self.def_type
@@ -247,7 +247,7 @@ impl Definition for PortDec {
         CompletionItem {
             label: self.ident.clone(),
             detail: Some(clean_type_str(&self.type_str, &self.ident)),
-            kind: Some(self.completion_kind.clone()),
+            kind: Some(self.completion_kind),
             ..CompletionItem::default()
         }
     }
@@ -317,10 +317,10 @@ impl Definition for GenericDec {
         self.type_str.clone()
     }
     fn completion_kind(&self) -> CompletionItemKind {
-        self.completion_kind.clone()
+        self.completion_kind
     }
     fn symbol_kind(&self) -> SymbolKind {
-        self.symbol_kind.clone()
+        self.symbol_kind
     }
     fn def_type(&self) -> &DefinitionType {
         &self.def_type
@@ -332,7 +332,7 @@ impl Definition for GenericDec {
         CompletionItem {
             label: self.ident.clone(),
             detail: Some(clean_type_str(&self.type_str, &self.ident)),
-            kind: Some(self.completion_kind.clone()),
+            kind: Some(self.completion_kind),
             ..CompletionItem::default()
         }
     }
@@ -384,10 +384,10 @@ impl Definition for PackageImport {
         self.type_str.clone()
     }
     fn completion_kind(&self) -> CompletionItemKind {
-        self.completion_kind.clone()
+        self.completion_kind
     }
     fn symbol_kind(&self) -> SymbolKind {
-        self.symbol_kind.clone()
+        self.symbol_kind
     }
     fn def_type(&self) -> &DefinitionType {
         &self.def_type
@@ -399,7 +399,7 @@ impl Definition for PackageImport {
         CompletionItem {
             label: self.ident.clone(),
             detail: Some(clean_type_str(&self.type_str, &self.ident.clone())),
-            kind: Some(self.completion_kind.clone()),
+            kind: Some(self.completion_kind),
             ..CompletionItem::default()
         }
     }
@@ -455,10 +455,10 @@ impl Definition for SubDec {
         self.type_str.clone()
     }
     fn completion_kind(&self) -> CompletionItemKind {
-        self.completion_kind.clone()
+        self.completion_kind
     }
     fn symbol_kind(&self) -> SymbolKind {
-        self.symbol_kind.clone()
+        self.symbol_kind
     }
     fn def_type(&self) -> &DefinitionType {
         &self.def_type
@@ -470,7 +470,7 @@ impl Definition for SubDec {
         CompletionItem {
             label: self.ident.clone(),
             detail: Some(clean_type_str(&self.type_str, &self.ident)),
-            kind: Some(self.completion_kind.clone()),
+            kind: Some(self.completion_kind),
             ..CompletionItem::default()
         }
     }
@@ -537,10 +537,10 @@ impl Definition for ModportDec {
         self.type_str.clone()
     }
     fn completion_kind(&self) -> CompletionItemKind {
-        self.completion_kind.clone()
+        self.completion_kind
     }
     fn symbol_kind(&self) -> SymbolKind {
-        self.symbol_kind.clone()
+        self.symbol_kind
     }
     fn def_type(&self) -> &DefinitionType {
         &self.def_type
@@ -552,7 +552,7 @@ impl Definition for ModportDec {
         CompletionItem {
             label: self.ident.clone(),
             detail: Some(clean_type_str(&self.type_str, &self.ident)),
-            kind: Some(self.completion_kind.clone()),
+            kind: Some(self.completion_kind),
             ..CompletionItem::default()
         }
     }
@@ -602,10 +602,10 @@ impl Definition for ModInst {
         self.type_str.clone()
     }
     fn completion_kind(&self) -> CompletionItemKind {
-        self.completion_kind.clone()
+        self.completion_kind
     }
     fn symbol_kind(&self) -> SymbolKind {
-        self.symbol_kind.clone()
+        self.symbol_kind
     }
     fn def_type(&self) -> &DefinitionType {
         &self.def_type
@@ -617,13 +617,13 @@ impl Definition for ModInst {
         CompletionItem {
             label: self.ident.clone(),
             detail: Some(clean_type_str(&self.type_str, &self.ident)),
-            kind: Some(self.completion_kind.clone()),
+            kind: Some(self.completion_kind),
             ..CompletionItem::default()
         }
     }
     fn dot_completion(&self, scope_tree: &GenericScope) -> Vec<CompletionItem> {
         for scope in &scope_tree.scopes {
-            if &scope.ident() == &self.mod_ident {
+            if scope.ident() == self.mod_ident {
                 return scope
                     .defs()
                     .iter()
@@ -692,10 +692,10 @@ impl Definition for GenericScope {
         self.type_str.clone()
     }
     fn completion_kind(&self) -> CompletionItemKind {
-        self.completion_kind.clone()
+        self.completion_kind
     }
     fn symbol_kind(&self) -> SymbolKind {
-        self.symbol_kind.clone()
+        self.symbol_kind
     }
     fn def_type(&self) -> &DefinitionType {
         &self.def_type
@@ -707,13 +707,13 @@ impl Definition for GenericScope {
         CompletionItem {
             label: self.ident.clone(),
             detail: Some(clean_type_str(&self.type_str, &self.ident)),
-            kind: Some(self.completion_kind.clone()),
+            kind: Some(self.completion_kind),
             ..CompletionItem::default()
         }
     }
     fn dot_completion(&self, scope_tree: &GenericScope) -> Vec<CompletionItem> {
         for scope in scope_tree.scopes() {
-            if &scope.ident() == &self.ident {
+            if scope.ident() == self.ident {
                 return scope
                     .defs()
                     .iter()
@@ -799,10 +799,10 @@ impl Definition for ClassDec {
         self.type_str.clone()
     }
     fn completion_kind(&self) -> CompletionItemKind {
-        self.completion_kind.clone()
+        self.completion_kind
     }
     fn symbol_kind(&self) -> SymbolKind {
-        self.symbol_kind.clone()
+        self.symbol_kind
     }
     fn def_type(&self) -> &DefinitionType {
         &self.def_type
@@ -814,13 +814,13 @@ impl Definition for ClassDec {
         CompletionItem {
             label: self.ident.clone(),
             detail: Some(clean_type_str(&self.type_str, &self.ident)),
-            kind: Some(self.completion_kind.clone()),
+            kind: Some(self.completion_kind),
             ..CompletionItem::default()
         }
     }
     fn dot_completion(&self, scope_tree: &GenericScope) -> Vec<CompletionItem> {
         for scope in scope_tree.scopes() {
-            if &scope.ident() == &self.ident {
+            if scope.ident() == self.ident {
                 return scope
                     .defs()
                     .iter()

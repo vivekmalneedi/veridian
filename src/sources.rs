@@ -37,14 +37,7 @@ impl LSPServer {
             self.srcs.add(document);
         }
         // diagnostics
-        let urls = self
-            .srcs
-            .names
-            .read()
-            .unwrap()
-            .keys()
-            .map(|x| x.clone())
-            .collect();
+        let urls = self.srcs.names.read().unwrap().keys().cloned().collect();
         get_diagnostics(uri, urls)
     }
 
@@ -77,14 +70,7 @@ impl LSPServer {
     }
 
     pub fn did_save(&self, params: DidSaveTextDocumentParams) -> PublishDiagnosticsParams {
-        let urls = self
-            .srcs
-            .names
-            .read()
-            .unwrap()
-            .keys()
-            .map(|x| x.clone())
-            .collect();
+        let urls = self.srcs.names.read().unwrap().keys().cloned().collect();
         get_diagnostics(params.text_document.uri, urls)
     }
 }
@@ -104,7 +90,7 @@ pub struct SourceMeta {
     pub parse_handle: JoinHandle<()>,
 }
 
-fn find_src_paths(dirs: &Vec<PathBuf>) -> Vec<PathBuf> {
+fn find_src_paths(dirs: &[PathBuf]) -> Vec<PathBuf> {
     let mut paths: Vec<PathBuf> = Vec::new();
 
     for dir in dirs {
@@ -134,6 +120,12 @@ pub struct Sources {
     pub scope_tree: Arc<RwLock<Option<GenericScope>>>,
     pub include_dirs: Arc<RwLock<Vec<PathBuf>>>,
     pub source_dirs: Arc<RwLock<Vec<PathBuf>>>,
+}
+
+impl std::default::Default for Sources {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl Sources {
@@ -170,6 +162,7 @@ impl Sources {
         }
     }
     pub fn add(&self, doc: TextDocumentItem) {
+        #[allow(clippy::mutex_atomic)] // https://github.com/rust-lang/rust-clippy/issues/1516
         let valid_parse = Arc::new((Mutex::new(false), Condvar::new()));
         let valid_parse2 = valid_parse.clone();
         let mut files = self.files.write().unwrap();
@@ -240,7 +233,7 @@ impl Sources {
                 valid_parse,
                 parse_handle,
             })));
-        self.names.write().unwrap().insert(doc.uri.clone(), fid);
+        self.names.write().unwrap().insert(doc.uri, fid);
     }
 
     pub fn get_file(&self, id: usize) -> Option<Arc<RwLock<Source>>> {
@@ -280,12 +273,12 @@ impl Sources {
     }
 
     pub fn get_id(&self, uri: &Url) -> usize {
-        self.names.read().unwrap().get(uri).unwrap().clone()
+        *self.names.read().unwrap().get(uri).unwrap()
     }
 
     pub fn get_completions(
         &self,
-        token: &String,
+        token: &str,
         byte_idx: usize,
         url: &Url,
     ) -> Option<CompletionList> {
@@ -322,11 +315,11 @@ pub fn parse(
     doc: &Rope,
     uri: &Url,
     last_change_range: &Option<Range>,
-    inc_paths: &Vec<PathBuf>,
+    inc_paths: &[PathBuf],
 ) -> Option<SyntaxTree> {
     let mut parse_iterations = 1;
     let mut i = 0;
-    let mut includes: Vec<PathBuf> = inc_paths.clone();
+    let mut includes: Vec<PathBuf> = inc_paths.to_vec();
     let before = Instant::now();
     let mut reverted_change = false;
     let mut text = doc.clone();
@@ -369,25 +362,21 @@ pub fn parse(
                     },
 
                     sv_parser::Error::Include { source: x } => {
-                        match *x {
-                            sv_parser::Error::File { source: y, path: z } => {
-                                let mut inc_path_given = z.clone();
-                                let mut uri_path = uri.to_file_path().unwrap();
-                                uri_path.pop();
-                                let rel_path =
-                                    diff_paths(uri_path, current_dir().unwrap()).unwrap();
-                                inc_path_given.pop();
-                                let inc_path = rel_path.join(inc_path_given);
-                                if !includes.contains(&inc_path) {
-                                    includes.push(inc_path);
-                                } else {
-                                    eprintln!("File Not Found: {:?}", z);
-                                    break;
-                                }
-                                parse_iterations += 1;
+                        if let sv_parser::Error::File { source: y, path: z } = *x {
+                            let mut inc_path_given = z.clone();
+                            let mut uri_path = uri.to_file_path().unwrap();
+                            uri_path.pop();
+                            let rel_path = diff_paths(uri_path, current_dir().unwrap()).unwrap();
+                            inc_path_given.pop();
+                            let inc_path = rel_path.join(inc_path_given);
+                            if !includes.contains(&inc_path) {
+                                includes.push(inc_path);
+                            } else {
+                                eprintln!("File Not Found: {:?}", z);
+                                break;
                             }
-                            _ => (),
-                        };
+                            parse_iterations += 1;
+                        }
                     }
                     _ => eprintln!("parse, {:?}", err),
                 };
@@ -510,7 +499,7 @@ endmodule"#;
 
         let change_params = DidChangeTextDocumentParams {
             text_document: VersionedTextDocumentIdentifier {
-                uri: uri.clone(),
+                uri,
                 version: Some(1),
             },
             content_changes: vec![TextDocumentContentChangeEvent {
@@ -579,13 +568,7 @@ endmodule"#;
         d.push("tests_rtl/lab6/src/fp_add.sv");
         let text = read_to_string(&d).unwrap();
         let doc = Rope::from_str(&text);
-        assert!(parse(
-            &doc.clone(),
-            &Url::from_file_path(d).unwrap(),
-            &None,
-            &Vec::new()
-        )
-        .is_some(),);
+        assert!(parse(&doc, &Url::from_file_path(d).unwrap(), &None, &Vec::new()).is_some(),);
         // TODO: add missing header test
     }
 }

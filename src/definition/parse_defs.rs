@@ -113,45 +113,37 @@ pub fn port_dec_ansi(
 ) -> Option<PortDec> {
     let mut port = PortDec::new(url);
     let mut tokens = String::new();
-    match node {
-        AnsiPortDeclaration::Net(x) => {
-            let ident = get_ident(tree, RefNode::PortIdentifier(&x.nodes.1));
-            port.ident = ident.0;
-            port.byte_idx = ident.1;
-            match &x.nodes.0 {
-                Some(y) => match y {
-                    NetPortHeaderOrInterfacePortHeader::InterfacePortHeader(z) => match &**z {
-                        InterfacePortHeader::Identifier(node) => {
-                            port.interface = Some(
-                                get_ident(tree, RefNode::InterfaceIdentifier(&node.nodes.0)).0,
-                            );
-                            match &node.nodes.1 {
-                                Some((_, mod_ident)) => {
-                                    port.modport = Some(
-                                        get_ident(tree, RefNode::ModportIdentifier(mod_ident)).0,
-                                    );
-                                }
-                                None => (),
+    if let AnsiPortDeclaration::Net(x) = node {
+        let ident = get_ident(tree, RefNode::PortIdentifier(&x.nodes.1));
+        port.ident = ident.0;
+        port.byte_idx = ident.1;
+        if let Some(y) = &x.nodes.0 {
+            if let NetPortHeaderOrInterfacePortHeader::InterfacePortHeader(z) = y {
+                match &**z {
+                    InterfacePortHeader::Identifier(node) => {
+                        port.interface =
+                            Some(get_ident(tree, RefNode::InterfaceIdentifier(&node.nodes.0)).0);
+                        match &node.nodes.1 {
+                            Some((_, mod_ident)) => {
+                                port.modport =
+                                    Some(get_ident(tree, RefNode::ModportIdentifier(mod_ident)).0);
                             }
+                            None => (),
                         }
-                        InterfacePortHeader::Interface(node) => {
-                            port.interface = Some("interface".to_string());
-                            match &node.nodes.1 {
-                                Some((_, mod_ident)) => {
-                                    port.modport = Some(
-                                        get_ident(tree, RefNode::ModportIdentifier(mod_ident)).0,
-                                    );
-                                }
-                                None => (),
+                    }
+                    InterfacePortHeader::Interface(node) => {
+                        port.interface = Some("interface".to_string());
+                        match &node.nodes.1 {
+                            Some((_, mod_ident)) => {
+                                port.modport =
+                                    Some(get_ident(tree, RefNode::ModportIdentifier(mod_ident)).0);
                             }
+                            None => (),
                         }
-                    },
-                    _ => (),
-                },
-                None => (),
+                    }
+                }
             }
         }
-        _ => (),
     }
 
     advance_until_leave!(tokens, tree, event_iter, RefNode::AnsiPortDeclaration);

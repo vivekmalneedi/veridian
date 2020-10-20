@@ -31,6 +31,12 @@ impl LSPServer {
     }
 }
 
+impl Default for LSPServer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 pub struct Backend {
     client: Client,
     server: LSPServer,
@@ -53,7 +59,7 @@ pub struct ProjectConfig {
 
 fn read_config(root_uri: Option<Url>) -> anyhow::Result<ProjectConfig> {
     let path = root_uri
-        .ok_or(anyhow::anyhow!("config error"))?
+        .ok_or_else(|| anyhow::anyhow!("config error"))?
         .to_file_path()
         .map_err(|x| anyhow::anyhow!("config error"))?;
     let mut config: Option<PathBuf> = None;
@@ -70,7 +76,8 @@ fn read_config(root_uri: Option<Url>) -> anyhow::Result<ProjectConfig> {
         }
     }
     let mut contents = String::new();
-    File::open(config.ok_or(anyhow::anyhow!("config error"))?)?.read_to_string(&mut contents)?;
+    File::open(config.ok_or_else(|| anyhow::anyhow!("config error"))?)?
+        .read_to_string(&mut contents)?;
     Ok(serde_yaml::from_str(&contents)?)
 }
 

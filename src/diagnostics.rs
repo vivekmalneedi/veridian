@@ -20,7 +20,7 @@ pub fn get_diagnostics(uri: Url, files: Vec<Url>) -> PublishDiagnosticsParams {
         }
     } else {
         PublishDiagnosticsParams {
-            uri: uri.clone(),
+            uri,
             diagnostics: Vec::new(),
             version: None,
         }
@@ -46,25 +46,22 @@ fn get_paths(files: Vec<Url>) -> Vec<PathBuf> {
         if !paths.contains(&path) {
             let walker = WalkDir::new(path.parent().unwrap()).into_iter();
             for entry in walker.filter_entry(|e| !is_hidden(e)) {
-                match entry {
-                    Ok(entry) => {
-                        if entry.file_type().is_file() && entry.path().extension().is_some() {
-                            let extension = entry.path().extension().unwrap();
+                if let Ok(entry) = entry {
+                    if entry.file_type().is_file() && entry.path().extension().is_some() {
+                        let extension = entry.path().extension().unwrap();
 
-                            if extension == "sv"
-                                || extension == "svh"
-                                || extension == "v"
-                                || extension == "vh"
-                            {
-                                let entry_path = entry.path().to_path_buf();
-                                if !paths.contains(&entry_path) {
-                                    paths.push(entry_path);
-                                }
+                        if extension == "sv"
+                            || extension == "svh"
+                            || extension == "v"
+                            || extension == "vh"
+                        {
+                            let entry_path = entry.path().to_path_buf();
+                            if !paths.contains(&entry_path) {
+                                paths.push(entry_path);
                             }
                         }
                     }
-                    Err(_) => (),
-                };
+                }
             }
         }
     }
@@ -75,14 +72,14 @@ pub fn is_hidden(entry: &DirEntry) -> bool {
     entry
         .file_name()
         .to_str()
-        .map(|s| s.starts_with("."))
+        .map(|s| s.starts_with('.'))
         .unwrap_or(false)
 }
 
 fn parse_report(uri: Url, report: String) -> Vec<Diagnostic> {
     let mut diagnostics: Vec<Diagnostic> = Vec::new();
     for line in report.lines() {
-        let diag: Vec<&str> = line.splitn(5, ":").collect();
+        let diag: Vec<&str> = line.splitn(5, ':').collect();
         if absolute_path(diag.get(0).unwrap()).unwrap() == uri.to_file_path().unwrap().as_os_str() {
             let pos = Position::new(
                 diag.get(1).unwrap().parse::<u64>().unwrap() - 1,
@@ -138,6 +135,6 @@ mod tests {
             )],
             None,
         );
-        assert_eq!(get_diagnostics(uri.clone(), vec![uri.clone()]), expected);
+        assert_eq!(get_diagnostics(uri.clone(), vec![uri]), expected);
     }
 }

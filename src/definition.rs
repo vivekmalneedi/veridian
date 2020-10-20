@@ -77,7 +77,7 @@ fn get_definition_token(line: RopeSlice, pos: Position) -> String {
         line_iter.next();
     }
     let mut c = line_iter.prev();
-    while !c.is_none() && (c.unwrap().is_alphanumeric() || c.unwrap() == '_') {
+    while c.is_some() && (c.unwrap().is_alphanumeric() || c.unwrap() == '_') {
         token.push(c.unwrap());
         c = line_iter.prev();
     }
@@ -87,19 +87,21 @@ fn get_definition_token(line: RopeSlice, pos: Position) -> String {
         line_iter.next();
     }
     let mut c = line_iter.next();
-    while !c.is_none() && (c.unwrap().is_alphanumeric() || c.unwrap() == '_') {
+    while c.is_some() && (c.unwrap().is_alphanumeric() || c.unwrap() == '_') {
         token.push(c.unwrap());
         c = line_iter.next();
     }
     token
 }
 
+type ScopesAndDefs = Option<(Vec<Box<dyn Scope>>, Vec<Box<dyn Definition>>)>;
+
 pub fn match_definitions(
     syntax_tree: &SyntaxTree,
     event_iter: &mut EventIter,
     node: RefNode,
     url: &Url,
-) -> Option<(Vec<Box<dyn Scope>>, Vec<Box<dyn Definition>>)> {
+) -> ScopesAndDefs {
     let mut definitions: Vec<Box<dyn Definition>> = Vec::new();
     let mut scopes: Vec<Box<dyn Scope>> = Vec::new();
     match node {
@@ -245,17 +247,16 @@ fn get_hover(doc: &Rope, line: usize) -> String {
             current = doc.line(line_idx).to_string();
             let currentl = current.clone().trim_start().to_owned();
             let currentr = current.clone().trim_end().to_owned();
-            if currentl.starts_with("/*") && currentr.ends_with("*/") {
+            if (currentl.starts_with("/*") && currentr.ends_with("*/"))
+                || currentl.starts_with("//")
+                || multiline
+            {
                 valid = true;
             } else if currentr.ends_with("*/") {
                 multiline = true;
                 valid = true;
             } else if currentl.starts_with("/*") {
                 multiline = false;
-                valid = true;
-            } else if currentl.starts_with("//") {
-                valid = true;
-            } else if multiline {
                 valid = true;
             } else {
                 valid = false;
@@ -297,7 +298,7 @@ mod tests {
         let text = read_to_string(d).unwrap();
         let doc = Rope::from_str(&text);
         let url = Url::parse("file:///tests_rtl/definition_test.sv").unwrap();
-        let syntax_tree = parse(&doc.clone(), &url, &None, &Vec::new()).unwrap();
+        let syntax_tree = parse(&doc, &url, &None, &Vec::new()).unwrap();
         let scope_tree = get_scopes(&syntax_tree, &url).unwrap();
         for def in &scope_tree.defs {
             println!("{:?} {:?}", def, doc.byte_to_pos(def.byte_idx()));
