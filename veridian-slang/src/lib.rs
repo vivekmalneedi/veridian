@@ -67,7 +67,7 @@ mod tests {
         let mut result: String = String::new();
         result_iter.for_each(|x| {
             let mut y: String = x.to_owned();
-            y.replace_range(..x.find(":").unwrap(), "\n");
+            y.replace_range(..x.find(':').unwrap(), "\n");
             result.push_str(&y);
         });
         // get rid of unnecessary newlines

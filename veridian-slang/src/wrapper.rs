@@ -24,7 +24,7 @@ mod tests {
         let report: &CStr = unsafe { CStr::from_ptr(report_raw) };
         let expected = ":1:42: error: cannot refer to element 2 of \'logic[1:0]\'\n";
         let mut result = report.to_str().unwrap().to_owned();
-        let offset = result.find(":").unwrap_or(result.len());
+        let offset = result.find(':').unwrap_or_else(|| result.len());
         result.replace_range(..offset, "");
         assert_eq!(result, expected);
         unsafe {
