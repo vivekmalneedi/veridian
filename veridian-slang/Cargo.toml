@@ -11,7 +11,7 @@ edition = "2018"
 [build-dependencies]
 bindgen = "0.55.1"
 cmake = "0.1.44"
-cc = { version = "1.0.59", features = ["parallel"] }
+cc = { version = "1.0.61", features = ["parallel"] }
 
 [dev-dependencies]
 tempdir = "0.3.7"
