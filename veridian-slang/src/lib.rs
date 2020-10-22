@@ -16,8 +16,7 @@ pub fn slang_compile(paths: Vec<PathBuf>) -> Result<String, Box<dyn error::Error
         paths_c.push(CString::new(path)?);
     }
     let mut paths_ptr: Vec<*const i8> = paths_c.iter().map(|x| x.as_ptr()).collect();
-    let report_raw =
-        unsafe { compile_paths(paths_ptr.as_mut_ptr(), paths_ptr.len() as u32) };
+    let report_raw = unsafe { compile_paths(paths_ptr.as_mut_ptr(), paths_ptr.len() as u32) };
     let report: &CStr = unsafe { CStr::from_ptr(report_raw) };
     let result = report.to_str()?.to_owned();
     unsafe {
@@ -62,8 +61,7 @@ mod tests {
         paths.push(file_path_3);
 
         let report: String = slang_compile(paths).unwrap();
-        let mut expected =
-            ":1:43: error: cannot refer to element 2 of \'logic[1:0]\'\n".repeat(3);
+        let mut expected = ":1:43: error: cannot refer to element 2 of \'logic[1:0]\'\n".repeat(3);
         expected.pop();
         let result_iter = report.lines();
         let mut result: String = String::new();

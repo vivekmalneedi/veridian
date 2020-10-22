@@ -63,8 +63,7 @@ mod tests {
         paths.push(file_path_3_c.as_ptr());
         let report_raw = unsafe { compile_paths(paths.as_mut_ptr(), 3) };
         let report: &CStr = unsafe { CStr::from_ptr(report_raw) };
-        let mut expected =
-            ":1:43: error: cannot refer to element 2 of \'logic[1:0]\'\n".repeat(3);
+        let mut expected = ":1:43: error: cannot refer to element 2 of \'logic[1:0]\'\n".repeat(3);
         expected.pop();
         let result_raw = report.to_str().unwrap().to_owned();
         let result_iter = result_raw.lines();
@@ -93,24 +92,17 @@ mod tests {
         names.push(name1.as_ptr());
         names.push(name2.as_ptr());
         names.push(name3.as_ptr());
-        let text1 = CString::new(
-            "module test1; logic [1:0] abc; assign abc[2] = 1'b1; endmodule",
-        )
-        .unwrap();
-        let text2 = CString::new(
-            "module test2; logic [1:0] abc; assign abc[2] = 1'b1; endmodule",
-        )
-        .unwrap();
-        let text3 = CString::new(
-            "module test3; logic [1:0] abc; assign abc[2] = 1'b1; endmodule",
-        )
-        .unwrap();
+        let text1 =
+            CString::new("module test1; logic [1:0] abc; assign abc[2] = 1'b1; endmodule").unwrap();
+        let text2 =
+            CString::new("module test2; logic [1:0] abc; assign abc[2] = 1'b1; endmodule").unwrap();
+        let text3 =
+            CString::new("module test3; logic [1:0] abc; assign abc[2] = 1'b1; endmodule").unwrap();
         texts.push(text1.as_ptr());
         texts.push(text2.as_ptr());
         texts.push(text3.as_ptr());
 
-        let report_raw =
-            unsafe { compile_sources(names.as_mut_ptr(), texts.as_mut_ptr(), 3) };
+        let report_raw = unsafe { compile_sources(names.as_mut_ptr(), texts.as_mut_ptr(), 3) };
         let report: &CStr = unsafe { CStr::from_ptr(report_raw) };
         let expected = "test1.sv:1:43: error: cannot refer to element 2 of \'logic[1:0]\'\ntest2.sv:1:43: error: cannot refer to element 2 of \'logic[1:0]\'\ntest3.sv:1:43: error: cannot refer to element 2 of \'logic[1:0]\'\n";
         let result = report.to_str().unwrap();

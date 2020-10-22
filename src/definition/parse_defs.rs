@@ -1266,7 +1266,8 @@ pub fn module_dec(
             }
             if let Some(list_port_decs) = &x.nodes.0.nodes.6 {
                 if let Some(port_decs) = &list_port_decs.nodes.0.nodes.1 {
-                    let mut port_decs_list: Vec<&AnsiPortDeclaration> = vec![&port_decs.nodes.0.1];
+                    let mut port_decs_list: Vec<&AnsiPortDeclaration> =
+                        vec![&(port_decs.nodes.0).1];
                     for port_dec in &port_decs.nodes.1 {
                         port_decs_list.push(&(port_dec.1).1);
                     }
@@ -1336,7 +1337,8 @@ pub fn module_dec(
             }
             if let Some(list_port_decs) = &x.nodes.1.nodes.6 {
                 if let Some(port_decs) = &list_port_decs.nodes.0.nodes.1 {
-                    let mut port_decs_list: Vec<&AnsiPortDeclaration> = vec![&port_decs.nodes.0.1];
+                    let mut port_decs_list: Vec<&AnsiPortDeclaration> =
+                        vec![&(port_decs.nodes.0).1];
                     for port_dec in &port_decs.nodes.1 {
                         port_decs_list.push(&(port_dec.1).1);
                     }
@@ -1414,7 +1416,8 @@ pub fn interface_dec(
             }
             if let Some(list_port_decs) = &x.nodes.0.nodes.6 {
                 if let Some(port_decs) = &list_port_decs.nodes.0.nodes.1 {
-                    let mut port_decs_list: Vec<&AnsiPortDeclaration> = vec![&port_decs.nodes.0.1];
+                    let mut port_decs_list: Vec<&AnsiPortDeclaration> =
+                        vec![&(port_decs.nodes.0).1];
                     for port_dec in &port_decs.nodes.1 {
                         port_decs_list.push(&(port_dec.1).1);
                     }
@@ -1484,7 +1487,8 @@ pub fn interface_dec(
             }
             if let Some(list_port_decs) = &x.nodes.1.nodes.6 {
                 if let Some(port_decs) = &list_port_decs.nodes.0.nodes.1 {
-                    let mut port_decs_list: Vec<&AnsiPortDeclaration> = vec![&port_decs.nodes.0.1];
+                    let mut port_decs_list: Vec<&AnsiPortDeclaration> =
+                        vec![&(port_decs.nodes.0).1];
                     for port_dec in &port_decs.nodes.1 {
                         port_decs_list.push(&(port_dec.1).1);
                     }
@@ -1829,7 +1833,8 @@ pub fn program_dec(
             }
             if let Some(list_port_decs) = &x.nodes.0.nodes.6 {
                 if let Some(port_decs) = &list_port_decs.nodes.0.nodes.1 {
-                    let mut port_decs_list: Vec<&AnsiPortDeclaration> = vec![&port_decs.nodes.0.1];
+                    let mut port_decs_list: Vec<&AnsiPortDeclaration> =
+                        vec![&(port_decs.nodes.0).1];
                     for port_dec in &port_decs.nodes.1 {
                         port_decs_list.push(&(port_dec.1).1);
                     }
@@ -1899,7 +1904,8 @@ pub fn program_dec(
             }
             if let Some(list_port_decs) = &x.nodes.1.nodes.6 {
                 if let Some(port_decs) = &list_port_decs.nodes.0.nodes.1 {
-                    let mut port_decs_list: Vec<&AnsiPortDeclaration> = vec![&port_decs.nodes.0.1];
+                    let mut port_decs_list: Vec<&AnsiPortDeclaration> =
+                        vec![&(port_decs.nodes.0).1];
                     for port_dec in &port_decs.nodes.1 {
                         port_decs_list.push(&(port_dec.1).1);
                     }
