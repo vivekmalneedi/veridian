@@ -5,7 +5,7 @@ name: CI
 jobs:
   check:
     name: Check
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
     steps:
       - name: Checkout sources
         uses: actions/checkout@v2
@@ -18,6 +18,15 @@ jobs:
           profile: minimal
           toolchain: stable
           override: true
+
+      - name: cache cargo dirs
+        uses: actions/cache@v2
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
 
       - name: Run cargo check
         uses: actions-rs/cargo@v1
@@ -26,7 +35,7 @@ jobs:
 
   test:
     name: Test Suite
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
     steps:
       - name: Checkout sources
         uses: actions/checkout@v2
@@ -40,6 +49,15 @@ jobs:
           toolchain: stable
           override: true
 
+      - name: cache cargo dirs
+        uses: actions/cache@v2
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+
       - name: Run cargo test
         uses: actions-rs/cargo@v1
         with:
@@ -47,7 +65,7 @@ jobs:
 
   lints:
     name: Lints
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
     steps:
       - name: Checkout sources
         uses: actions/checkout@v2
@@ -61,6 +79,15 @@ jobs:
           toolchain: stable
           override: true
           components: rustfmt, clippy
+
+      - name: cache cargo dirs
+        uses: actions/cache@v2
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
 
       - name: Run cargo fmt
         uses: actions-rs/cargo@v1
