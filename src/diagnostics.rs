@@ -121,7 +121,7 @@ mod tests {
     #[test]
     fn test_diagnostics() {
         let uri =
-            Url::from_file_path(absolute_path("tests_rtl/diag/diag_test.sv").unwrap()).unwrap();
+            Url::from_file_path(absolute_path("test_data/diag/diag_test.sv").unwrap()).unwrap();
         let expected = PublishDiagnosticsParams::new(
             uri.clone(),
             vec![Diagnostic::new(

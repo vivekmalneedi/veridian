@@ -1,0 +1,229 @@
+{
+ "builder": {
+  "_version": "<undefined>",
+  "_logger": "hdl_checker.builders.fallback",
+  "_database": {
+   "sources": [],
+   "inferred_libraries": [],
+   "design_units": [
+    {
+     "owner": {
+      "name": "/home/vivek/Documents/projects/verilogls/tests_rtl/FIR_filter.v",
+      "__class__": "Path"
+     },
+     "type_": "entity",
+     "name": {
+      "name": "FIR_filter_firBlock_left_MultiplyBlock",
+      "case_sensitive": true,
+      "__class__": "VerilogIdentifier"
+     },
+     "locations": [
+      [
+       10,
+       7
+      ]
+     ],
+     "__class__": "VerilogDesignUnit"
+    },
+    {
+     "owner": {
+      "name": "/home/vivek/Documents/projects/verilogls/tests_rtl/FIR_filter.v",
+      "__class__": "Path"
+     },
+     "type_": "entity",
+     "name": {
+      "name": "FIR_filter_firBlock_right_MultiplyBlock",
+      "case_sensitive": true,
+      "__class__": "VerilogIdentifier"
+     },
+     "locations": [
+      [
+       180,
+       7
+      ]
+     ],
+     "__class__": "VerilogDesignUnit"
+    },
+    {
+     "owner": {
+      "name": "/home/vivek/Documents/projects/verilogls/tests_rtl/FIR_filter.v",
+      "__class__": "Path"
+     },
+     "type_": "entity",
+     "name": {
+      "name": "FIR_filter_firBlock_left",
+      "case_sensitive": true,
+      "__class__": "VerilogIdentifier"
+     },
+     "locations": [
+      [
+       101,
+       7
+      ]
+     ],
+     "__class__": "VerilogDesignUnit"
+    },
+    {
+     "owner": {
+      "name": "/home/vivek/Documents/projects/verilogls/tests_rtl/FIR_filter.v",
+      "__class__": "Path"
+     },
+     "type_": "entity",
+     "name": {
+      "name": "FIR_filter_firBlock_right",
+      "case_sensitive": true,
+      "__class__": "VerilogIdentifier"
+     },
+     "locations": [
+      [
+       208,
+       7
+      ]
+     ],
+     "__class__": "VerilogDesignUnit"
+    },
+    {
+     "owner": {
+      "name": "/home/vivek/Documents/projects/verilogls/tests_rtl/FIR_filter.v",
+      "__class__": "Path"
+     },
+     "type_": "entity",
+     "name": {
+      "name": "FIR_filter",
+      "case_sensitive": true,
+      "__class__": "VerilogIdentifier"
+     },
+     "locations": [
+      [
+       248,
+       7
+      ]
+     ],
+     "__class__": "VerilogDesignUnit"
+    }
+   ],
+   "__class__": "Database"
+  },
+  "_work_folder": "/home/vivek/Documents/projects/verilogls/tests_rtl/.hdl_checker",
+  "_builtin_libraries": [],
+  "_added_libraries": [
+   {
+    "name": "not_in_project",
+    "case_sensitive": true,
+    "__class__": "Identifier"
+   }
+  ],
+  "__class__": "Fallback"
+ },
+ "config_file": [
+  {
+   "name": "/tmp/hdl_checker_project_pid1732247.json",
+   "__class__": "Path"
+  },
+  1596729619.6300464,
+  "generated"
+ ],
+ "database": {
+  "sources": [],
+  "inferred_libraries": [],
+  "design_units": [
+   {
+    "owner": {
+     "name": "/home/vivek/Documents/projects/verilogls/tests_rtl/FIR_filter.v",
+     "__class__": "Path"
+    },
+    "type_": "entity",
+    "name": {
+     "name": "FIR_filter_firBlock_left_MultiplyBlock",
+     "case_sensitive": true,
+     "__class__": "VerilogIdentifier"
+    },
+    "locations": [
+     [
+      10,
+      7
+     ]
+    ],
+    "__class__": "VerilogDesignUnit"
+   },
+   {
+    "owner": {
+     "name": "/home/vivek/Documents/projects/verilogls/tests_rtl/FIR_filter.v",
+     "__class__": "Path"
+    },
+    "type_": "entity",
+    "name": {
+     "name": "FIR_filter_firBlock_right_MultiplyBlock",
+     "case_sensitive": true,
+     "__class__": "VerilogIdentifier"
+    },
+    "locations": [
+     [
+      180,
+      7
+     ]
+    ],
+    "__class__": "VerilogDesignUnit"
+   },
+   {
+    "owner": {
+     "name": "/home/vivek/Documents/projects/verilogls/tests_rtl/FIR_filter.v",
+     "__class__": "Path"
+    },
+    "type_": "entity",
+    "name": {
+     "name": "FIR_filter_firBlock_left",
+     "case_sensitive": true,
+     "__class__": "VerilogIdentifier"
+    },
+    "locations": [
+     [
+      101,
+      7
+     ]
+    ],
+    "__class__": "VerilogDesignUnit"
+   },
+   {
+    "owner": {
+     "name": "/home/vivek/Documents/projects/verilogls/tests_rtl/FIR_filter.v",
+     "__class__": "Path"
+    },
+    "type_": "entity",
+    "name": {
+     "name": "FIR_filter_firBlock_right",
+     "case_sensitive": true,
+     "__class__": "VerilogIdentifier"
+    },
+    "locations": [
+     [
+      208,
+      7
+     ]
+    ],
+    "__class__": "VerilogDesignUnit"
+   },
+   {
+    "owner": {
+     "name": "/home/vivek/Documents/projects/verilogls/tests_rtl/FIR_filter.v",
+     "__class__": "Path"
+    },
+    "type_": "entity",
+    "name": {
+     "name": "FIR_filter",
+     "case_sensitive": true,
+     "__class__": "VerilogIdentifier"
+    },
+    "locations": [
+     [
+      248,
+      7
+     ]
+    ],
+    "__class__": "VerilogDesignUnit"
+   }
+  ],
+  "__class__": "Database"
+ },
+ "__version__": "0.6.13"
+}

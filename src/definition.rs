@@ -293,10 +293,10 @@ mod tests {
     #[test]
     fn test_get_definition() {
         let mut d = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-        d.push("tests_rtl/definition_test.sv");
+        d.push("test_data/definition_test.sv");
         let text = read_to_string(d).unwrap();
         let doc = Rope::from_str(&text);
-        let url = Url::parse("file:///tests_rtl/definition_test.sv").unwrap();
+        let url = Url::parse("file:///test_data/definition_test.sv").unwrap();
         let syntax_tree = parse(&doc, &url, &None, &Vec::new()).unwrap();
         let scope_tree = get_scopes(&syntax_tree, &url).unwrap();
         for def in &scope_tree.defs {

@@ -565,7 +565,7 @@ endmodule"#;
     #[test]
     fn test_header() {
         let mut d = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-        d.push("tests_rtl/lab6/src/fp_add.sv");
+        d.push("test_data/top_inc.sv");
         let text = read_to_string(&d).unwrap();
         let doc = Rope::from_str(&text);
         assert!(parse(&doc, &Url::from_file_path(d).unwrap(), &None, &Vec::new()).is_some(),);
