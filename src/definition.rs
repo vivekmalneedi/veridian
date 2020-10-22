@@ -247,16 +247,15 @@ fn get_hover(doc: &Rope, line: usize) -> String {
             current = doc.line(line_idx).to_string();
             let currentl = current.clone().trim_start().to_owned();
             let currentr = current.clone().trim_end().to_owned();
-            if (currentl.starts_with("/*") && currentr.ends_with("*/"))
-                || currentl.starts_with("//")
-                || multiline
-            {
+            if currentl.starts_with("/*") && currentr.ends_with("*/") {
                 valid = true;
             } else if currentr.ends_with("*/") {
                 multiline = true;
                 valid = true;
             } else if currentl.starts_with("/*") {
                 multiline = false;
+                valid = true;
+            } else if currentl.starts_with("//") || multiline {
                 valid = true;
             } else {
                 valid = false;
