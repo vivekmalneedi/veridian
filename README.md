@@ -4,8 +4,8 @@ A WIP SystemVerilog Language Server
 
 ## Installation
 
-For formatting support install `verible-verilog-format` from [verible](https://github.com/google/verible)
-Dependencies (from [slang](https://github.com/MikePopoloski/slang)): python 3, cmake (>=3.12), C++17 compatible compiler
+* For formatting support install `verible-verilog-format` from [verible](https://github.com/google/verible)
+* Install dependencies: C++17 compatible compiler
 
 ```
 # clone the repo
