@@ -13,7 +13,7 @@ mod sources;
 use server::Backend;
 
 #[derive(StructOpt, Debug)]
-#[structopt(name = "veridian")]
+#[structopt(name = "veridian", about = "A SystemVerilog/Verilog Language Server")]
 struct Opt {}
 
 #[tokio::main]
