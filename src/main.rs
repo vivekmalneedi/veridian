@@ -8,6 +8,7 @@ use tower_lsp::{LspService, Server};
 mod completion;
 mod definition;
 mod diagnostics;
+mod format;
 mod server;
 mod sources;
 use server::Backend;

@@ -10,12 +10,14 @@ use std::path::PathBuf;
 use tower_lsp::jsonrpc::Result;
 use tower_lsp::lsp_types::*;
 use tower_lsp::{Client, LanguageServer};
+use which::which;
 
 pub struct LSPServer {
     pub srcs: Sources,
     pub key_comps: Vec<CompletionItem>,
     pub sys_tasks: Vec<CompletionItem>,
     pub directives: Vec<CompletionItem>,
+    pub format: bool,
 }
 
 impl LSPServer {
@@ -25,6 +27,7 @@ impl LSPServer {
             key_comps: keyword_completions(KEYWORDS),
             sys_tasks: other_completions(SYS_TASKS),
             directives: other_completions(DIRECTIVES),
+            format: which("verible-verilog-format").is_ok(),
         }
     }
 }
@@ -134,6 +137,8 @@ impl LanguageServer for Backend {
                 definition_provider: Some(true),
                 hover_provider: Some(HoverProviderCapability::Simple(true)),
                 document_symbol_provider: Some(true),
+                document_formatting_provider: Some(true),
+                document_range_formatting_provider: Some(true),
                 ..ServerCapabilities::default()
             },
         })
@@ -186,5 +191,14 @@ impl LanguageServer for Backend {
         params: DocumentSymbolParams,
     ) -> Result<Option<DocumentSymbolResponse>> {
         Ok(self.server.document_symbol(params))
+    }
+    async fn formatting(&self, params: DocumentFormattingParams) -> Result<Option<Vec<TextEdit>>> {
+        Ok(self.server.formatting(params))
+    }
+    async fn range_formatting(
+        &self,
+        params: DocumentRangeFormattingParams,
+    ) -> Result<Option<Vec<TextEdit>>> {
+        Ok(self.server.range_formatting(params))
     }
 }

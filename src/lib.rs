@@ -5,5 +5,6 @@
 pub mod completion;
 pub mod definition;
 pub mod diagnostics;
+pub mod format;
 pub mod server;
 pub mod sources;

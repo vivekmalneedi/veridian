@@ -19,6 +19,7 @@ walkdir = "2.3.1"
 serde_yaml = "0.8.13"
 anyhow = "1.0.33"
 serde = "1.0.117"
+which = "4.0.2"
 
 veridian_slang = { path = "veridian-slang" }
 structopt = "0.3.20"
