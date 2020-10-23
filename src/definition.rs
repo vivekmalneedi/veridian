@@ -1,8 +1,6 @@
 use crate::server::LSPServer;
 use crate::sources::LSPSupport;
 use ropey::{Rope, RopeSlice};
-use std::fmt::Display;
-use std::sync::Arc;
 use sv_parser::*;
 use tower_lsp::lsp_types::*;
 
@@ -279,7 +277,6 @@ mod tests {
     use super::*;
     use crate::sources::{parse, LSPSupport};
     use ropey::Rope;
-    use std::collections::HashMap;
     use std::fs::read_to_string;
     use std::path::PathBuf;
 

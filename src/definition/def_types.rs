@@ -336,7 +336,7 @@ impl Definition for GenericDec {
             ..CompletionItem::default()
         }
     }
-    fn dot_completion(&self, scope_tree: &GenericScope) -> Vec<CompletionItem> {
+    fn dot_completion(&self, _: &GenericScope) -> Vec<CompletionItem> {
         Vec::new()
     }
 }
@@ -403,7 +403,7 @@ impl Definition for PackageImport {
             ..CompletionItem::default()
         }
     }
-    fn dot_completion(&self, scope_tree: &GenericScope) -> Vec<CompletionItem> {
+    fn dot_completion(&self, _: &GenericScope) -> Vec<CompletionItem> {
         Vec::new()
     }
 }
@@ -474,7 +474,7 @@ impl Definition for SubDec {
             ..CompletionItem::default()
         }
     }
-    fn dot_completion(&self, scope_tree: &GenericScope) -> Vec<CompletionItem> {
+    fn dot_completion(&self, _: &GenericScope) -> Vec<CompletionItem> {
         Vec::new()
     }
 }
@@ -556,7 +556,7 @@ impl Definition for ModportDec {
             ..CompletionItem::default()
         }
     }
-    fn dot_completion(&self, scope_tree: &GenericScope) -> Vec<CompletionItem> {
+    fn dot_completion(&self, _: &GenericScope) -> Vec<CompletionItem> {
         self.ports.iter().map(|x| x.completion()).collect()
     }
 }

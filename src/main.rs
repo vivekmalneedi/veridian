@@ -18,7 +18,7 @@ struct Opt {}
 
 #[tokio::main]
 async fn main() {
-    let opt = Opt::from_args();
+    let _ = Opt::from_args();
     flexi_logger::Logger::with_str("info").start().unwrap();
     info!("starting LSP server");
 

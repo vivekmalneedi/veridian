@@ -1,22 +1,14 @@
-use crate::definition::Definition;
 use crate::server::LSPServer;
 use crate::sources::LSPSupport;
-use log::info;
 use ropey::RopeSlice;
-use std::collections::HashSet;
-use std::str;
-use std::time::Instant;
-use sv_parser::*;
 use tower_lsp::lsp_types::*;
 
 pub mod keyword;
-use keyword::*;
 
 impl LSPServer {
     pub fn completion(&self, params: CompletionParams) -> Option<CompletionResponse> {
         let doc = params.text_document_position;
         let file_id = self.srcs.get_id(&doc.text_document.uri).to_owned();
-        let now = Instant::now();
         self.srcs.wait_parse_ready(file_id, false);
         // eprintln!("comp wait parse: {}", now.elapsed().as_millis());
         let file = self.srcs.get_file(file_id)?;
@@ -112,7 +104,6 @@ fn get_completion_token(line: RopeSlice, pos: Position) -> String {
 mod tests {
     use super::*;
     use ropey::Rope;
-    use std::{thread, time};
 
     #[test]
     fn test_get_completion_token() {
@@ -408,9 +399,9 @@ endmodule
         server.did_open(open_params);
         let fid = server.srcs.get_id(&uri);
         server.srcs.wait_parse_ready(fid, true);
+        /*
         let file = server.srcs.get_file(fid).unwrap();
         let file = file.read().unwrap();
-        /*
         eprintln!("{}", file.syntax_tree.as_ref().unwrap());
         eprintln!(
             "{:#?}",

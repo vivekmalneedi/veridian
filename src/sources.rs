@@ -1,23 +1,20 @@
 use crate::definition::def_types::*;
-use crate::definition::{get_scopes, Definition};
+use crate::definition::get_scopes;
 use crate::diagnostics::{get_diagnostics, is_hidden};
-use crate::server::{LSPServer, ProjectConfig};
-use log::info;
+use crate::server::LSPServer;
 use pathdiff::diff_paths;
 use ropey::{Rope, RopeSlice};
 use std::collections::HashMap;
-use std::collections::HashSet;
 use std::env::current_dir;
 use std::fs;
-use std::io;
 use std::ops::Range as StdRange;
 use std::path::PathBuf;
-use std::sync::{mpsc, Arc, Condvar, Mutex, RwLock};
-use std::{thread, time::Instant};
+use std::sync::{Arc, Condvar, Mutex, RwLock};
+use std::thread;
 use sv_parser::*;
 use thread::JoinHandle;
 use tower_lsp::lsp_types::*;
-use walkdir::{DirEntry, WalkDir};
+use walkdir::WalkDir;
 
 impl LSPServer {
     pub fn did_open(&self, params: DidOpenTextDocumentParams) -> PublishDiagnosticsParams {
@@ -42,11 +39,9 @@ impl LSPServer {
     }
 
     pub fn did_change(&self, params: DidChangeTextDocumentParams) {
-        let now = Instant::now();
         let file_id = self.srcs.get_id(&params.text_document.uri);
         let file = self.srcs.get_file(file_id).unwrap();
         let mut file = file.write().unwrap();
-        // eprintln!("change write: {}", now.elapsed().as_millis());
         for change in params.content_changes {
             if change.range.is_none() {
                 file.text = Rope::from_str(&change.text);
@@ -59,11 +54,9 @@ impl LSPServer {
             file.version = version;
         }
         drop(file);
-        // eprintln!("change apply: {}", now.elapsed().as_millis());
         // invalidate syntaxtree and wake parse thread
         let meta_data = self.srcs.get_meta_data(file_id).unwrap();
         let (lock, cvar) = &*meta_data.read().unwrap().valid_parse;
-        // eprintln!("change read: {}", now.elapsed().as_millis());
         let mut valid = lock.lock().unwrap();
         *valid = false;
         cvar.notify_all();
@@ -180,7 +173,7 @@ impl Sources {
         let parse_handle = thread::spawn(move || {
             let (lock, cvar) = &*valid_parse2;
             loop {
-                let now = Instant::now();
+                // let now = Instant::now();
                 let file = source_handle.read().unwrap();
                 let text = file.text.clone();
                 let uri = &file.uri.clone();
@@ -320,7 +313,6 @@ pub fn parse(
     let mut parse_iterations = 1;
     let mut i = 0;
     let mut includes: Vec<PathBuf> = inc_paths.to_vec();
-    let before = Instant::now();
     let mut reverted_change = false;
     let mut text = doc.clone();
 
@@ -362,7 +354,7 @@ pub fn parse(
                     },
 
                     sv_parser::Error::Include { source: x } => {
-                        if let sv_parser::Error::File { source: y, path: z } = *x {
+                        if let sv_parser::Error::File { source: _, path: z } = *x {
                             let mut inc_path_given = z.clone();
                             let mut uri_path = uri.to_file_path().unwrap();
                             uri_path.pop();
@@ -547,11 +539,9 @@ endmodule"#;
         };
         server.did_open(open_params);
         let fid = server.srcs.get_id(&uri);
-        let file = server.srcs.get_file(fid).unwrap();
 
         server.srcs.wait_parse_ready(fid, true);
 
-        let file = file.read().unwrap();
         assert!(server
             .srcs
             .scope_tree

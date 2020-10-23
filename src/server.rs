@@ -1,14 +1,12 @@
 use crate::sources::*;
 
 use crate::completion::keyword::*;
-use log::info;
 use path_clean::PathClean;
 use serde::{Deserialize, Serialize};
 use std::env::current_dir;
 use std::fs::File;
 use std::io::Read;
 use std::path::PathBuf;
-use std::sync::{Arc, RwLock};
 use tower_lsp::jsonrpc::Result;
 use tower_lsp::lsp_types::*;
 use tower_lsp::{Client, LanguageServer};
@@ -61,7 +59,7 @@ fn read_config(root_uri: Option<Url>) -> anyhow::Result<ProjectConfig> {
     let path = root_uri
         .ok_or_else(|| anyhow::anyhow!("config error"))?
         .to_file_path()
-        .map_err(|x| anyhow::anyhow!("config error"))?;
+        .map_err(|_| anyhow::anyhow!("config error"))?;
     let mut config: Option<PathBuf> = None;
     for dir in path.ancestors() {
         let config_path = dir.join("veridian.yaml");
