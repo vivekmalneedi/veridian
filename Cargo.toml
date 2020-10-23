@@ -21,3 +21,4 @@ anyhow = "1.0.33"
 serde = "1.0.117"
 
 veridian_slang = { path = "veridian-slang" }
+structopt = "0.3.20"

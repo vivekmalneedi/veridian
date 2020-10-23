@@ -94,7 +94,7 @@ macro_rules! match_until_leave {
                     scopes.append(&mut result.0);
                 }
                 NodeEvent::Leave(node) => match node {
-                    $node(n) => {
+                    $node(_) => {
                         break;
                     }
                     _ => {}

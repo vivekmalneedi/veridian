@@ -1,9 +1,8 @@
 #![recursion_limit = "256"]
-#![allow(unused_imports)]
-#![allow(unused_variables)]
 
 use log::info;
 use std::sync::Arc;
+use structopt::StructOpt;
 use tower_lsp::{LspService, Server};
 
 mod completion;
@@ -13,8 +12,13 @@ mod server;
 mod sources;
 use server::Backend;
 
+#[derive(StructOpt, Debug)]
+#[structopt(name = "veridian")]
+struct Opt {}
+
 #[tokio::main]
 async fn main() {
+    let opt = Opt::from_args();
     flexi_logger::Logger::with_str("info").start().unwrap();
     info!("starting LSP server");
 
