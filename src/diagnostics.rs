@@ -11,7 +11,11 @@ pub fn get_diagnostics(uri: Url, files: Vec<Url>) -> PublishDiagnosticsParams {
     if !(cfg!(test) && (uri.to_string().starts_with("file:///test"))) {
         let paths = get_paths(files);
         // eprintln!("{:#?}", paths);
+        eprintln!("there");
+        dbg!(&paths);
         let diagnostics = slang_compile(paths).unwrap();
+        eprintln!("here");
+        dbg!(&diagnostics);
         // eprintln!("{}", diagnostics);
         PublishDiagnosticsParams {
             uri: uri.clone(),
@@ -28,6 +32,7 @@ pub fn get_diagnostics(uri: Url, files: Vec<Url>) -> PublishDiagnosticsParams {
 }
 
 fn get_paths(files: Vec<Url>) -> Vec<PathBuf> {
+    // check recursively from working dir for source files
     let mut paths: Vec<PathBuf> = Vec::new();
     let walker = WalkDir::new(".").into_iter();
     for entry in walker.filter_entry(|e| !is_hidden(e)) {
@@ -41,23 +46,25 @@ fn get_paths(files: Vec<Url>) -> Vec<PathBuf> {
         }
     }
 
+    // check recursively from opened files for source files
     for file in files {
-        let path = file.to_file_path().unwrap();
-        if !paths.contains(&path) {
-            let walker = WalkDir::new(path.parent().unwrap()).into_iter();
-            for entry in walker.filter_entry(|e| !is_hidden(e)) {
-                if let Ok(entry) = entry {
-                    if entry.file_type().is_file() && entry.path().extension().is_some() {
-                        let extension = entry.path().extension().unwrap();
+        if let Ok(path) = file.to_file_path() {
+            if !paths.contains(&path) {
+                let walker = WalkDir::new(path.parent().unwrap()).into_iter();
+                for entry in walker.filter_entry(|e| !is_hidden(e)) {
+                    if let Ok(entry) = entry {
+                        if entry.file_type().is_file() && entry.path().extension().is_some() {
+                            let extension = entry.path().extension().unwrap();
 
-                        if extension == "sv"
-                            || extension == "svh"
-                            || extension == "v"
-                            || extension == "vh"
-                        {
-                            let entry_path = entry.path().to_path_buf();
-                            if !paths.contains(&entry_path) {
-                                paths.push(entry_path);
+                            if extension == "sv"
+                                || extension == "svh"
+                                || extension == "v"
+                                || extension == "vh"
+                            {
+                                let entry_path = entry.path().to_path_buf();
+                                if !paths.contains(&entry_path) {
+                                    paths.push(entry_path);
+                                }
                             }
                         }
                     }
@@ -65,6 +72,7 @@ fn get_paths(files: Vec<Url>) -> Vec<PathBuf> {
             }
         }
     }
+    dbg!(&paths);
     paths
 }
 
@@ -136,5 +144,11 @@ mod tests {
             None,
         );
         assert_eq!(get_diagnostics(uri.clone(), vec![uri]), expected);
+    }
+
+    #[test]
+    fn test_unsaved_file() {
+        let uri = Url::parse("file://test.sv").unwrap();
+        get_diagnostics(uri.clone(), vec![uri]);
     }
 }

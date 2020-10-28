@@ -7,15 +7,24 @@ mod wrapper;
 use wrapper::*;
 
 pub fn slang_compile(paths: Vec<PathBuf>) -> Result<String, Box<dyn error::Error>> {
+    if paths.is_empty() {
+        return Ok(String::new());
+    }
+
+    // convert pathbufs to strings
     let mut paths_str: Vec<String> = Vec::new();
     for path in paths {
         paths_str.push(path.to_str().unwrap().to_owned());
     }
+    // convert strings to cstrings
     let mut paths_c: Vec<CString> = Vec::new();
     for path in paths_str {
         paths_c.push(CString::new(path)?);
     }
+    // convert cstrings to char* pointers
     let mut paths_ptr: Vec<*const i8> = paths_c.iter().map(|x| x.as_ptr()).collect();
+
+    // compile with slang, and convert report from char* to string
     let report_raw = unsafe { compile_paths(paths_ptr.as_mut_ptr(), paths_ptr.len() as u32) };
     let report: &CStr = unsafe { CStr::from_ptr(report_raw) };
     let result = report.to_str()?.to_owned();

@@ -1,11 +1,13 @@
 # veridian
 
+![build](https://github.com/vivekmalneedi/veridian/workflows/CI/badge.svg)
+
 A WIP SystemVerilog Language Server
 
 ## Installation
 
-* For formatting support install `verible-verilog-format` from [verible](https://github.com/google/verible)
-* Install dependencies: C++17 compatible compiler
+- For formatting support install `verible-verilog-format` from [verible](https://github.com/google/verible)
+- Install dependencies: C++17 compatible compiler
 
 ```
 # clone the repo
