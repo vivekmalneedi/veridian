@@ -15,7 +15,7 @@ impl LSPServer {
         let file = file.read().ok()?;
         // eprintln!("comp read: {}", now.elapsed().as_millis());
         let token = get_completion_token(file.text.line(doc.position.line as usize), doc.position);
-        eprintln!("token: {}", token);
+        // eprintln!("token: {}", token);
         let response = match params.context {
             Some(context) => match context.trigger_kind {
                 CompletionTriggerKind::TriggerCharacter => {

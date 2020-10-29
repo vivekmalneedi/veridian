@@ -73,9 +73,10 @@ pub trait Scope: std::fmt::Debug + Definition + Sync + Send {
         url: &Url,
         scope_tree: &GenericScope,
     ) -> Vec<CompletionItem> {
-        eprintln!("dot entering: {}, token: {}", self.ident(), token);
-        eprintln!("{:?}", self.scopes());
+        // eprintln!("dot entering: {}, token: {}", self.ident(), token);
+        // eprintln!("{:?}", self.scopes());
         for scope in self.scopes() {
+            /*
             eprintln!(
                 "{}, {}, {}, {}",
                 scope.ident(),
@@ -83,6 +84,7 @@ pub trait Scope: std::fmt::Debug + Definition + Sync + Send {
                 scope.start(),
                 scope.end()
             );
+            */
             if &scope.url() == url && scope.start() <= byte_idx && byte_idx <= scope.end() {
                 eprintln!("checking dot completion: {}", scope.ident());
                 let result = scope.get_dot_completion(token, byte_idx, url, scope_tree);
@@ -92,15 +94,15 @@ pub trait Scope: std::fmt::Debug + Definition + Sync + Send {
             }
         }
         for def in self.defs() {
-            eprintln!("def: {:?}", def);
+            // eprintln!("def: {:?}", def);
             if def.starts_with(token) {
-                eprintln!("complete def: {:?}", def);
+                // eprintln!("complete def: {:?}", def);
                 return def.dot_completion(scope_tree);
             }
         }
         for scope in self.scopes() {
             if scope.starts_with(token) {
-                eprintln!("found dot-completion scope: {}", scope.ident());
+                // eprintln!("found dot-completion scope: {}", scope.ident());
                 return scope.dot_completion(scope_tree);
             }
         }

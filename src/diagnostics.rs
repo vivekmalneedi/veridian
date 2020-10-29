@@ -10,13 +10,7 @@ use walkdir::{DirEntry, WalkDir};
 pub fn get_diagnostics(uri: Url, files: Vec<Url>) -> PublishDiagnosticsParams {
     if !(cfg!(test) && (uri.to_string().starts_with("file:///test"))) {
         let paths = get_paths(files);
-        // eprintln!("{:#?}", paths);
-        eprintln!("there");
-        dbg!(&paths);
         let diagnostics = slang_compile(paths).unwrap();
-        eprintln!("here");
-        dbg!(&diagnostics);
-        // eprintln!("{}", diagnostics);
         PublishDiagnosticsParams {
             uri: uri.clone(),
             diagnostics: parse_report(uri, diagnostics),
@@ -72,7 +66,6 @@ fn get_paths(files: Vec<Url>) -> Vec<PathBuf> {
             }
         }
     }
-    dbg!(&paths);
     paths
 }
 

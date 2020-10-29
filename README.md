@@ -7,17 +7,13 @@ A WIP SystemVerilog Language Server
 ## Installation
 
 - For formatting support install `verible-verilog-format` from [verible](https://github.com/google/verible)
-- Install dependencies: C++17 compatible compiler
+- Install dependencies: Rust toolchain, C++17 compatible compiler
 
 ```
 # clone the repo
-git clone --recurse-submodules https://github.com/vivekmalneedi/veridian.git
-# enter the folder
-cd veridian
-# build veridian
-cargo build --release
-# put veridian on your path
-sudo cp target/release/veridian /usr/local/bin
+git clone https://github.com/vivekmalneedi/veridian.git
+# install using cargo
+cargo install --path veridian
 ```
 
 ## Usage
