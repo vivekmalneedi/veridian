@@ -1,19 +1,70 @@
+#[cfg(any(feature = "slang", test))]
 use path_clean::PathClean;
+use regex::Regex;
+use serde::Deserialize;
+use serde_xml_rs::from_reader;
+#[cfg(any(feature = "slang", test))]
 use std::env::current_dir;
+use std::fs;
+#[cfg(any(feature = "slang", test))]
 use std::io;
+#[cfg(any(feature = "slang", test))]
 use std::path::Path;
 use std::path::PathBuf;
+use std::process::Command;
+use tempdir::TempDir;
 use tower_lsp::lsp_types::*;
+#[cfg(feature = "slang")]
 use veridian_slang::slang_compile;
 use walkdir::{DirEntry, WalkDir};
 
-pub fn get_diagnostics(uri: Url, files: Vec<Url>) -> PublishDiagnosticsParams {
+#[cfg(feature = "slang")]
+pub fn get_diagnostics(uri: Url, files: Vec<Url>, hal: bool) -> PublishDiagnosticsParams {
     if !(cfg!(test) && (uri.to_string().starts_with("file:///test"))) {
         let paths = get_paths(files);
-        let diagnostics = slang_compile(paths).unwrap();
+        let diagnostics = {
+            if hal {
+                match hal_lint(&uri, paths) {
+                    Some(diags) => diags,
+                    None => Vec::new(),
+                }
+            } else if cfg!(feature = "slang") {
+                parse_report(uri.clone(), slang_compile(paths).unwrap())
+            } else {
+                Vec::new()
+            }
+        };
         PublishDiagnosticsParams {
-            uri: uri.clone(),
-            diagnostics: parse_report(uri, diagnostics),
+            uri,
+            diagnostics,
+            version: None,
+        }
+    } else {
+        PublishDiagnosticsParams {
+            uri,
+            diagnostics: Vec::new(),
+            version: None,
+        }
+    }
+}
+
+#[cfg(not(feature = "slang"))]
+pub fn get_diagnostics(uri: Url, files: Vec<Url>, hal: bool) -> PublishDiagnosticsParams {
+    if !(cfg!(test) && (uri.to_string().starts_with("file:///test"))) {
+        let paths = get_paths(files);
+        let diagnostics = {
+            if hal {
+                match hal_lint(&uri, paths) {
+                    Some(diags) => diags,
+                    None => Vec::new(),
+                }
+            } else {
+                Vec::new()
+            }
+        };
+        PublishDiagnosticsParams {
+            uri,
+            diagnostics,
             version: None,
         }
     } else {
@@ -77,6 +128,7 @@ pub fn is_hidden(entry: &DirEntry) -> bool {
         .unwrap_or(false)
 }
 
+#[cfg(feature = "slang")]
 fn parse_report(uri: Url, report: String) -> Vec<Diagnostic> {
     let mut diagnostics: Vec<Diagnostic> = Vec::new();
     for line in report.lines() {
@@ -100,6 +152,7 @@ fn parse_report(uri: Url, report: String) -> Vec<Diagnostic> {
     diagnostics
 }
 
+#[cfg(feature = "slang")]
 fn slang_severity(severity: &str) -> Option<DiagnosticSeverity> {
     match severity {
         " error" => Some(DiagnosticSeverity::Error),
@@ -109,10 +162,107 @@ fn slang_severity(severity: &str) -> Option<DiagnosticSeverity> {
     }
 }
 
+#[cfg(any(feature = "slang", test))]
 // convert relative path to absolute
 fn absolute_path(path_str: &str) -> io::Result<PathBuf> {
     let path = Path::new(path_str);
     Ok(current_dir().unwrap().join(path).clean())
+}
+
+#[derive(Debug, Deserialize)]
+enum HalSeverity {
+    #[serde(rename = "fatal")]
+    Fatal,
+    #[serde(rename = "error")]
+    Error,
+    #[serde(rename = "warning")]
+    Warning,
+    #[serde(rename = "note")]
+    Note,
+    #[serde(rename = "info")]
+    Info,
+}
+
+impl From<HalSeverity> for DiagnosticSeverity {
+    fn from(severity: HalSeverity) -> Self {
+        match severity {
+            HalSeverity::Fatal => DiagnosticSeverity::Error,
+            HalSeverity::Error => DiagnosticSeverity::Error,
+            HalSeverity::Warning => DiagnosticSeverity::Warning,
+            HalSeverity::Note => DiagnosticSeverity::Information,
+            HalSeverity::Info => DiagnosticSeverity::Information,
+        }
+    }
+}
+
+#[derive(Debug, Deserialize)]
+struct HalMessage {
+    id: String,
+    severity: HalSeverity,
+    info: String,
+    source_line: String,
+    file_info: String,
+    help: String,
+    object: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct HalMessageFile {
+    tool: String,
+    version: String,
+    timestamp: String,
+    #[serde(rename = "message", default)]
+    messages: Vec<HalMessage>,
+}
+
+fn hal_lint(uri: &Url, paths: Vec<PathBuf>) -> Option<Vec<Diagnostic>> {
+    let mut path_strs = Vec::new();
+    for path in paths {
+        if let Some(path_str) = path.to_str() {
+            path_strs.push(path_str.to_string());
+        }
+    }
+    let tmp_dir = TempDir::new("veridian").ok()?;
+    Command::new("hal")
+        .current_dir(tmp_dir.path())
+        .arg("-64BIT")
+        .arg("-SV")
+        .arg("-NOSTDOUT")
+        .arg("-NO_DESIGN_FACTS")
+        .arg("-XMLFILE")
+        .arg("hal.xml")
+        .args(path_strs)
+        .spawn()
+        .expect("hal call failed");
+    let report = fs::read_to_string(tmp_dir.path().join("hal.xml")).ok()?;
+    let hal_report: HalMessageFile = from_reader(report.as_bytes()).ok()?;
+    let mut diags: Vec<Diagnostic> = Vec::new();
+    let re = Regex::new(r"^(?P<path>[^\s]+) (?P<line>[0-9]+) (?P<col>[0-9]+)$").ok()?;
+    for message in hal_report.messages {
+        let mut file_info = message.file_info[2..].trim_end_matches('}').to_string();
+        file_info.retain(|x| x != '"' && x != '\\');
+        if let Some(caps) = re.captures(&file_info) {
+            if let Ok(file_path) = Url::from_file_path(&caps["path"]) {
+                if let Ok(line) = &caps["line"].parse::<u64>() {
+                    if let Ok(col) = &caps["col"].parse::<u64>() {
+                        if uri == &file_path {
+                            let pos = Position::new(*line, *col);
+                            diags.push(Diagnostic {
+                                range: Range::new(pos, pos),
+                                severity: Some(message.severity.into()),
+                                code: Some(NumberOrString::String(message.id)),
+                                source: Some("HAL".to_string()),
+                                message: message.info,
+                                related_information: None,
+                                tags: None,
+                            })
+                        }
+                    }
+                }
+            }
+        }
+    }
+    Some(diags)
 }
 
 #[cfg(test)]
@@ -136,12 +286,25 @@ mod tests {
             )],
             None,
         );
-        assert_eq!(get_diagnostics(uri.clone(), vec![uri]), expected);
+        assert_eq!(get_diagnostics(uri.clone(), vec![uri], false), expected);
     }
 
     #[test]
     fn test_unsaved_file() {
         let uri = Url::parse("file://test.sv").unwrap();
-        get_diagnostics(uri.clone(), vec![uri]);
+        get_diagnostics(uri.clone(), vec![uri], false);
     }
+
+    // There's not really a good way to test the HAL linter
+    // #[test]
+    // fn test_hal_lint() {
+    // let uri =
+    // Url::from_file_path(absolute_path("test_data/diag/diag_test.sv").unwrap()).unwrap();
+    // let paths = vec![
+    // absolute_path("test_data/diag/diag_test.sv").unwrap(),
+    // absolute_path("test_data/simple_bus.svh").unwrap(),
+    // ];
+    // dbg!(hal_lint(&uri, paths));
+    // panic!();
+    // }
 }

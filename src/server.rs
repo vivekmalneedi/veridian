@@ -18,6 +18,7 @@ pub struct LSPServer {
     pub sys_tasks: Vec<CompletionItem>,
     pub directives: Vec<CompletionItem>,
     pub format: bool,
+    pub hal: bool,
 }
 
 impl LSPServer {
@@ -28,6 +29,7 @@ impl LSPServer {
             sys_tasks: other_completions(SYS_TASKS),
             directives: other_completions(DIRECTIVES),
             format: which("verible-verilog-format").is_ok(),
+            hal: which("hal").is_ok(),
         }
     }
 }

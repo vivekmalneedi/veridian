@@ -4,7 +4,8 @@ version = "0.1.0"
 authors = ["Vivek Malneedi <vivekmalneedi@gmail.com>"]
 edition = "2018"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[features]
+slang = ["veridian_slang"]
 
 [dependencies]
 sv-parser = "0.8.2"
@@ -20,6 +21,11 @@ serde_yaml = "0.8.13"
 anyhow = "1.0.33"
 serde = "1.0.117"
 which = "4.0.2"
-
-veridian_slang = { path = "veridian-slang" }
+tempdir = "0.3.7"
+serde-xml-rs = "0.4.0"
+regex = "1.4.2"
 structopt = "0.3.20"
+
+[dependencies.veridian_slang]
+optional = true
+path = "veridian-slang"
