@@ -17,8 +17,7 @@ pub struct LSPServer {
     pub key_comps: Vec<CompletionItem>,
     pub sys_tasks: Vec<CompletionItem>,
     pub directives: Vec<CompletionItem>,
-    pub format: bool,
-    pub hal: bool,
+    pub conf: ProjectConfig,
 }
 
 impl LSPServer {
@@ -28,8 +27,7 @@ impl LSPServer {
             key_comps: keyword_completions(KEYWORDS),
             sys_tasks: other_completions(SYS_TASKS),
             directives: other_completions(DIRECTIVES),
-            format: which("verible-verilog-format").is_ok(),
-            hal: which("hal").is_ok(),
+            conf: ProjectConfig::default(),
         }
     }
 }
@@ -58,6 +56,19 @@ impl Backend {
 pub struct ProjectConfig {
     pub include_dirs: Vec<String>,
     pub source_dirs: Vec<String>,
+    pub format: bool,
+    pub hal: bool,
+}
+
+impl Default for ProjectConfig {
+    fn default() -> Self {
+        ProjectConfig {
+            include_dirs: Vec::new(),
+            source_dirs: Vec::new(),
+            format: which("verible-verilog-format").is_ok(),
+            hal: which("hal").is_ok(),
+        }
+    }
 }
 
 fn read_config(root_uri: Option<Url>) -> anyhow::Result<ProjectConfig> {

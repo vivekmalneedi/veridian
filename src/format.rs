@@ -12,7 +12,7 @@ impl LSPServer {
         let file = self.srcs.get_file(file_id)?;
         let file = file.read().ok()?;
 
-        if self.format {
+        if self.conf.format {
             Some(vec![TextEdit::new(
                 Range::new(
                     file.text.char_to_pos(0),
@@ -32,7 +32,7 @@ impl LSPServer {
         let file = self.srcs.get_file(file_id)?;
         let file = file.read().ok()?;
 
-        if self.format {
+        if self.conf.format {
             Some(vec![TextEdit::new(
                 file.text.char_range_to_range(0..file.text.len_chars()),
                 format_document(&file.text, Some(params.range))?,

@@ -223,8 +223,8 @@ fn hal_lint(uri: &Url, paths: Vec<PathBuf>) -> Option<Vec<Diagnostic>> {
         }
     }
     let tmp_dir = TempDir::new("veridian").ok()?;
+    dbg!(tmp_dir.path());
     Command::new("hal")
-        .current_dir(tmp_dir.path())
         .arg("-64BIT")
         .arg("-SV")
         .arg("-NOSTDOUT")
@@ -234,7 +234,8 @@ fn hal_lint(uri: &Url, paths: Vec<PathBuf>) -> Option<Vec<Diagnostic>> {
         .args(path_strs)
         .spawn()
         .expect("hal call failed");
-    let report = fs::read_to_string(tmp_dir.path().join("hal.xml")).ok()?;
+    let report = fs::read_to_string("hal.xml").ok()?;
+    dbg!(&report);
     let hal_report: HalMessageFile = from_reader(report.as_bytes()).ok()?;
     let mut diags: Vec<Diagnostic> = Vec::new();
     let re = Regex::new(r"^(?P<path>[^\s]+) (?P<line>[0-9]+) (?P<col>[0-9]+)$").ok()?;
