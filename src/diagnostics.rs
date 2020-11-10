@@ -1,18 +1,14 @@
-#[cfg(any(feature = "slang", test))]
 use path_clean::PathClean;
 use regex::Regex;
 use serde::Deserialize;
 use serde_xml_rs::from_reader;
-#[cfg(any(feature = "slang", test))]
 use std::env::current_dir;
 use std::fs;
-#[cfg(any(feature = "slang", test))]
 use std::io;
-#[cfg(any(feature = "slang", test))]
 use std::path::Path;
 use std::path::PathBuf;
 use std::process::Command;
-use tempdir::TempDir;
+// use tempdir::TempDir;
 use tower_lsp::lsp_types::*;
 #[cfg(feature = "slang")]
 use veridian_slang::slang_compile;
@@ -162,7 +158,6 @@ fn slang_severity(severity: &str) -> Option<DiagnosticSeverity> {
     }
 }
 
-#[cfg(any(feature = "slang", test))]
 // convert relative path to absolute
 fn absolute_path(path_str: &str) -> io::Result<PathBuf> {
     let path = Path::new(path_str);
@@ -215,15 +210,17 @@ struct HalMessageFile {
     messages: Vec<HalMessage>,
 }
 
+// Lint using the Cadence Incisive HDL analysis technology (HAL)
 fn hal_lint(uri: &Url, paths: Vec<PathBuf>) -> Option<Vec<Diagnostic>> {
+    // get all file paths
     let mut path_strs = Vec::new();
     for path in paths {
         if let Some(path_str) = path.to_str() {
             path_strs.push(path_str.to_string());
         }
     }
-    let tmp_dir = TempDir::new("veridian").ok()?;
-    dbg!(tmp_dir.path());
+    // using temp dir breaks hal
+    // let tmp_dir = TempDir::new("veridian").ok()?;
     Command::new("hal")
         .arg("-64BIT")
         .arg("-SV")
@@ -234,20 +231,24 @@ fn hal_lint(uri: &Url, paths: Vec<PathBuf>) -> Option<Vec<Diagnostic>> {
         .args(path_strs)
         .spawn()
         .expect("hal call failed");
+
+    // retreive and parse xml report
     let report = fs::read_to_string("hal.xml").ok()?;
-    dbg!(&report);
     let hal_report: HalMessageFile = from_reader(report.as_bytes()).ok()?;
+
     let mut diags: Vec<Diagnostic> = Vec::new();
+    // regex to extract path and line/col from file_info field
     let re = Regex::new(r"^(?P<path>[^\s]+) (?P<line>[0-9]+) (?P<col>[0-9]+)$").ok()?;
     for message in hal_report.messages {
+        // preprocess file_info
         let mut file_info = message.file_info[2..].trim_end_matches('}').to_string();
         file_info.retain(|x| x != '"' && x != '\\');
         if let Some(caps) = re.captures(&file_info) {
-            if let Ok(file_path) = Url::from_file_path(&caps["path"]) {
+            if let Ok(file_path) = Url::from_file_path(absolute_path(&caps["path"]).ok()?) {
                 if let Ok(line) = &caps["line"].parse::<u64>() {
                     if let Ok(col) = &caps["col"].parse::<u64>() {
                         if uri == &file_path {
-                            let pos = Position::new(*line, *col);
+                            let pos = Position::new(*line - 1, *col);
                             diags.push(Diagnostic {
                                 range: Range::new(pos, pos),
                                 severity: Some(message.severity.into()),
