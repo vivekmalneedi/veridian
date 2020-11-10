@@ -6,13 +6,27 @@ A WIP SystemVerilog Language Server
 
 ## Installation
 
-- For formatting support install `verible-verilog-format` from [verible](https://github.com/google/verible)
-- Install dependencies: Rust toolchain, C++17 compatible compiler
+- Veridian supports these optional external tools
+  - For formatting support install `verible-verilog-format` from [verible](https://github.com/google/verible)
+  - Cadence Incisive HAL linter
+
+### Install from Release
+
+- Download the latest release for your OS from the [releases page](https://github.com/vivekmalneedi/veridian/releases)
+  - The nightly release contains the last successful build, and is not guaranteed to be stable
+  - The ubuntu build also includes [slang](https://github.com/MikePopoloski/slang) for linting
+
+### Install from Source
+
+- Build dependencies: Rust toolchain
+- optional: C++17 compatible compiler (for linting with slang)
 
 ```
 # clone the repo
 git clone https://github.com/vivekmalneedi/veridian.git
-# install using cargo
+# install with slang feature, if C++17 compiler is available
+cargo install --path veridian --all-features
+# install if C++17 compiler is not available
 cargo install --path veridian
 ```
 
@@ -52,7 +66,7 @@ source_dirs:
 
 See the [LSP Specification](https://microsoft.github.io/language-server-protocol/specifications/specification-current/) for more details
 
-- diagnostics (using [slang](https://github.com/MikePopoloski/slang))
+- diagnostics (using [slang](https://github.com/MikePopoloski/slang) or hal)
 - completion
   - identifier completion
   - dot completion (partially implemented)

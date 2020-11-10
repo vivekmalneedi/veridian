@@ -88,8 +88,10 @@ jobs:
         with:
           tag_name: nightly
           release_name: nightly
-          body: release of last successful build
-          draft: true
+          body: |
+            This is an auto-generated release from the last successful build
+            This build is not guaranteed to be stable
+          draft: false
           prerelease: true
 
   build_ubuntu:
@@ -125,7 +127,8 @@ jobs:
       - name: Create archive
         run: |
           strip target/release/veridian
-          tar -czvf veridian-${{ matrix.os }}.tar.gz target/release/veridian
+          cp target/release/veridian .
+          tar -czvf veridian-ubuntu-20.04.tar.gz veridian
 
       - name: Upload assets
         id: upload-release-asset
@@ -134,8 +137,8 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ needs.publish.outputs.upload_url }}
-          asset_path: veridian-${{ matrix.os }}.tar.gz
-          asset_name: veridian-${{ matrix.os }}.tar.gz
+          asset_path: veridian-ubuntu-20.04.tar.gz
+          asset_name: veridian-ubuntu-20.04.tar.gz
           asset_content_type: application/gzip
 
   build_centos:
@@ -147,13 +150,6 @@ jobs:
     steps:
       - name: Checkout sources
         uses: actions/checkout@v2
-
-      - name: Install stable toolchain
-        uses: actions-rs/toolchain@v1
-        with:
-          profile: minimal
-          toolchain: stable
-          override: true
 
       - name: cache cargo dirs
         uses: actions/cache@v2
@@ -173,7 +169,8 @@ jobs:
       - name: Create archive
         run: |
           strip target/release/veridian
-          tar -czvf veridian-centos-7.tar.gz target/release/veridian
+          cp target/release/veridian .
+          tar -czvf veridian-centos-7.tar.gz veridian
 
       - name: Upload assets
         id: upload-release-asset
