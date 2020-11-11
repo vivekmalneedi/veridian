@@ -58,6 +58,8 @@ pub struct ProjectConfig {
     pub source_dirs: Vec<String>,
     pub format: bool,
     pub hal: bool,
+    pub verible_format_path: String,
+    pub hal_path: String,
 }
 
 impl Default for ProjectConfig {
@@ -65,8 +67,10 @@ impl Default for ProjectConfig {
         ProjectConfig {
             include_dirs: Vec::new(),
             source_dirs: Vec::new(),
-            format: which("verible-verilog-format").is_ok(),
-            hal: which("hal").is_ok(),
+            format: false,
+            hal: false,
+            verible_format_path: "verible-verilog-format".to_string(),
+            hal_path: "hal".to_string(),
         }
     }
 }
@@ -92,7 +96,10 @@ fn read_config(root_uri: Option<Url>) -> anyhow::Result<ProjectConfig> {
     let mut contents = String::new();
     File::open(config.ok_or_else(|| anyhow::anyhow!("config error"))?)?
         .read_to_string(&mut contents)?;
-    Ok(serde_yaml::from_str(&contents)?)
+    let mut config: ProjectConfig = serde_yaml::from_str(&contents)?;
+    config.hal = which(config.hal_path).is_ok();
+    config.format = which(config.verible_format_path).is_ok();
+    Ok(config)
 }
 
 // convert string path to absolute path

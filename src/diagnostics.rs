@@ -9,18 +9,19 @@ use std::path::Path;
 use std::path::PathBuf;
 use std::process::Command;
 // use tempdir::TempDir;
+use crate::server::ProjectConfig;
 use tower_lsp::lsp_types::*;
 #[cfg(feature = "slang")]
 use veridian_slang::slang_compile;
 use walkdir::{DirEntry, WalkDir};
 
 #[cfg(feature = "slang")]
-pub fn get_diagnostics(uri: Url, files: Vec<Url>, hal: bool) -> PublishDiagnosticsParams {
+pub fn get_diagnostics(uri: Url, files: Vec<Url>, conf: ProjectConfig) -> PublishDiagnosticsParams {
     if !(cfg!(test) && (uri.to_string().starts_with("file:///test"))) {
         let paths = get_paths(files);
         let diagnostics = {
             if hal {
-                match hal_lint(&uri, paths) {
+                match hal_lint(&uri, paths, &conf.hal_path) {
                     Some(diags) => diags,
                     None => Vec::new(),
                 }
@@ -45,12 +46,12 @@ pub fn get_diagnostics(uri: Url, files: Vec<Url>, hal: bool) -> PublishDiagnosti
 }
 
 #[cfg(not(feature = "slang"))]
-pub fn get_diagnostics(uri: Url, files: Vec<Url>, hal: bool) -> PublishDiagnosticsParams {
+pub fn get_diagnostics(uri: Url, files: Vec<Url>, conf: ProjectConfig) -> PublishDiagnosticsParams {
     if !(cfg!(test) && (uri.to_string().starts_with("file:///test"))) {
         let paths = get_paths(files);
         let diagnostics = {
-            if hal {
-                match hal_lint(&uri, paths) {
+            if conf.hal {
+                match hal_lint(&uri, paths, &conf.hal_path) {
                     Some(diags) => diags,
                     None => Vec::new(),
                 }
@@ -211,7 +212,7 @@ struct HalMessageFile {
 }
 
 // Lint using the Cadence Incisive HDL analysis technology (HAL)
-fn hal_lint(uri: &Url, paths: Vec<PathBuf>) -> Option<Vec<Diagnostic>> {
+fn hal_lint(uri: &Url, paths: Vec<PathBuf>, hal_path: &str) -> Option<Vec<Diagnostic>> {
     // get all file paths
     let mut path_strs = Vec::new();
     for path in paths {
@@ -221,7 +222,7 @@ fn hal_lint(uri: &Url, paths: Vec<PathBuf>) -> Option<Vec<Diagnostic>> {
     }
     // using temp dir breaks hal
     // let tmp_dir = TempDir::new("veridian").ok()?;
-    Command::new("hal")
+    Command::new(hal_path)
         .arg("-64BIT")
         .arg("-SV")
         .arg("-NOSTDOUT")
@@ -288,13 +289,16 @@ mod tests {
             )],
             None,
         );
-        assert_eq!(get_diagnostics(uri.clone(), vec![uri], false), expected);
+        assert_eq!(
+            get_diagnostics(uri.clone(), vec![uri], ProjectConfig::default()),
+            expected
+        );
     }
 
     #[test]
     fn test_unsaved_file() {
         let uri = Url::parse("file://test.sv").unwrap();
-        get_diagnostics(uri.clone(), vec![uri], false);
+        get_diagnostics(uri.clone(), vec![uri], ProjectConfig::default());
     }
 
     // There's not really a good way to test the HAL linter

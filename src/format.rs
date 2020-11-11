@@ -18,7 +18,7 @@ impl LSPServer {
                     file.text.char_to_pos(0),
                     file.text.char_to_pos(file.text.len_chars() - 1),
                 ),
-                format_document(&file.text, None)?,
+                format_document(&file.text, None, &self.conf.verible_format_path)?,
             )])
         } else {
             None
@@ -35,7 +35,11 @@ impl LSPServer {
         if self.conf.format {
             Some(vec![TextEdit::new(
                 file.text.char_range_to_range(0..file.text.len_chars()),
-                format_document(&file.text, Some(params.range))?,
+                format_document(
+                    &file.text,
+                    Some(params.range),
+                    &self.conf.verible_format_path,
+                )?,
             )])
         } else {
             None
@@ -43,8 +47,12 @@ impl LSPServer {
     }
 }
 
-pub fn format_document(rope: &Rope, range: Option<Range>) -> Option<String> {
-    let mut child = Command::new("verible-verilog-format");
+pub fn format_document(
+    rope: &Rope,
+    range: Option<Range>,
+    verible_format_path: &str,
+) -> Option<String> {
+    let mut child = Command::new(verible_format_path);
     child
         .stdin(Stdio::piped())
         .stderr(Stdio::piped())
@@ -69,6 +77,7 @@ pub fn format_document(rope: &Rope, range: Option<Range>) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::server::ProjectConfig;
     use which::which;
 
     #[test]
@@ -86,7 +95,10 @@ endmodule
 "#;
         let doc = Rope::from_str(&text);
         if which("verible-verilog-format").is_ok() {
-            assert_eq!(format_document(&doc, None).unwrap(), text_fixed.to_string());
+            assert_eq!(
+                format_document(&doc, None, &ProjectConfig::default().verible_format_path).unwrap(),
+                text_fixed.to_string()
+            );
         }
     }
 
@@ -123,7 +135,8 @@ endmodule
             assert_eq!(
                 format_document(
                     &doc,
-                    Some(Range::new(Position::new(0, 0), Position::new(4, 9)))
+                    Some(Range::new(Position::new(0, 0), Position::new(4, 9))),
+                    &ProjectConfig::default().verible_format_path
                 )
                 .unwrap(),
                 text_fixed.to_string()
