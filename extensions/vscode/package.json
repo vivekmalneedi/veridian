@@ -1,17 +1,28 @@
 {
-  "name": "veridian-client",
+  "name": "veridian",
   "description": "A client for the Veridian Language Server for SystemVerilog/Verilog",
   "author": "Vivek Malneedi",
   "publisher": "vivekmalneedi",
   "license": "MIT",
   "version": "0.1.0",
-  "categories": ["Programming", "Languages", "Snippets", "Linters"],
-  "keywords": ["SystemVerilog", "Verilog"],
+  "categories": [
+    "Programming",
+    "Languages",
+    "Snippets",
+    "Linters"
+  ],
+  "keywords": [
+    "SystemVerilog",
+    "Verilog"
+  ],
   "repository": {
     "type": "git",
     "url": "https://github.com/vivekmalneedi/veridian"
   },
-  "activationEvents": ["onLanguage:systemverilog", "onLanguage:verilog"],
+  "activationEvents": [
+    "onLanguage:systemverilog",
+    "onLanguage:verilog"
+  ],
   "main": "./out/extension",
   "scripts": {
     "vscode:prepublish": "npm run compile",
@@ -22,8 +33,17 @@
     "languages": [
       {
         "id": "systemverilog",
-        "extensions": [".sv", ".svh", ".v", ".vh"],
-        "aliases": ["SystemVerilog", "verilog", "Verilog"]
+        "extensions": [
+          ".sv",
+          ".svh",
+          ".v",
+          ".vh"
+        ],
+        "aliases": [
+          "SystemVerilog",
+          "verilog",
+          "Verilog"
+        ]
       }
     ],
     "grammars": [
@@ -35,7 +55,7 @@
     ],
     "configuration": {
       "type": "object",
-      "title": "veridian-client",
+      "title": "veridian",
       "properties": {
         "VeridianClient.maxNumberOfProblems": {
           "scope": "resource",
@@ -46,7 +66,11 @@
         "VeridianClient.trace.server": {
           "scope": "window",
           "type": "string",
-          "enum": ["off", "messages", "verbose"],
+          "enum": [
+            "off",
+            "messages",
+            "verbose"
+          ],
           "default": "off",
           "description": "Traces the communication between VS Code and the language server."
         }
