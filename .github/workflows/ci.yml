@@ -3,15 +3,163 @@ on: [push, pull_request]
 name: CI
 
 jobs:
+  test:
+    name: Test Suite
+    runs-on: ubuntu-20.04
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v2
+        with:
+          submodules: true
+
+      - name: Install stable toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: stable
+          override: true
+
+      - name: cache cargo dirs
+        uses: actions/cache@v2
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Run cargo test
+        uses: actions-rs/cargo@v1
+        with:
+          command: test
+          args: --all-features
+
+  lints:
+    name: Lints
+    runs-on: ubuntu-20.04
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v2
+        with:
+          submodules: true
+
+      - name: Install stable toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: stable
+          override: true
+          components: rustfmt, clippy
+
+      - name: cache cargo dirs
+        uses: actions/cache@v2
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Run cargo fmt
+        uses: actions-rs/cargo@v1
+        with:
+          command: fmt
+          args: --all -- --check
+
+      - name: Run cargo clippy
+        uses: actions-rs/cargo@v1
+        with:
+          command: clippy
+          args: --all-features -- -D warnings
+
+  build_ubuntu:
+    name: Build Ubuntu
+    needs: test
+    runs-on: ubuntu-20.04
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v2
+
+      - name: Install stable toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: stable
+          override: true
+
+      - name: cache cargo dirs
+        uses: actions/cache@v2
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Run cargo build
+        uses: actions-rs/cargo@v1
+        with:
+          command: build
+          args: --all-features --release
+
+      - name: Create archive
+        run: |
+          strip target/release/veridian
+          cp target/release/veridian .
+          tar -czvf veridian-ubuntu-20.04.tar.gz veridian
+
+      - uses: actions/upload-artifact@v2
+        with:
+          name: veridian-ubuntu-20.04.tar.gz
+          path: veridian-ubuntu-20.04.tar.gz
+          if-no-files-found: error
+
+  build_centos:
+    name: Build Centos
+    needs: test
+    runs-on: ubuntu-latest
+    container:
+      image: vivekmalneedi/centos7-rust
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v2
+
+      - name: cache cargo dirs
+        uses: actions/cache@v2
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Run cargo build
+        uses: actions-rs/cargo@v1
+        with:
+          command: build
+          args: --release
+
+      - name: Create archive
+        run: |
+          strip target/release/veridian
+          cp target/release/veridian .
+          tar -czvf veridian-centos-7.tar.gz veridian
+
+      - uses: actions/upload-artifact@v2
+        with:
+          name: veridian-centos-7.tar.gz
+          path: veridian-centos-7.tar.gz
+          if-no-files-found: error
+
   build_vscode:
     name: Build vscode extension
+    needs: test
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
       - uses: actions/setup-node@v1
         with:
           node-version: "12"
-          check-latest: true
       - name: build extension
         working-directory: extensions/vscode
         run: |
@@ -27,9 +175,15 @@ jobs:
 
   publish:
     name: Create Release
-    needs: build_vscode
+    needs: [build_ubuntu, build_centos, build_vscode]
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/download-artifact@v2
+        with:
+          name: veridian-ubuntu-20.04.tar.gz
+      - uses: actions/download-artifact@v2
+        with:
+          name: veridian-centos-7.tar.gz
       - uses: actions/download-artifact@v2
         with:
           name: veridian.vsix
@@ -40,4 +194,26 @@ jobs:
           prerelease: true
           title: "nightly"
           files: |
+            veridian-ubuntu-20.04.tar.gz
+            veridian-centos-7.tar.gz
+            veridian.vsix
+      - uses: meeDamian/github-release@2.0
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          tag: nightly
+          name: nightly
+          prerelease: true
+          allow_override: true
+          body: |
+            This is an auto-generated release from the last successful build
+            This build is not guaranteed to be stable
+            Included Assets
+            - Ubuntu build (with [slang](https://github.com/MikePopoloski/slang) linting)
+            - CentOS 7 (RHEL 7 Compatible) build
+            - vscode client extension (veridian.vsix)
+                - manually install inside vscode or run `code --install-extension veridian.vsix`
+          gzip: folders
+          files: >
+            veridian-ubuntu-20.04.tar.gz
+            veridian-centos-7.tar.gz
             veridian.vsix
