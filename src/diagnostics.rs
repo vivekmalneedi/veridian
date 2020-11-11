@@ -16,11 +16,15 @@ use veridian_slang::slang_compile;
 use walkdir::{DirEntry, WalkDir};
 
 #[cfg(feature = "slang")]
-pub fn get_diagnostics(uri: Url, files: Vec<Url>, conf: ProjectConfig) -> PublishDiagnosticsParams {
+pub fn get_diagnostics(
+    uri: Url,
+    files: Vec<Url>,
+    conf: &ProjectConfig,
+) -> PublishDiagnosticsParams {
     if !(cfg!(test) && (uri.to_string().starts_with("file:///test"))) {
         let paths = get_paths(files);
         let diagnostics = {
-            if hal {
+            if conf.hal {
                 match hal_lint(&uri, paths, &conf.hal_path) {
                     Some(diags) => diags,
                     None => Vec::new(),
@@ -46,7 +50,11 @@ pub fn get_diagnostics(uri: Url, files: Vec<Url>, conf: ProjectConfig) -> Publis
 }
 
 #[cfg(not(feature = "slang"))]
-pub fn get_diagnostics(uri: Url, files: Vec<Url>, conf: ProjectConfig) -> PublishDiagnosticsParams {
+pub fn get_diagnostics(
+    uri: Url,
+    files: Vec<Url>,
+    conf: &ProjectConfig,
+) -> PublishDiagnosticsParams {
     if !(cfg!(test) && (uri.to_string().starts_with("file:///test"))) {
         let paths = get_paths(files);
         let diagnostics = {
@@ -290,7 +298,7 @@ mod tests {
             None,
         );
         assert_eq!(
-            get_diagnostics(uri.clone(), vec![uri], ProjectConfig::default()),
+            get_diagnostics(uri.clone(), vec![uri], &ProjectConfig::default()),
             expected
         );
     }
@@ -298,7 +306,7 @@ mod tests {
     #[test]
     fn test_unsaved_file() {
         let uri = Url::parse("file://test.sv").unwrap();
-        get_diagnostics(uri.clone(), vec![uri], ProjectConfig::default());
+        get_diagnostics(uri.clone(), vec![uri], &ProjectConfig::default());
     }
 
     // There's not really a good way to test the HAL linter

@@ -97,8 +97,8 @@ fn read_config(root_uri: Option<Url>) -> anyhow::Result<ProjectConfig> {
     File::open(config.ok_or_else(|| anyhow::anyhow!("config error"))?)?
         .read_to_string(&mut contents)?;
     let mut config: ProjectConfig = serde_yaml::from_str(&contents)?;
-    config.hal = which(config.hal_path).is_ok();
-    config.format = which(config.verible_format_path).is_ok();
+    config.hal = which(&config.hal_path).is_ok();
+    config.format = which(&config.verible_format_path).is_ok();
     Ok(config)
 }
 
