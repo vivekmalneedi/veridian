@@ -16,7 +16,7 @@ jobs:
         working-directory: extensions/vscode
         run: |
           npm install
-          npm install vsce
+          npm install -g vsce
           vsce package -o veridian.vsix
 
       - uses: actions/upload-artifact@v2
