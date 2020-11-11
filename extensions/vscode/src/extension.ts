@@ -15,10 +15,11 @@ import {
 let client: LanguageClient;
 const workSpaceFolder = workspace.workspaceFolders?.[0];
 let cwd: string = workSpaceFolder.uri.fsPath;
+const serverPath: string = workspace.getConfiguration().get("veridian.serverPath");
 
 export function activate(context: ExtensionContext) {
   const run: Executable = {
-    command: "veridian",
+    command: serverPath,
     // options: { cwd },
   };
 
