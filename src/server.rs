@@ -7,6 +7,7 @@ use std::env::current_dir;
 use std::fs::File;
 use std::io::Read;
 use std::path::PathBuf;
+use std::sync::RwLock;
 use tower_lsp::jsonrpc::Result;
 use tower_lsp::lsp_types::*;
 use tower_lsp::{Client, LanguageServer};
@@ -17,7 +18,7 @@ pub struct LSPServer {
     pub key_comps: Vec<CompletionItem>,
     pub sys_tasks: Vec<CompletionItem>,
     pub directives: Vec<CompletionItem>,
-    pub conf: ProjectConfig,
+    pub conf: RwLock<ProjectConfig>,
 }
 
 impl LSPServer {
@@ -27,7 +28,7 @@ impl LSPServer {
             key_comps: keyword_completions(KEYWORDS),
             sys_tasks: other_completions(SYS_TASKS),
             directives: other_completions(DIRECTIVES),
-            conf: ProjectConfig::default(),
+            conf: RwLock::new(ProjectConfig::default()),
         }
     }
 }
@@ -96,10 +97,7 @@ fn read_config(root_uri: Option<Url>) -> anyhow::Result<ProjectConfig> {
     let mut contents = String::new();
     File::open(config.ok_or_else(|| anyhow::anyhow!("config error"))?)?
         .read_to_string(&mut contents)?;
-    let mut config: ProjectConfig = serde_yaml::from_str(&contents)?;
-    config.hal = which(&config.hal_path).is_ok();
-    config.format = which(&config.verible_format_path).is_ok();
-    Ok(config)
+    Ok(serde_yaml::from_str(&contents)?)
 }
 
 // convert string path to absolute path
@@ -124,9 +122,14 @@ impl LanguageServer for Backend {
         if let Ok(conf) = read_config(params.root_uri) {
             inc_dirs.extend(conf.include_dirs.iter().filter_map(|x| absolute_path(x)));
             src_dirs.extend(conf.source_dirs.iter().filter_map(|x| absolute_path(x)));
+            *self.server.conf.write().unwrap() = conf;
         }
+        let mut conf = self.server.conf.write().unwrap();
+        conf.hal = which(&conf.hal_path).is_ok();
+        conf.format = which(&conf.verible_format_path).is_ok();
         drop(inc_dirs);
         drop(src_dirs);
+        drop(conf);
         // parse all source files found from walking source dirs and include dirs
         self.server.srcs.init();
         Ok(InitializeResult {

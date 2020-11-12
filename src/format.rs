@@ -12,13 +12,14 @@ impl LSPServer {
         let file = self.srcs.get_file(file_id)?;
         let file = file.read().ok()?;
 
-        if self.conf.format {
+        let conf = self.conf.read().unwrap();
+        if conf.format {
             Some(vec![TextEdit::new(
                 Range::new(
                     file.text.char_to_pos(0),
                     file.text.char_to_pos(file.text.len_chars() - 1),
                 ),
-                format_document(&file.text, None, &self.conf.verible_format_path)?,
+                format_document(&file.text, None, &conf.verible_format_path)?,
             )])
         } else {
             None
@@ -32,14 +33,11 @@ impl LSPServer {
         let file = self.srcs.get_file(file_id)?;
         let file = file.read().ok()?;
 
-        if self.conf.format {
+        let conf = self.conf.read().unwrap();
+        if conf.format {
             Some(vec![TextEdit::new(
                 file.text.char_range_to_range(0..file.text.len_chars()),
-                format_document(
-                    &file.text,
-                    Some(params.range),
-                    &self.conf.verible_format_path,
-                )?,
+                format_document(&file.text, Some(params.range), &conf.verible_format_path)?,
             )])
         } else {
             None
