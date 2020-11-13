@@ -17,7 +17,7 @@ tokio = { version = "0.2.22", features = ["macros", "io-std", "rt-threaded"] }
 path-clean = "0.1.0"
 pathdiff = "0.2.0"
 walkdir = "2.3.1"
-serde_yaml = "0.8.13"
+serde_yaml = "0.8.14"
 anyhow = "1.0.33"
 serde = "1.0.117"
 which = "4.0.2"
