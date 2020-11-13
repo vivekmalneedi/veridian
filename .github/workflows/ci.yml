@@ -1,4 +1,8 @@
-on: push
+on:
+  push:
+    branches:
+      - master
+  pull_request:
 
 name: CI
 
@@ -33,6 +37,16 @@ jobs:
         with:
           command: test
           args: --all-features
+      #todo: vscode extensions tests
+      - uses: actions/setup-node@v1
+        with:
+          node-version: "12"
+      - name: build extension
+        working-directory: extensions/vscode
+        run: |
+          npm install
+          npm install -g vsce
+          vsce package -o veridian.vsix
 
   lints:
     name: Lints
@@ -76,6 +90,7 @@ jobs:
     name: Build Ubuntu
     needs: test
     runs-on: ubuntu-20.04
+    if: github.ref == 'refs/heads/master'
     steps:
       - name: Checkout sources
         uses: actions/checkout@v2
@@ -118,6 +133,7 @@ jobs:
     name: Build Centos
     needs: test
     runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/master'
     container:
       image: vivekmalneedi/centos7-rust
     steps:
@@ -155,6 +171,7 @@ jobs:
     name: Build vscode extension
     needs: test
     runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/master'
     steps:
       - uses: actions/checkout@v2
       - uses: actions/setup-node@v1
@@ -177,6 +194,7 @@ jobs:
     name: Create Release
     needs: [build_ubuntu, build_centos, build_vscode]
     runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/master'
     steps:
       - uses: actions/download-artifact@v2
         with:
