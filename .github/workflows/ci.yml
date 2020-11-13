@@ -205,16 +205,6 @@ jobs:
       - uses: actions/download-artifact@v2
         with:
           name: veridian.vsix
-      - uses: "marvinpinto/action-automatic-releases@latest"
-        with:
-          repo_token: "${{ secrets.GITHUB_TOKEN }}"
-          automatic_release_tag: "nightly"
-          prerelease: true
-          title: "nightly"
-          files: |
-            veridian-ubuntu-20.04.tar.gz
-            veridian-centos-7.tar.gz
-            veridian.vsix
       - uses: meeDamian/github-release@2.0
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
