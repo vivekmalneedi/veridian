@@ -10,9 +10,9 @@ edition = "2018"
 
 [build-dependencies]
 bindgen = "0.55.1"
-cc = { version = "1.0.61", features = ["parallel"] }
+cc = { version = "1.0.62", features = ["parallel"] }
 reqwest = {version = "0.10.8", features = ["blocking"] }
-flate2 = "1.0.18"
+flate2 = "1.0.19"
 tar = "0.4.30"
 
 [dev-dependencies]
