@@ -22,7 +22,7 @@ pub fn get_diagnostics(
     conf: &ProjectConfig,
 ) -> PublishDiagnosticsParams {
     if !(cfg!(test) && (uri.to_string().starts_with("file:///test"))) {
-        let paths = get_paths(files);
+        let paths = get_paths(files, conf.auto_search_workdir);
         let diagnostics = {
             if conf.hal {
                 match hal_lint(&uri, paths, &conf.hal_path) {
@@ -56,7 +56,7 @@ pub fn get_diagnostics(
     conf: &ProjectConfig,
 ) -> PublishDiagnosticsParams {
     if !(cfg!(test) && (uri.to_string().starts_with("file:///test"))) {
-        let paths = get_paths(files);
+        let paths = get_paths(files, conf.auto_search_workdir);
         let diagnostics = {
             if conf.hal {
                 match hal_lint(&uri, paths, &conf.hal_path) {
@@ -81,17 +81,20 @@ pub fn get_diagnostics(
     }
 }
 
-fn get_paths(files: Vec<Url>) -> Vec<PathBuf> {
+fn get_paths(files: Vec<Url>, search_workdir: bool) -> Vec<PathBuf> {
     // check recursively from working dir for source files
     let mut paths: Vec<PathBuf> = Vec::new();
-    let walker = WalkDir::new(".").into_iter();
-    for entry in walker.filter_entry(|e| !is_hidden(e)) {
-        let entry = entry.unwrap();
-        if entry.file_type().is_file() {
-            let extension = entry.path().extension().unwrap();
+    if search_workdir {
+        let walker = WalkDir::new(".").into_iter();
+        for entry in walker.filter_entry(|e| !is_hidden(e)) {
+            let entry = entry.unwrap();
+            if entry.file_type().is_file() {
+                let extension = entry.path().extension().unwrap();
 
-            if extension == "sv" || extension == "svh" || extension == "v" || extension == "vh" {
-                paths.push(entry.path().to_path_buf());
+                if extension == "sv" || extension == "svh" || extension == "v" || extension == "vh"
+                {
+                    paths.push(entry.path().to_path_buf());
+                }
             }
         }
     }

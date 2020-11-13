@@ -399,7 +399,6 @@ endmodule
         server.did_open(open_params);
         let fid = server.srcs.get_id(&uri);
         server.srcs.wait_parse_ready(fid, true);
-        /*
         let file = server.srcs.get_file(fid).unwrap();
         let file = file.read().unwrap();
         eprintln!("{}", file.syntax_tree.as_ref().unwrap());
@@ -407,7 +406,6 @@ endmodule
             "{:#?}",
             server.srcs.scope_tree.read().unwrap().as_ref().unwrap()
         );
-        */
 
         let completion_params = CompletionParams {
             text_document_position: TextDocumentPositionParams {
@@ -425,6 +423,7 @@ endmodule
             }),
         };
         let response: CompletionResponse = server.completion(completion_params).unwrap();
+        dbg!(&response);
         let item1 = CompletionItem {
             label: "abcd".to_owned(),
             kind: Some(CompletionItemKind::Variable),

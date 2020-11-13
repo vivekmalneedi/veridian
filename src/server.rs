@@ -55,17 +55,26 @@ impl Backend {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ProjectConfig {
+    // if true, recursively search the working directory for files to run diagnostics on
+    pub auto_search_workdir: bool,
+    // list of directories with header files
     pub include_dirs: Vec<String>,
+    // list of directories to recursively search for SystemVerilog/Verilog sources
     pub source_dirs: Vec<String>,
+    // enable formatting with verible-verilog-format
     pub format: bool,
+    // enable linting with Cadence HAL
     pub hal: bool,
+    // path to verible-verilog-format binary, defaults to verible-verilog-format
     pub verible_format_path: String,
+    // path to hal binary, defaults to hal
     pub hal_path: String,
 }
 
 impl Default for ProjectConfig {
     fn default() -> Self {
         ProjectConfig {
+            auto_search_workdir: true,
             include_dirs: Vec::new(),
             source_dirs: Vec::new(),
             format: false,

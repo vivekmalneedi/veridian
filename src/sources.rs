@@ -324,7 +324,6 @@ pub fn parse(
             &HashMap::new(),
             &includes,
             false,
-            false,
         ) {
             Ok((syntax_tree, _)) => {
                 return Some(syntax_tree);
