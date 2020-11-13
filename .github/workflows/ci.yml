@@ -38,7 +38,7 @@ jobs:
           command: test
           args: --all-features
       #todo: vscode extensions tests
-      - uses: actions/setup-node@v1
+      - uses: actions/setup-node@v2.1.2
         with:
           node-version: "12"
       - name: build extension
@@ -174,7 +174,7 @@ jobs:
     if: github.ref == 'refs/heads/master'
     steps:
       - uses: actions/checkout@v2
-      - uses: actions/setup-node@v1
+      - uses: actions/setup-node@v2.1.2
         with:
           node-version: "12"
       - name: build extension
