@@ -54,12 +54,34 @@ Specify source directories and include directories using a yaml project config
 In `veridian.yml`:
 
 ```
+# list of directories with header files
 include_dirs:
   - inc1
   - inc2
+# list of directories to recursively search for SystemVerilog/Verilog sources
 source_dirs:
   - src
   - src2
+```
+
+There are other config options as well
+
+```
+# if true, recursively search the working directory for files to run diagnostics on
+# default: true
+auto_search_workdir: true|false,
+# enable formatting with verible-verilog-format
+# default: true
+format: true|false,
+# enable linting with Cadence HAL
+# default: true
+hal: true|false,
+# path to verible-verilog-format binary, defaults to verible-verilog-format
+# default: verible-verilog-format
+verible_format_path: <path>,
+# path to hal binary, defaults to hal
+# default: hal
+hal_path: <path>,
 ```
 
 ## LSP Support
