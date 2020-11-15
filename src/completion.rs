@@ -1,24 +1,31 @@
 use crate::server::LSPServer;
 use crate::sources::LSPSupport;
+use log::{debug, trace};
 use ropey::RopeSlice;
+use std::time::Instant;
 use tower_lsp::lsp_types::*;
 
 pub mod keyword;
 
 impl LSPServer {
     pub fn completion(&self, params: CompletionParams) -> Option<CompletionResponse> {
+        debug!("completion requested");
+        let now = Instant::now();
         let doc = params.text_document_position;
         let file_id = self.srcs.get_id(&doc.text_document.uri).to_owned();
         self.srcs.wait_parse_ready(file_id, false);
-        // eprintln!("comp wait parse: {}", now.elapsed().as_millis());
+        trace!("comp wait parse: {}", now.elapsed().as_millis());
         let file = self.srcs.get_file(file_id)?;
         let file = file.read().ok()?;
-        // eprintln!("comp read: {}", now.elapsed().as_millis());
+        trace!("comp read: {}", now.elapsed().as_millis());
         let token = get_completion_token(file.text.line(doc.position.line as usize), doc.position);
-        // eprintln!("token: {}", token);
         let response = match params.context {
             Some(context) => match context.trigger_kind {
                 CompletionTriggerKind::TriggerCharacter => {
+                    debug!(
+                        "trigger char completion: {}",
+                        context.trigger_character.clone()?.as_str()
+                    );
                     match context.trigger_character?.as_str() {
                         "." => Some(self.srcs.get_dot_completions(
                             token.trim_end_matches('.'),
@@ -38,11 +45,13 @@ impl LSPServer {
                 }
                 CompletionTriggerKind::TriggerForIncompleteCompletions => None,
                 CompletionTriggerKind::Invoked => {
+                    debug!("Invoked Completion");
                     let mut comps = self.srcs.get_completions(
                         &token,
                         file.text.pos_to_byte(&doc.position),
                         &doc.text_document.uri,
                     )?;
+                    // complete keywords
                     comps.items.extend::<Vec<CompletionItem>>(
                         self.key_comps
                             .iter()
@@ -74,6 +83,8 @@ impl LSPServer {
     }
 }
 
+/// attempt to get the token the user was trying to complete, by
+/// filtering out characters unneeded for name resolution
 fn get_completion_token(line: RopeSlice, pos: Position) -> String {
     let mut token = String::new();
     let mut line_iter = line.chars();
@@ -103,10 +114,12 @@ fn get_completion_token(line: RopeSlice, pos: Position) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::support::test_init;
     use ropey::Rope;
 
     #[test]
     fn test_get_completion_token() {
+        test_init();
         let text = Rope::from_str("abc abc.cba de_fg cde[4]");
         let mut result = get_completion_token(
             text.line(0),
@@ -144,7 +157,8 @@ mod tests {
 
     #[test]
     fn test_completion() {
-        let server = LSPServer::new();
+        test_init();
+        let server = LSPServer::new(None);
         let uri = Url::parse("file:///test.sv").unwrap();
         let text = r#"module test;
     logic abc;
@@ -255,7 +269,8 @@ endmodule
 
     #[test]
     fn test_nested_completion() {
-        let server = LSPServer::new();
+        test_init();
+        let server = LSPServer::new(None);
         let uri = Url::parse("file:///test.sv").unwrap();
         let text = r#"module test;
     logic aouter;
@@ -376,7 +391,8 @@ endmodule
 
     #[test]
     fn test_dot_completion() {
-        let server = LSPServer::new();
+        test_init();
+        let server = LSPServer::new(None);
         let uri = Url::parse("file:///test.sv").unwrap();
         let text = r#"interface test_inter;
     wire abcd;
@@ -464,7 +480,8 @@ endmodule
 
     #[test]
     fn test_inter_file_completion() {
-        let server = LSPServer::new();
+        test_init();
+        let server = LSPServer::new(None);
         let uri = Url::parse("file:///test.sv").unwrap();
         let uri2 = Url::parse("file:///test2.sv").unwrap();
         let text = r#"module test;

@@ -1,13 +1,16 @@
 use crate::sources::*;
 
 use crate::completion::keyword::*;
+use flexi_logger::ReconfigurationHandle;
+use log::{debug, info};
 use path_clean::PathClean;
 use serde::{Deserialize, Serialize};
 use std::env::current_dir;
 use std::fs::File;
 use std::io::Read;
 use std::path::PathBuf;
-use std::sync::RwLock;
+use std::string::ToString;
+use std::sync::{Mutex, RwLock};
 use tower_lsp::jsonrpc::Result;
 use tower_lsp::lsp_types::*;
 use tower_lsp::{Client, LanguageServer};
@@ -19,23 +22,19 @@ pub struct LSPServer {
     pub sys_tasks: Vec<CompletionItem>,
     pub directives: Vec<CompletionItem>,
     pub conf: RwLock<ProjectConfig>,
+    pub log_handle: Mutex<Option<ReconfigurationHandle>>,
 }
 
 impl LSPServer {
-    pub fn new() -> LSPServer {
+    pub fn new(log_handle: Option<ReconfigurationHandle>) -> LSPServer {
         LSPServer {
             srcs: Sources::new(),
             key_comps: keyword_completions(KEYWORDS),
             sys_tasks: other_completions(SYS_TASKS),
             directives: other_completions(DIRECTIVES),
             conf: RwLock::new(ProjectConfig::default()),
+            log_handle: Mutex::new(log_handle),
         }
-    }
-}
-
-impl Default for LSPServer {
-    fn default() -> Self {
-        Self::new()
     }
 }
 
@@ -45,12 +44,26 @@ pub struct Backend {
 }
 
 impl Backend {
-    pub fn new(client: Client) -> Backend {
+    pub fn new(client: Client, log_handle: ReconfigurationHandle) -> Backend {
         Backend {
             client,
-            server: LSPServer::new(),
+            server: LSPServer::new(Some(log_handle)),
         }
     }
+}
+
+#[derive(strum_macros::ToString, Debug, Serialize, Deserialize)]
+pub enum LogLevel {
+    #[strum(serialize = "error")]
+    Error,
+    #[strum(serialize = "warn")]
+    Warn,
+    #[strum(serialize = "info")]
+    Info,
+    #[strum(serialize = "debug")]
+    Debug,
+    #[strum(serialize = "trace")]
+    Trace,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -69,6 +82,8 @@ pub struct ProjectConfig {
     pub verible_format_path: String,
     // path to hal binary, defaults to hal
     pub hal_path: String,
+    // log level
+    pub log_level: LogLevel,
 }
 
 impl Default for ProjectConfig {
@@ -81,31 +96,35 @@ impl Default for ProjectConfig {
             hal: false,
             verible_format_path: "verible-verilog-format".to_string(),
             hal_path: "hal".to_string(),
+            log_level: LogLevel::Info,
         }
     }
 }
 
 fn read_config(root_uri: Option<Url>) -> anyhow::Result<ProjectConfig> {
     let path = root_uri
-        .ok_or_else(|| anyhow::anyhow!("config error"))?
+        .ok_or_else(|| anyhow::anyhow!("couldn't resolve workdir path"))?
         .to_file_path()
-        .map_err(|_| anyhow::anyhow!("config error"))?;
+        .map_err(|_| anyhow::anyhow!("couldn't resolve workdir path"))?;
     let mut config: Option<PathBuf> = None;
     for dir in path.ancestors() {
         let config_path = dir.join("veridian.yaml");
         if config_path.exists() {
+            info!("found config: veridian.yaml");
             config = Some(config_path);
             break;
         }
         let config_path = dir.join("veridian.yml");
         if config_path.exists() {
+            info!("found config: veridian.yml");
             config = Some(config_path);
             break;
         }
     }
     let mut contents = String::new();
-    File::open(config.ok_or_else(|| anyhow::anyhow!("config error"))?)?
+    File::open(config.ok_or_else(|| anyhow::anyhow!("unable to read config file"))?)?
         .read_to_string(&mut contents)?;
+    info!("reading config file");
     Ok(serde_yaml::from_str(&contents)?)
 }
 
@@ -130,15 +149,34 @@ impl LanguageServer for Backend {
         let mut src_dirs = self.server.srcs.source_dirs.write().unwrap();
         if let Ok(conf) = read_config(params.root_uri) {
             inc_dirs.extend(conf.include_dirs.iter().filter_map(|x| absolute_path(x)));
+            debug!("{:#?}", inc_dirs);
             src_dirs.extend(conf.source_dirs.iter().filter_map(|x| absolute_path(x)));
+            debug!("{:#?}", src_dirs);
+            let mut log_handle = self.server.log_handle.lock().unwrap();
+            let log_handle = log_handle.as_mut();
+            if let Some(handle) = log_handle {
+                handle.parse_and_push_temp_spec(&conf.log_level.to_string());
+            }
             *self.server.conf.write().unwrap() = conf;
+        } else {
+            info!("no config file found");
         }
         let mut conf = self.server.conf.write().unwrap();
         conf.hal = which(&conf.hal_path).is_ok();
+        if cfg!(feature = "slang") {
+            info!("enabled linting with slang");
+        }
+        if conf.hal {
+            info!("enabled linting with hal")
+        }
         conf.format = which(&conf.verible_format_path).is_ok();
+        if conf.format {
+            info!("enabled formatting with verible-verilog-format");
+        } else {
+            info!("formatting unavailable");
+        }
         drop(inc_dirs);
         drop(src_dirs);
-        drop(conf);
         // parse all source files found from walking source dirs and include dirs
         self.server.srcs.init();
         Ok(InitializeResult {
@@ -169,15 +207,15 @@ impl LanguageServer for Backend {
                 definition_provider: Some(true),
                 hover_provider: Some(HoverProviderCapability::Simple(true)),
                 document_symbol_provider: Some(true),
-                document_formatting_provider: Some(true),
-                document_range_formatting_provider: Some(true),
+                document_formatting_provider: Some(conf.format),
+                document_range_formatting_provider: Some(conf.format),
                 ..ServerCapabilities::default()
             },
         })
     }
     async fn initialized(&self, _: InitializedParams) {
         self.client
-            .log_message(MessageType::Info, "server initialized!")
+            .log_message(MessageType::Info, "veridian initialized!")
             .await;
     }
     async fn shutdown(&self) -> Result<()> {

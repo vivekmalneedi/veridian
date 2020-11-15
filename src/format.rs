@@ -1,5 +1,6 @@
 use crate::server::LSPServer;
 use crate::sources::LSPSupport;
+use log::info;
 use ropey::Rope;
 use std::process::{Command, Stdio};
 use tower_lsp::lsp_types::*;
@@ -7,6 +8,7 @@ use tower_lsp::lsp_types::*;
 impl LSPServer {
     pub fn formatting(&self, params: DocumentFormattingParams) -> Option<Vec<TextEdit>> {
         let uri = params.text_document.uri;
+        info!("formatting {}", &uri);
         let file_id = self.srcs.get_id(&uri).to_owned();
         self.srcs.wait_parse_ready(file_id, false);
         let file = self.srcs.get_file(file_id)?;
@@ -28,6 +30,7 @@ impl LSPServer {
 
     pub fn range_formatting(&self, params: DocumentRangeFormattingParams) -> Option<Vec<TextEdit>> {
         let uri = params.text_document.uri;
+        info!("range formatting {}", &uri);
         let file_id = self.srcs.get_id(&uri).to_owned();
         self.srcs.wait_parse_ready(file_id, false);
         let file = self.srcs.get_file(file_id)?;
@@ -45,6 +48,7 @@ impl LSPServer {
     }
 }
 
+/// format the document using verible-verilog-format
 pub fn format_document(
     rope: &Rope,
     range: Option<Range>,
@@ -55,6 +59,7 @@ pub fn format_document(
         .stdin(Stdio::piped())
         .stderr(Stdio::piped())
         .stdout(Stdio::piped());
+    // rangeFormatting
     if let Some(r) = range {
         child
             .arg("--lines")
@@ -62,9 +67,11 @@ pub fn format_document(
     }
     let mut child = child.arg("-").spawn().ok()?;
 
+    // write file to stdin, read output from stdout
     rope.write_to(child.stdin.as_mut()?).ok()?;
     let output = child.wait_with_output().ok()?;
     if output.status.success() {
+        info!("formatting succeeded");
         let raw_output = String::from_utf8(output.stdout).ok()?;
         Some(raw_output)
     } else {
@@ -76,10 +83,12 @@ pub fn format_document(
 mod tests {
     use super::*;
     use crate::server::ProjectConfig;
+    use crate::support::test_init;
     use which::which;
 
     #[test]
     fn test_formatting() {
+        test_init();
         let text = r#"
 module test;
   logic a;
@@ -102,6 +111,7 @@ endmodule
 
     #[test]
     fn test_range_formatting() {
+        test_init();
         let text = r#"module t1;
     logic a;
  logic b;

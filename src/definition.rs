@@ -1,5 +1,6 @@
 use crate::server::LSPServer;
 use crate::sources::LSPSupport;
+use log::{debug, trace};
 use ropey::{Rope, RopeSlice};
 use sv_parser::*;
 use tower_lsp::lsp_types::*;
@@ -19,13 +20,14 @@ impl LSPServer {
         let file = self.srcs.get_file(file_id)?;
         let file = file.read().ok()?;
         let token = get_definition_token(file.text.line(pos.line as usize), pos);
+        debug!("goto definition, token: {}", &token);
         let scope_tree = self.srcs.scope_tree.read().ok()?;
-        // eprintln!("{:#?}", scope_tree.as_ref()?);
+        trace!("{:#?}", scope_tree.as_ref()?);
         let def = scope_tree
             .as_ref()?
             .get_definition(&token, file.text.pos_to_byte(&pos), &doc)?;
         let def_pos = file.text.byte_to_pos(def.byte_idx());
-        // eprintln!("def: {:?}", def_pos);
+        debug!("def: {:?}", def_pos);
         Some(GotoDefinitionResponse::Scalar(Location::new(
             def.url(),
             Range::new(def_pos, def_pos),
@@ -40,6 +42,7 @@ impl LSPServer {
         let file = self.srcs.get_file(file_id)?;
         let file = file.read().ok()?;
         let token = get_definition_token(file.text.line(pos.line as usize), pos);
+        debug!("hover, token: {}", &token);
         let scope_tree = self.srcs.scope_tree.read().ok()?;
         let def = scope_tree
             .as_ref()?
@@ -67,10 +70,10 @@ impl LSPServer {
     }
 }
 
+/// retrieve the token the user invoked goto definition or hover on
 fn get_definition_token(line: RopeSlice, pos: Position) -> String {
     let mut token = String::new();
     let mut line_iter = line.chars();
-    //TODO: fix panic here: Attempt to index past end of slice: utf16 code unit index 5, slice utf16 code unit length
     for _ in 0..(line.utf16_cu_to_char(pos.character as usize)) {
         line_iter.next();
     }
@@ -94,6 +97,8 @@ fn get_definition_token(line: RopeSlice, pos: Position) -> String {
 
 type ScopesAndDefs = Option<(Vec<Box<dyn Scope>>, Vec<Box<dyn Definition>>)>;
 
+/// Take a given syntax node from a sv-parser syntax tree and extract out the definition/scope at
+/// that point.
 pub fn match_definitions(
     syntax_tree: &SyntaxTree,
     event_iter: &mut EventIter,
@@ -207,12 +212,16 @@ pub fn match_definitions(
     Some((scopes, definitions))
 }
 
+/// convert the syntax tree to a scope tree
+/// the root node is the global scope
 pub fn get_scopes(syntax_tree: &SyntaxTree, url: &Url) -> Option<GenericScope> {
-    // eprintln!("{}", syntax_tree);
+    trace!("{}", syntax_tree);
     let mut scopes: Vec<Box<dyn Scope>> = Vec::new();
     let mut global_scope: GenericScope = GenericScope::new(url);
     global_scope.ident = "global".to_string();
     let mut event_iter = syntax_tree.into_iter().event();
+    // iterate over each enter event and extract out any scopes or definitions
+    // match_definitions is recursively called so we get a tree in the end
     while let Some(event) = event_iter.next() {
         match event {
             NodeEvent::Enter(node) => {
@@ -227,6 +236,7 @@ pub fn get_scopes(syntax_tree: &SyntaxTree, url: &Url) -> Option<GenericScope> {
     Some(global_scope)
 }
 
+/// get the hover information
 fn get_hover(doc: &Rope, line: usize) -> String {
     if line == 0 {
         return doc.line(line).to_string();
@@ -237,6 +247,8 @@ fn get_hover(doc: &Rope, line: usize) -> String {
     let mut current: String = doc.line(line).to_string();
     let ltrim: String = " ".repeat(current.len() - current.trim_start().len());
     let mut line_idx = line;
+
+    // iterate upwards from the definition, and grab the comments
     while valid {
         hover.push(current.clone());
         line_idx -= 1;
@@ -276,12 +288,14 @@ fn get_hover(doc: &Rope, line: usize) -> String {
 mod tests {
     use super::*;
     use crate::sources::{parse, LSPSupport};
+    use crate::support::test_init;
     use ropey::Rope;
     use std::fs::read_to_string;
     use std::path::PathBuf;
 
     #[test]
     fn test_definition_token() {
+        test_init();
         let line = Rope::from_str("assign ab_c[2:0] = 3'b000;");
         let token = get_definition_token(line.line(0), Position::new(0, 10));
         assert_eq!(token, "ab_c".to_owned());
@@ -289,15 +303,18 @@ mod tests {
 
     #[test]
     fn test_get_definition() {
+        test_init();
         let mut d = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
         d.push("test_data/definition_test.sv");
         let text = read_to_string(d).unwrap();
         let doc = Rope::from_str(&text);
         let url = Url::parse("file:///test_data/definition_test.sv").unwrap();
         let syntax_tree = parse(&doc, &url, &None, &Vec::new()).unwrap();
+        trace!("{}", &syntax_tree);
         let scope_tree = get_scopes(&syntax_tree, &url).unwrap();
+        trace!("{:#?}", &scope_tree);
         for def in &scope_tree.defs {
-            println!("{:?} {:?}", def, doc.byte_to_pos(def.byte_idx()));
+            trace!("{:?} {:?}", def, doc.byte_to_pos(def.byte_idx()));
         }
         let token = get_definition_token(doc.line(3), Position::new(3, 13));
         for def in scope_tree.defs {
@@ -309,6 +326,7 @@ mod tests {
 
     #[test]
     fn test_hover() {
+        test_init();
         let text = r#"
 // module test
 // test module

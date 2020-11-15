@@ -2,6 +2,7 @@ use crate::definition::def_types::*;
 use crate::definition::get_scopes;
 use crate::diagnostics::{get_diagnostics, is_hidden};
 use crate::server::LSPServer;
+use log::{debug, error, trace};
 use pathdiff::diff_paths;
 use ropey::{Rope, RopeSlice};
 use std::collections::HashMap;
@@ -11,6 +12,7 @@ use std::ops::Range as StdRange;
 use std::path::PathBuf;
 use std::sync::{Arc, Condvar, Mutex, RwLock};
 use std::thread;
+use std::time::Instant;
 use sv_parser::*;
 use thread::JoinHandle;
 use tower_lsp::lsp_types::*;
@@ -20,8 +22,10 @@ impl LSPServer {
     pub fn did_open(&self, params: DidOpenTextDocumentParams) -> PublishDiagnosticsParams {
         let document: TextDocumentItem = params.text_document;
         let uri = document.uri.clone();
+        debug!("did_open: {}", &uri);
         // check if doc is already added
         if self.srcs.names.read().unwrap().contains_key(&document.uri) {
+            // convert to a did_change that replace the entire text
             self.did_change(DidChangeTextDocumentParams {
                 text_document: VersionedTextDocumentIdentifier::new(document.uri, document.version),
                 content_changes: vec![TextDocumentContentChangeEvent {
@@ -39,9 +43,11 @@ impl LSPServer {
     }
 
     pub fn did_change(&self, params: DidChangeTextDocumentParams) {
+        debug!("did_change: {}", &params.text_document.uri);
         let file_id = self.srcs.get_id(&params.text_document.uri);
         let file = self.srcs.get_file(file_id).unwrap();
         let mut file = file.write().unwrap();
+        // loop through changes and apply
         for change in params.content_changes {
             if change.range.is_none() {
                 file.text = Rope::from_str(&change.text);
@@ -54,6 +60,7 @@ impl LSPServer {
             file.version = version;
         }
         drop(file);
+
         // invalidate syntaxtree and wake parse thread
         let meta_data = self.srcs.get_meta_data(file_id).unwrap();
         let (lock, cvar) = &*meta_data.read().unwrap().valid_parse;
@@ -68,21 +75,25 @@ impl LSPServer {
     }
 }
 
+/// The Source struct holds all file specific information
 pub struct Source {
     pub id: usize,
     pub uri: Url,
     pub text: Rope,
     pub version: i64,
     pub syntax_tree: Option<SyntaxTree>,
+    // if there is a parse error, we can remove the last change
     pub last_change_range: Option<Range>,
 }
 
+/// file metadata, including whether or not the syntax tree is up to date
 pub struct SourceMeta {
     pub id: usize,
     pub valid_parse: Arc<(Mutex<bool>, Condvar)>,
     pub parse_handle: JoinHandle<()>,
 }
 
+/// find SystemVerilog/Verilog sources recursively from opened files
 fn find_src_paths(dirs: &[PathBuf]) -> Vec<PathBuf> {
     let mut paths: Vec<PathBuf> = Vec::new();
 
@@ -106,12 +117,20 @@ fn find_src_paths(dirs: &[PathBuf]) -> Vec<PathBuf> {
     paths
 }
 
+/// The Sources struct manages all source files
 pub struct Sources {
+    // all files
     pub files: Arc<RwLock<Vec<Arc<RwLock<Source>>>>>,
+    // map file urls to id
     pub names: Arc<RwLock<HashMap<Url, usize>>>,
+    // file metadata
     pub meta: Arc<RwLock<Vec<Arc<RwLock<SourceMeta>>>>>,
+    // all source files are indexed into this tree, which can then
+    // be used for completion, name resolution
     pub scope_tree: Arc<RwLock<Option<GenericScope>>>,
+    // include directories, passed to parser to resolve `include
     pub include_dirs: Arc<RwLock<Vec<PathBuf>>>,
+    // source directories
     pub source_dirs: Arc<RwLock<Vec<PathBuf>>>,
 }
 
@@ -140,6 +159,7 @@ impl Sources {
         for path in &*self.source_dirs.read().unwrap() {
             paths.push(path.clone());
         }
+        // find and add all source/header files recursively from configured include and source directories
         let src_paths = find_src_paths(&paths);
         for path in src_paths {
             if let Ok(url) = Url::from_file_path(&path) {
@@ -154,7 +174,12 @@ impl Sources {
             }
         }
     }
+
+    /// add a source file, creating a parse thread for that file
     pub fn add(&self, doc: TextDocumentItem) {
+        // use a condvar to synchronize the parse thread
+        // the valid bool decides whether or not the file
+        // needs to be re-parsed
         #[allow(clippy::mutex_atomic)] // https://github.com/rust-lang/rust-clippy/issues/1516
         let valid_parse = Arc::new((Mutex::new(false), Condvar::new()));
         let valid_parse2 = valid_parse.clone();
@@ -173,24 +198,28 @@ impl Sources {
         let parse_handle = thread::spawn(move || {
             let (lock, cvar) = &*valid_parse2;
             loop {
-                // let now = Instant::now();
+                let now = Instant::now();
                 let file = source_handle.read().unwrap();
                 let text = file.text.clone();
                 let uri = &file.uri.clone();
                 let range = &file.last_change_range.clone();
                 drop(file);
-                // eprintln!("parse read: {}", now.elapsed().as_millis());
+                trace!("{}, parse read: {}", uri, now.elapsed().as_millis());
                 let syntax_tree = parse(&text, &uri, &range, &*inc_dirs.read().unwrap());
                 let mut scope_tree = match &syntax_tree {
                     Some(tree) => get_scopes(tree, uri),
                     None => None,
                 };
-                // eprintln!("parse read complete: {}", now.elapsed().as_millis());
+                trace!(
+                    "{}, parse read complete: {}",
+                    uri,
+                    now.elapsed().as_millis()
+                );
                 let mut file = source_handle.write().unwrap();
-                // eprintln!("parse write: {}", now.elapsed().as_millis());
+                trace!("{}, parse write: {}", uri, now.elapsed().as_millis());
                 file.syntax_tree = syntax_tree;
                 drop(file);
-                // eprintln!("try write global scope");
+                debug!("try write global scope");
                 let mut global_scope = scope_handle.write().unwrap();
                 match &mut *global_scope {
                     Some(scope) => match &mut scope_tree {
@@ -206,8 +235,12 @@ impl Sources {
                 }
                 // eprintln!("{:#?}", *global_scope);
                 drop(global_scope);
-                // eprintln!("write global scope");
-                // eprintln!("parse write complete: {}", now.elapsed().as_millis());
+                trace!("{}, write global scope", uri);
+                trace!(
+                    "{}, parse write complete: {}",
+                    uri,
+                    now.elapsed().as_millis()
+                );
                 let mut valid = lock.lock().unwrap();
                 *valid = true;
                 cvar.notify_all();
@@ -226,9 +259,11 @@ impl Sources {
                 valid_parse,
                 parse_handle,
             })));
+        debug!("added {}", &doc.uri);
         self.names.write().unwrap().insert(doc.uri, fid);
     }
 
+    /// get file by id
     pub fn get_file(&self, id: usize) -> Option<Arc<RwLock<Source>>> {
         let files = self.files.read().ok()?;
         for file in files.iter() {
@@ -240,6 +275,7 @@ impl Sources {
         None
     }
 
+    /// get metadata by file id
     pub fn get_meta_data(&self, id: usize) -> Option<Arc<RwLock<SourceMeta>>> {
         let meta = self.meta.read().ok()?;
         for data in meta.iter() {
@@ -251,6 +287,7 @@ impl Sources {
         None
     }
 
+    /// wait for a valid parse
     pub fn wait_parse_ready(&self, id: usize, wait_valid: bool) {
         let file = self.get_file(id).unwrap();
         let file = file.read().unwrap();
@@ -265,16 +302,19 @@ impl Sources {
         }
     }
 
+    /// get file id from url
     pub fn get_id(&self, uri: &Url) -> usize {
         *self.names.read().unwrap().get(uri).unwrap()
     }
 
+    /// compute identifier completions
     pub fn get_completions(
         &self,
         token: &str,
         byte_idx: usize,
         url: &Url,
     ) -> Option<CompletionList> {
+        debug!("retrieving identifier completion for token: {}", &token);
         Some(CompletionList {
             is_incomplete: false,
             items: self
@@ -286,13 +326,14 @@ impl Sources {
         })
     }
 
+    /// compute dot completions
     pub fn get_dot_completions(
         &self,
         token: &str,
         byte_idx: usize,
         url: &Url,
     ) -> Option<CompletionList> {
-        // eprintln!("get dot completions");
+        debug!("retrieving dot completion for token: {}", &token);
         let tree = self.scope_tree.read().ok()?;
         Some(CompletionList {
             is_incomplete: false,
@@ -304,6 +345,7 @@ impl Sources {
 }
 
 //TODO: show all unrecoverable parse errors to user
+/// parse the file using sv-parser, attempt to recover if the parse fails
 pub fn parse(
     doc: &Rope,
     uri: &Url,
@@ -326,10 +368,13 @@ pub fn parse(
             false,
         ) {
             Ok((syntax_tree, _)) => {
+                debug!("parse complete of {}", uri);
+                trace!("{}", syntax_tree.to_string());
                 return Some(syntax_tree);
             }
             Err(err) => {
                 match err {
+                    // syntax error
                     sv_parser::Error::Parse(trace) => match trace {
                         Some((_, bpos)) => {
                             let mut line_start = text.byte_to_line(bpos);
@@ -352,9 +397,13 @@ pub fn parse(
                         }
                         None => return None,
                     },
-
+                    // include error, take the include path from the error message and
+                    // add it as an include dir for the next parser invocation
                     sv_parser::Error::Include { source: x } => {
                         if let sv_parser::Error::File { source: _, path: z } = *x {
+                            // Include paths have to be relative to the working directory
+                            // so we have to convert a source file relative path to a working directory
+                            // relative path. This should have been handled by sv-parser
                             let mut inc_path_given = z.clone();
                             let mut uri_path = uri.to_file_path().unwrap();
                             uri_path.pop();
@@ -364,13 +413,13 @@ pub fn parse(
                             if !includes.contains(&inc_path) {
                                 includes.push(inc_path);
                             } else {
-                                eprintln!("File Not Found: {:?}", z);
+                                error!("parser: include error: {:?}", z);
                                 break;
                             }
                             parse_iterations += 1;
                         }
                     }
-                    _ => eprintln!("parse, {:?}", err),
+                    _ => error!("parse error, {:?}", err),
                 };
             }
         }
@@ -379,6 +428,8 @@ pub fn parse(
 }
 
 //TODO: add bounds checking for utf8<->utf16 conversions
+/// This trait defines some helper functions to convert between lsp types
+/// and char/byte positions
 pub trait LSPSupport {
     fn pos_to_byte(&self, pos: &Position) -> usize;
     fn pos_to_char(&self, pos: &Position) -> usize;
@@ -389,6 +440,7 @@ pub trait LSPSupport {
     fn apply_change(&mut self, change: &TextDocumentContentChangeEvent);
 }
 
+/// Extend ropey's Rope type with lsp convenience functions
 impl LSPSupport for Rope {
     fn pos_to_byte(&self, pos: &Position) -> usize {
         self.char_to_byte(self.pos_to_char(pos))
@@ -464,11 +516,13 @@ impl<'a> LSPSupport for RopeSlice<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::support::test_init;
     use std::fs::read_to_string;
 
     #[test]
     fn test_open_and_change() {
-        let server = LSPServer::new();
+        test_init();
+        let server = LSPServer::new(None);
         let uri = Url::parse("file:///test.sv").unwrap();
         let text = r#"module test;
   logic abc;
@@ -524,7 +578,8 @@ endmodule"#
 
     #[test]
     fn test_fault_tolerance() {
-        let server = LSPServer::new();
+        test_init();
+        let server = LSPServer::new(None);
         let uri = Url::parse("file:///test.sv").unwrap();
         let text = r#"module test;
   logic abc
@@ -554,6 +609,7 @@ endmodule"#;
 
     #[test]
     fn test_header() {
+        test_init();
         let mut d = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
         d.push("test_data/top_inc.sv");
         let text = read_to_string(&d).unwrap();

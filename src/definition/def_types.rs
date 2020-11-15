@@ -1,9 +1,12 @@
 use crate::sources::LSPSupport;
+use log::trace;
 use ropey::Rope;
 use tower_lsp::lsp_types::*;
 
-fn clean_type_str(type_str: &str, ident: &str) -> String {
+/// cleanup the text of a definition so it can be included in completions
+pub fn clean_type_str(type_str: &str, ident: &str) -> String {
     let endings: &[_] = &[';', ','];
+    // remove anything after an equals sign
     let eq_offset = type_str.find('=').unwrap_or_else(|| type_str.len());
     let mut result = type_str.to_string();
     result.replace_range(eq_offset.., "");
@@ -13,27 +16,48 @@ fn clean_type_str(type_str: &str, ident: &str) -> String {
         .trim_end_matches(endings)
         .trim_end_matches(ident)
         .trim_end()
-        .to_string()
+        .split_whitespace()
+        .collect::<Vec<&str>>()
+        .join(" ")
+        .replace("[ ", "[")
+        .replace(" ]", "]")
+        .replace(" : ", ":")
 }
 
+/// A definition of any SystemVerilog variable or construct
 pub trait Definition: std::fmt::Debug + Sync + Send {
+    // identifier
     fn ident(&self) -> String;
+    // byte index in file of definition
     fn byte_idx(&self) -> usize;
+    // url pointing to the file the definition is in
     fn url(&self) -> Url;
+    // cleaned up text of the definition
     fn type_str(&self) -> String;
+    // the kind of this definition, for use in completions
     fn completion_kind(&self) -> CompletionItemKind;
+    // the kind of this definition, for use in showing document symbols
+    // for some reason this kind is different than CompletionItemKind
     fn symbol_kind(&self) -> SymbolKind;
+    // the kind of this definition, simplified for internal use
     fn def_type(&self) -> &DefinitionType;
+    // whether the definition identifier starts with the given token
     fn starts_with(&self, token: &str) -> bool;
+    // constructs the completion for this definition
     fn completion(&self) -> CompletionItem;
     fn dot_completion(&self, scope_tree: &GenericScope) -> Vec<CompletionItem>;
 }
 
 pub trait Scope: std::fmt::Debug + Definition + Sync + Send {
+    // the start byte of this scope
     fn start(&self) -> usize;
+    // the end byte of this scope
     fn end(&self) -> usize;
+    // all the within this scope
     fn defs(&self) -> &Vec<Box<dyn Definition>>;
+    // all the scopes within this scope, ex. task inside a module
     fn scopes(&self) -> &Vec<Box<dyn Scope>>;
+    // the definition of this scope
     fn definition(&self) -> GenericDec {
         GenericDec {
             ident: self.ident(),
@@ -45,14 +69,20 @@ pub trait Scope: std::fmt::Debug + Definition + Sync + Send {
             def_type: DefinitionType::GenericScope,
         }
     }
+    /// return a completion from the scope tree, this function should be called on the global scope
     fn get_completion(&self, token: &str, byte_idx: usize, url: &Url) -> Vec<CompletionItem> {
         let mut completions: Vec<CompletionItem> = Vec::new();
+        // first we need to go down the scope tree, to the scope the user is invoking a completion
+        // in
         for scope in self.scopes() {
             if &scope.url() == url && scope.start() <= byte_idx && byte_idx <= scope.end() {
                 completions = scope.get_completion(token, byte_idx, url);
                 break;
             }
         }
+        // now that we are in the users scope, we can attempt to find a relevant completion
+        // we proceed back upwards through the scope tree, adding any definitions that match
+        // the users token
         let completion_idents: Vec<String> = completions.iter().map(|x| x.label.clone()).collect();
         for def in self.defs() {
             if !completion_idents.contains(&def.ident()) && def.starts_with(token) {
@@ -66,6 +96,9 @@ pub trait Scope: std::fmt::Debug + Definition + Sync + Send {
         }
         completions
     }
+
+    /// return a dot completion from the scope tree, this function should be called on the global
+    /// scope
     fn get_dot_completion(
         &self,
         token: &str,
@@ -73,18 +106,18 @@ pub trait Scope: std::fmt::Debug + Definition + Sync + Send {
         url: &Url,
         scope_tree: &GenericScope,
     ) -> Vec<CompletionItem> {
-        // eprintln!("dot entering: {}, token: {}", self.ident(), token);
-        // eprintln!("{:?}", self.scopes());
+        trace!("dot entering: {}, token: {}", self.ident(), token);
+        trace!("{:?}", self.scopes());
+        // first we need to go down the scope tree, to the scope the user is invoking a completion
+        // in
         for scope in self.scopes() {
-            /*
-            eprintln!(
+            trace!(
                 "{}, {}, {}, {}",
                 scope.ident(),
                 byte_idx,
                 scope.start(),
                 scope.end()
             );
-            */
             if &scope.url() == url && scope.start() <= byte_idx && byte_idx <= scope.end() {
                 eprintln!("checking dot completion: {}", scope.ident());
                 let result = scope.get_dot_completion(token, byte_idx, url, scope_tree);
@@ -93,21 +126,27 @@ pub trait Scope: std::fmt::Debug + Definition + Sync + Send {
                 }
             }
         }
+        // now that we are in the users scope, we can attempt to find the relevant definition
+        // we proceed back upwards through the scope tree, and if a definition matches our token,
+        // we invoke dot completion on that definition and pass it the syntax tree
         for def in self.defs() {
-            // eprintln!("def: {:?}", def);
+            trace!("def: {:?}", def);
             if def.starts_with(token) {
-                // eprintln!("complete def: {:?}", def);
+                trace!("complete def: {:?}", def);
                 return def.dot_completion(scope_tree);
             }
         }
         for scope in self.scopes() {
             if scope.starts_with(token) {
-                // eprintln!("found dot-completion scope: {}", scope.ident());
+                trace!("found dot-completion scope: {}", scope.ident());
                 return scope.dot_completion(scope_tree);
             }
         }
         Vec::new()
     }
+
+    /// return a definition from the scope tree, this function should be called on the global
+    /// scope
     fn get_definition(&self, token: &str, byte_idx: usize, url: &Url) -> Option<GenericDec> {
         let mut definition: Option<GenericDec> = None;
         for scope in self.scopes() {

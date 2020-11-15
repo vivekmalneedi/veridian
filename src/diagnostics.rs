@@ -1,3 +1,4 @@
+use crate::server::ProjectConfig;
 use path_clean::PathClean;
 use regex::Regex;
 use serde::Deserialize;
@@ -8,8 +9,6 @@ use std::io;
 use std::path::Path;
 use std::path::PathBuf;
 use std::process::Command;
-// use tempdir::TempDir;
-use crate::server::ProjectConfig;
 use tower_lsp::lsp_types::*;
 #[cfg(feature = "slang")]
 use veridian_slang::slang_compile;
@@ -81,6 +80,8 @@ pub fn get_diagnostics(
     }
 }
 
+/// recursively find source file paths from working directory
+/// and open files
 fn get_paths(files: Vec<Url>, search_workdir: bool) -> Vec<PathBuf> {
     // check recursively from working dir for source files
     let mut paths: Vec<PathBuf> = Vec::new();
@@ -137,6 +138,7 @@ pub fn is_hidden(entry: &DirEntry) -> bool {
 }
 
 #[cfg(feature = "slang")]
+/// parse a report from slang
 fn parse_report(uri: Url, report: String) -> Vec<Diagnostic> {
     let mut diagnostics: Vec<Diagnostic> = Vec::new();
     for line in report.lines() {
@@ -213,6 +215,7 @@ struct HalMessage {
     object: String,
 }
 
+/// main struct to deserialize a hal report from xml output
 #[derive(Debug, Deserialize)]
 struct HalMessageFile {
     tool: String,
@@ -222,7 +225,7 @@ struct HalMessageFile {
     messages: Vec<HalMessage>,
 }
 
-// Lint using the Cadence Incisive HDL analysis technology (HAL)
+/// Lint using the Cadence Incisive HDL analysis technology (HAL)
 fn hal_lint(uri: &Url, paths: Vec<PathBuf>, hal_path: &str) -> Option<Vec<Diagnostic>> {
     // get all file paths
     let mut path_strs = Vec::new();
@@ -282,9 +285,11 @@ fn hal_lint(uri: &Url, paths: Vec<PathBuf>, hal_path: &str) -> Option<Vec<Diagno
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::support::test_init;
 
     #[test]
     fn test_diagnostics() {
+        test_init();
         let uri =
             Url::from_file_path(absolute_path("test_data/diag/diag_test.sv").unwrap()).unwrap();
         let expected = PublishDiagnosticsParams::new(
@@ -308,6 +313,7 @@ mod tests {
 
     #[test]
     fn test_unsaved_file() {
+        test_init();
         let uri = Url::parse("file://test.sv").unwrap();
         get_diagnostics(uri.clone(), vec![uri], &ProjectConfig::default());
     }
