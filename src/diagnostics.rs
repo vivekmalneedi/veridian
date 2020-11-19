@@ -1,14 +1,12 @@
 use crate::server::ProjectConfig;
 use path_clean::PathClean;
 use regex::Regex;
-use serde::Deserialize;
-use serde_xml_rs::from_reader;
+use ropey::Rope;
 use std::env::current_dir;
-use std::fs;
 use std::io;
 use std::path::Path;
 use std::path::PathBuf;
-use std::process::Command;
+use std::process::{Command, Stdio};
 use tower_lsp::lsp_types::*;
 #[cfg(feature = "slang")]
 use veridian_slang::slang_compile;
@@ -17,14 +15,15 @@ use walkdir::{DirEntry, WalkDir};
 #[cfg(feature = "slang")]
 pub fn get_diagnostics(
     uri: Url,
+    rope: &Rope,
     files: Vec<Url>,
     conf: &ProjectConfig,
 ) -> PublishDiagnosticsParams {
     if !(cfg!(test) && (uri.to_string().starts_with("file:///test"))) {
         let paths = get_paths(files, conf.auto_search_workdir);
         let diagnostics = {
-            if conf.hal {
-                match hal_lint(&uri, paths, &conf.hal_path) {
+            if conf.verible_syntax {
+                match verible_syntax(rope, &conf.verible_syntax_path) {
                     Some(diags) => diags,
                     None => Vec::new(),
                 }
@@ -51,14 +50,14 @@ pub fn get_diagnostics(
 #[cfg(not(feature = "slang"))]
 pub fn get_diagnostics(
     uri: Url,
-    files: Vec<Url>,
+    rope: &Rope,
+    #[allow(unused_variables)] files: Vec<Url>,
     conf: &ProjectConfig,
 ) -> PublishDiagnosticsParams {
     if !(cfg!(test) && (uri.to_string().starts_with("file:///test"))) {
-        let paths = get_paths(files, conf.auto_search_workdir);
         let diagnostics = {
-            if conf.hal {
-                match hal_lint(&uri, paths, &conf.hal_path) {
+            if conf.verible_syntax {
+                match verible_syntax(rope, &conf.verible_syntax_path) {
                     Some(diags) => diags,
                     None => Vec::new(),
                 }
@@ -82,6 +81,7 @@ pub fn get_diagnostics(
 
 /// recursively find source file paths from working directory
 /// and open files
+#[cfg(feature = "slang")]
 fn get_paths(files: Vec<Url>, search_workdir: bool) -> Vec<PathBuf> {
     // check recursively from working dir for source files
     let mut paths: Vec<PathBuf> = Vec::new();
@@ -178,108 +178,41 @@ fn absolute_path(path_str: &str) -> io::Result<PathBuf> {
     Ok(current_dir().unwrap().join(path).clean())
 }
 
-#[derive(Debug, Deserialize)]
-enum HalSeverity {
-    #[serde(rename = "fatal")]
-    Fatal,
-    #[serde(rename = "error")]
-    Error,
-    #[serde(rename = "warning")]
-    Warning,
-    #[serde(rename = "note")]
-    Note,
-    #[serde(rename = "info")]
-    Info,
-}
-
-impl From<HalSeverity> for DiagnosticSeverity {
-    fn from(severity: HalSeverity) -> Self {
-        match severity {
-            HalSeverity::Fatal => DiagnosticSeverity::Error,
-            HalSeverity::Error => DiagnosticSeverity::Error,
-            HalSeverity::Warning => DiagnosticSeverity::Warning,
-            HalSeverity::Note => DiagnosticSeverity::Information,
-            HalSeverity::Info => DiagnosticSeverity::Information,
-        }
-    }
-}
-
-#[derive(Debug, Deserialize)]
-struct HalMessage {
-    id: String,
-    severity: HalSeverity,
-    info: String,
-    source_line: String,
-    file_info: String,
-    help: String,
-    object: String,
-}
-
-/// main struct to deserialize a hal report from xml output
-#[derive(Debug, Deserialize)]
-struct HalMessageFile {
-    tool: String,
-    version: String,
-    timestamp: String,
-    #[serde(rename = "message", default)]
-    messages: Vec<HalMessage>,
-}
-
-/// Lint using the Cadence Incisive HDL analysis technology (HAL)
-fn hal_lint(uri: &Url, paths: Vec<PathBuf>, hal_path: &str) -> Option<Vec<Diagnostic>> {
-    // get all file paths
-    let mut path_strs = Vec::new();
-    for path in paths {
-        if let Some(path_str) = path.to_str() {
-            path_strs.push(path_str.to_string());
-        }
-    }
-    // using temp dir breaks hal
-    // let tmp_dir = TempDir::new("veridian").ok()?;
-    Command::new(hal_path)
-        .arg("-64BIT")
-        .arg("-SV")
-        .arg("-NOSTDOUT")
-        .arg("-NO_DESIGN_FACTS")
-        .arg("-XMLFILE")
-        .arg("hal.xml")
-        .args(path_strs)
+/// syntax checking using verible-verilog-syntax
+fn verible_syntax(rope: &Rope, verible_syntax_path: &str) -> Option<Vec<Diagnostic>> {
+    let mut child = Command::new(verible_syntax_path)
+        .stdin(Stdio::piped())
+        .stderr(Stdio::piped())
+        .stdout(Stdio::piped())
+        .arg("-")
         .spawn()
-        .expect("hal call failed");
-
-    // retreive and parse xml report
-    let report = fs::read_to_string("hal.xml").ok()?;
-    let hal_report: HalMessageFile = from_reader(report.as_bytes()).ok()?;
-
-    let mut diags: Vec<Diagnostic> = Vec::new();
-    // regex to extract path and line/col from file_info field
-    let re = Regex::new(r"^(?P<path>[^\s]+) (?P<line>[0-9]+) (?P<col>[0-9]+)$").ok()?;
-    for message in hal_report.messages {
-        // preprocess file_info
-        let mut file_info = message.file_info[2..].trim_end_matches('}').to_string();
-        file_info.retain(|x| x != '"' && x != '\\');
-        if let Some(caps) = re.captures(&file_info) {
-            if let Ok(file_path) = Url::from_file_path(absolute_path(&caps["path"]).ok()?) {
-                if let Ok(line) = &caps["line"].parse::<u64>() {
-                    if let Ok(col) = &caps["col"].parse::<u64>() {
-                        if uri == &file_path {
-                            let pos = Position::new(*line - 1, *col);
-                            diags.push(Diagnostic {
-                                range: Range::new(pos, pos),
-                                severity: Some(message.severity.into()),
-                                code: Some(NumberOrString::String(message.id)),
-                                source: Some("HAL".to_string()),
-                                message: message.info,
-                                related_information: None,
-                                tags: None,
-                            })
-                        }
-                    }
-                }
-            }
+        .ok()?;
+    let re = Regex::new(r"^.+:(?P<line>.*):(?P<col>.*):\s(?P<message>.*)\s.*$").ok()?;
+    // write file to stdin, read output from stdout
+    rope.write_to(child.stdin.as_mut()?).ok()?;
+    let output = child.wait_with_output().ok()?;
+    if !output.status.success() {
+        let mut diags: Vec<Diagnostic> = Vec::new();
+        let raw_output = String::from_utf8(output.stdout).ok()?;
+        for error in raw_output.lines() {
+            let caps = re.captures(error)?;
+            let line: u64 = caps.name("line")?.as_str().to_string().parse().ok()?;
+            let col: u64 = caps.name("col")?.as_str().to_string().parse().ok()?;
+            let pos = Position::new(line - 1, col - 1);
+            diags.push(Diagnostic::new(
+                Range::new(pos, pos),
+                Some(DiagnosticSeverity::Error),
+                None,
+                Some("verible".to_string()),
+                caps.name("message")?.as_str().to_string(),
+                None,
+                None,
+            ));
         }
+        Some(diags)
+    } else {
+        None
     }
-    Some(diags)
 }
 
 #[cfg(test)]
@@ -306,7 +239,12 @@ mod tests {
             None,
         );
         assert_eq!(
-            get_diagnostics(uri.clone(), vec![uri], &ProjectConfig::default()),
+            get_diagnostics(
+                uri.clone(),
+                &Rope::default(),
+                vec![uri],
+                &ProjectConfig::default()
+            ),
             expected
         );
     }
@@ -315,19 +253,43 @@ mod tests {
     fn test_unsaved_file() {
         test_init();
         let uri = Url::parse("file://test.sv").unwrap();
-        get_diagnostics(uri.clone(), vec![uri], &ProjectConfig::default());
+        get_diagnostics(
+            uri.clone(),
+            &Rope::default(),
+            vec![uri],
+            &ProjectConfig::default(),
+        );
     }
 
-    // There's not really a good way to test the HAL linter
-    // #[test]
-    // fn test_hal_lint() {
-    // let uri =
-    // Url::from_file_path(absolute_path("test_data/diag/diag_test.sv").unwrap()).unwrap();
-    // let paths = vec![
-    // absolute_path("test_data/diag/diag_test.sv").unwrap(),
-    // absolute_path("test_data/simple_bus.svh").unwrap(),
-    // ];
-    // dbg!(hal_lint(&uri, paths));
-    // panic!();
-    // }
+    #[test]
+    fn test_verible_syntax() {
+        let text = r#"module test;
+    logic abc;
+    logic abcd;
+
+  a
+endmodule
+"#;
+        let doc = Rope::from_str(&text);
+        let errors = verible_syntax(&doc, "verible-verilog-syntax").unwrap();
+        let expected: Vec<Diagnostic> = vec![Diagnostic {
+            range: Range {
+                start: Position {
+                    line: 5,
+                    character: 0,
+                },
+                end: Position {
+                    line: 5,
+                    character: 0,
+                },
+            },
+            severity: Some(DiagnosticSeverity::Error),
+            code: None,
+            source: Some("verible".to_string()),
+            message: "syntax error, rejected \"endmodule\"".to_string(),
+            related_information: None,
+            tags: None,
+        }];
+        assert_eq!(errors, expected);
+    }
 }

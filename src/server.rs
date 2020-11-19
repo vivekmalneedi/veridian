@@ -76,12 +76,12 @@ pub struct ProjectConfig {
     pub source_dirs: Vec<String>,
     // enable formatting with verible-verilog-format
     pub format: bool,
-    // enable linting with Cadence HAL
-    pub hal: bool,
+    // enable linting with Cadence verible_syntax
+    pub verible_syntax: bool,
     // path to verible-verilog-format binary, defaults to verible-verilog-format
     pub verible_format_path: String,
-    // path to hal binary, defaults to hal
-    pub hal_path: String,
+    // path to verible_syntax binary, defaults to verible_syntax
+    pub verible_syntax_path: String,
     // log level
     pub log_level: LogLevel,
 }
@@ -93,9 +93,9 @@ impl Default for ProjectConfig {
             include_dirs: Vec::new(),
             source_dirs: Vec::new(),
             format: false,
-            hal: false,
+            verible_syntax: false,
             verible_format_path: "verible-verilog-format".to_string(),
-            hal_path: "hal".to_string(),
+            verible_syntax_path: "verible_syntax".to_string(),
             log_level: LogLevel::Info,
         }
     }
@@ -162,12 +162,12 @@ impl LanguageServer for Backend {
             info!("no config file found");
         }
         let mut conf = self.server.conf.write().unwrap();
-        conf.hal = which(&conf.hal_path).is_ok();
+        conf.verible_syntax = which(&conf.verible_syntax_path).is_ok();
         if cfg!(feature = "slang") {
             info!("enabled linting with slang");
         }
-        if conf.hal {
-            info!("enabled linting with hal")
+        if conf.verible_syntax {
+            info!("enabled linting with verible-verilog-syntax")
         }
         conf.format = which(&conf.verible_format_path).is_ok();
         if conf.format {

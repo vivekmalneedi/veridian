@@ -39,7 +39,10 @@ impl LSPServer {
         }
         // diagnostics
         let urls = self.srcs.names.read().unwrap().keys().cloned().collect();
-        get_diagnostics(uri, urls, &self.conf.read().unwrap())
+        let file_id = self.srcs.get_id(&uri);
+        let file = self.srcs.get_file(file_id).unwrap();
+        let file = file.read().unwrap();
+        get_diagnostics(uri, &file.text, urls, &self.conf.read().unwrap())
     }
 
     pub fn did_change(&self, params: DidChangeTextDocumentParams) {
@@ -71,7 +74,15 @@ impl LSPServer {
 
     pub fn did_save(&self, params: DidSaveTextDocumentParams) -> PublishDiagnosticsParams {
         let urls = self.srcs.names.read().unwrap().keys().cloned().collect();
-        get_diagnostics(params.text_document.uri, urls, &self.conf.read().unwrap())
+        let file_id = self.srcs.get_id(&params.text_document.uri);
+        let file = self.srcs.get_file(file_id).unwrap();
+        let file = file.read().unwrap();
+        get_diagnostics(
+            params.text_document.uri,
+            &file.text,
+            urls,
+            &self.conf.read().unwrap(),
+        )
     }
 }
 
