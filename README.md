@@ -2,11 +2,11 @@
 
 ![build](https://github.com/vivekmalneedi/veridian/workflows/CI/badge.svg)
 
-A WIP SystemVerilog Language Server
+A SystemVerilog Language Server
 
 ## Installation
 
-- Veridian supports these optional external tools
+- veridian supports these optional external tools
   - For formatting support install `verible-verilog-format` from [verible](https://github.com/google/verible)
   - Cadence Incisive HAL linter
 
@@ -31,6 +31,13 @@ cargo install --path veridian
 ```
 
 ## Usage
+
+### [vscode](https://github.com/vivekmalneedi/veridian/tree/master/extensions/vscode)
+- download veridian.vsix from the latest release
+- install the extension using one of the two following methods
+  - In the extensions tab, click on the 3 dots, then click `Install from VSIX` and choose `veridian.vsix`
+  - Run `code --install-extension veridian.vsix`
+
 
 ### [coc.nvim](https://github.com/neoclide/coc.nvim)
 
@@ -82,6 +89,9 @@ verible_format_path: <path>,
 # path to hal binary, defaults to hal
 # default: hal
 hal_path: <path>,
+# set log level
+# default: Info
+log_level: Error|Warn|Info|Debug|Trace
 ```
 
 ## LSP Support
@@ -91,8 +101,8 @@ See the [LSP Specification](https://microsoft.github.io/language-server-protocol
 - diagnostics (using [slang](https://github.com/MikePopoloski/slang) or hal)
 - completion
   - identifier completion
-  - dot completion (partially implemented)
-  - keywords & keyword snippets
+  - dot completion
+  - keywords & snippets
   - system task/function and compiler directives
 - hover (documentation)
 - definition
