@@ -1,16 +1,23 @@
 use crate::server::ProjectConfig;
+#[cfg(any(feature = "slang", test))]
 use path_clean::PathClean;
 use regex::Regex;
 use ropey::Rope;
+#[cfg(any(feature = "slang", test))]
 use std::env::current_dir;
+#[cfg(any(feature = "slang", test))]
 use std::io;
+#[cfg(any(feature = "slang", test))]
 use std::path::Path;
+#[cfg(any(feature = "slang", test))]
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
 use tower_lsp::lsp_types::*;
 #[cfg(feature = "slang")]
 use veridian_slang::slang_compile;
-use walkdir::{DirEntry, WalkDir};
+use walkdir::DirEntry;
+#[cfg(feature = "slang")]
+use walkdir::WalkDir;
 
 #[cfg(feature = "slang")]
 pub fn get_diagnostics(
@@ -172,6 +179,7 @@ fn slang_severity(severity: &str) -> Option<DiagnosticSeverity> {
     }
 }
 
+#[cfg(any(feature = "slang", test))]
 // convert relative path to absolute
 fn absolute_path(path_str: &str) -> io::Result<PathBuf> {
     let path = Path::new(path_str);
