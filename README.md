@@ -6,9 +6,11 @@ A SystemVerilog Language Server
 
 ## Installation
 
-- veridian supports these optional external tools
-  - For formatting support install `verible-verilog-format` from [verible](https://github.com/google/verible)
-  - Cadence Incisive HAL linter
+### Pre-Installation
+
+- It is recommended to install the [verible](https://github.com/google/verible) tools for
+  - formatting support with `verible-verilog-format`
+  - syntax checking support with `verible-verilog-syntax`
 
 ### Install from Release
 
@@ -21,7 +23,7 @@ A SystemVerilog Language Server
 - Build dependencies: Rust toolchain
 - optional: C++17 compatible compiler (for linting with slang)
 
-```
+```bash
 # clone the repo
 git clone https://github.com/vivekmalneedi/veridian.git
 # install with slang feature, if C++17 compiler is available
@@ -38,12 +40,11 @@ cargo install --path veridian
   - In the extensions tab, click on the 3 dots, then click `Install from VSIX` and choose `veridian.vsix`
   - Run `code --install-extension veridian.vsix`
 
-
 ### [coc.nvim](https://github.com/neoclide/coc.nvim)
 
 In `coc-settings.json`:
 
-```
+```json
 {
   "languageserver": {
     "veridian": {
@@ -60,7 +61,7 @@ Specify source directories and include directories using a yaml project config
 
 In `veridian.yml`:
 
-```
+```yaml
 # list of directories with header files
 include_dirs:
   - inc1
@@ -73,7 +74,7 @@ source_dirs:
 
 There are other config options as well
 
-```
+```yaml
 # if true, recursively search the working directory for files to run diagnostics on
 # default: true
 auto_search_workdir: true|false,
