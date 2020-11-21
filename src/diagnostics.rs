@@ -29,8 +29,8 @@ pub fn get_diagnostics(
     if !(cfg!(test) && (uri.to_string().starts_with("file:///test"))) {
         let paths = get_paths(files, conf.auto_search_workdir);
         let diagnostics = {
-            if conf.verible_syntax {
-                match verible_syntax(rope, &conf.verible_syntax_path) {
+            if conf.verible.syntax.enabled {
+                match verible_syntax(rope, &conf.verible.syntax.path) {
                     Some(diags) => diags,
                     None => Vec::new(),
                 }
@@ -63,8 +63,8 @@ pub fn get_diagnostics(
 ) -> PublishDiagnosticsParams {
     if !(cfg!(test) && (uri.to_string().starts_with("file:///test"))) {
         let diagnostics = {
-            if conf.verible_syntax {
-                match verible_syntax(rope, &conf.verible_syntax_path) {
+            if conf.verible.syntax.enabled {
+                match verible_syntax(rope, &conf.verible.syntax.path) {
                     Some(diags) => diags,
                     None => Vec::new(),
                 }

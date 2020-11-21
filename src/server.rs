@@ -67,6 +67,7 @@ pub enum LogLevel {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
+#[serde(default)]
 pub struct ProjectConfig {
     // if true, recursively search the working directory for files to run diagnostics on
     pub auto_search_workdir: bool,
@@ -74,14 +75,7 @@ pub struct ProjectConfig {
     pub include_dirs: Vec<String>,
     // list of directories to recursively search for SystemVerilog/Verilog sources
     pub source_dirs: Vec<String>,
-    // enable formatting with verible-verilog-format
-    pub format: bool,
-    // enable linting with Cadence verible_syntax
-    pub verible_syntax: bool,
-    // path to verible-verilog-format binary, defaults to verible-verilog-format
-    pub verible_format_path: String,
-    // path to verible_syntax binary, defaults to verible_syntax
-    pub verible_syntax_path: String,
+    pub verible: Verible,
     // log level
     pub log_level: LogLevel,
 }
@@ -92,11 +86,60 @@ impl Default for ProjectConfig {
             auto_search_workdir: true,
             include_dirs: Vec::new(),
             source_dirs: Vec::new(),
-            format: false,
-            verible_syntax: false,
-            verible_format_path: "verible-verilog-format".to_string(),
-            verible_syntax_path: "verible_syntax".to_string(),
+            verible: Verible::default(),
             log_level: LogLevel::Info,
+        }
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(default)]
+pub struct Verible {
+    pub syntax: VeribleSyntax,
+    pub format: VeribleFormat,
+}
+
+impl Default for Verible {
+    fn default() -> Self {
+        Self {
+            syntax: VeribleSyntax::default(),
+            format: VeribleFormat::default(),
+        }
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(default)]
+pub struct VeribleSyntax {
+    pub enabled: bool,
+    pub path: String,
+    pub args: String,
+}
+
+impl Default for VeribleSyntax {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            path: "verible-verilog-syntax".to_string(),
+            args: String::new(),
+        }
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(default)]
+pub struct VeribleFormat {
+    pub enabled: bool,
+    pub path: String,
+    pub args: String,
+}
+
+impl Default for VeribleFormat {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            path: "verible-verilog-format".to_string(),
+            args: String::new(),
         }
     }
 }
@@ -162,15 +205,15 @@ impl LanguageServer for Backend {
             info!("no config file found");
         }
         let mut conf = self.server.conf.write().unwrap();
-        conf.verible_syntax = which(&conf.verible_syntax_path).is_ok();
+        conf.verible.syntax.enabled = which(&conf.verible.syntax.path).is_ok();
         if cfg!(feature = "slang") {
             info!("enabled linting with slang");
         }
-        if conf.verible_syntax {
+        if conf.verible.syntax.enabled {
             info!("enabled linting with verible-verilog-syntax")
         }
-        conf.format = which(&conf.verible_format_path).is_ok();
-        if conf.format {
+        conf.verible.format.enabled = which(&conf.verible.format.path).is_ok();
+        if conf.verible.format.enabled {
             info!("enabled formatting with verible-verilog-format");
         } else {
             info!("formatting unavailable");
@@ -207,8 +250,8 @@ impl LanguageServer for Backend {
                 definition_provider: Some(true),
                 hover_provider: Some(HoverProviderCapability::Simple(true)),
                 document_symbol_provider: Some(true),
-                document_formatting_provider: Some(conf.format),
-                document_range_formatting_provider: Some(conf.format),
+                document_formatting_provider: Some(conf.verible.format.enabled),
+                document_range_formatting_provider: Some(conf.verible.format.enabled),
                 ..ServerCapabilities::default()
             },
         })
@@ -270,5 +313,28 @@ impl LanguageServer for Backend {
         params: DocumentRangeFormattingParams,
     ) -> Result<Option<Vec<TextEdit>>> {
         Ok(self.server.range_formatting(params))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_config() {
+        let config = r#"
+auto_search_workdir: false
+format: true
+verible:
+  syntax:
+    enabled: true
+    path: "verible-verilog-syntax"
+  format:
+    args: "--net_variable_alignment=align"
+log_level: Info
+"#;
+        let config = serde_yaml::from_str::<ProjectConfig>(config);
+        dbg!(&config);
+        assert!(config.is_ok());
     }
 }

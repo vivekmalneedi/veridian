@@ -15,13 +15,13 @@ impl LSPServer {
         let file = file.read().ok()?;
 
         let conf = self.conf.read().unwrap();
-        if conf.format {
+        if conf.verible.format.enabled {
             Some(vec![TextEdit::new(
                 Range::new(
                     file.text.char_to_pos(0),
                     file.text.char_to_pos(file.text.len_chars() - 1),
                 ),
-                format_document(&file.text, None, &conf.verible_format_path)?,
+                format_document(&file.text, None, &conf.verible.format.path)?,
             )])
         } else {
             None
@@ -37,10 +37,10 @@ impl LSPServer {
         let file = file.read().ok()?;
 
         let conf = self.conf.read().unwrap();
-        if conf.format {
+        if conf.verible.format.enabled {
             Some(vec![TextEdit::new(
                 file.text.char_range_to_range(0..file.text.len_chars()),
-                format_document(&file.text, Some(params.range), &conf.verible_format_path)?,
+                format_document(&file.text, Some(params.range), &conf.verible.format.path)?,
             )])
         } else {
             None
@@ -103,7 +103,7 @@ endmodule
         let doc = Rope::from_str(&text);
         if which("verible-verilog-format").is_ok() {
             assert_eq!(
-                format_document(&doc, None, &ProjectConfig::default().verible_format_path).unwrap(),
+                format_document(&doc, None, &ProjectConfig::default().verible.format.path).unwrap(),
                 text_fixed.to_string()
             );
         }
@@ -144,7 +144,7 @@ endmodule
                 format_document(
                     &doc,
                     Some(Range::new(Position::new(0, 0), Position::new(4, 9))),
-                    &ProjectConfig::default().verible_format_path
+                    &ProjectConfig::default().verible.format.path
                 )
                 .unwrap(),
                 text_fixed.to_string()
