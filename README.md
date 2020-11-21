@@ -57,8 +57,8 @@ In `coc-settings.json`:
 
 ## Configuration
 
-Specify source directories and include directories using a yaml project config
-All settings have defaults so your config file should only specify custom values
+- Specify source directories and include directories using a yaml project config
+- All settings have defaults so your config file should only specify custom values
 
 In `veridian.yml`:
 
