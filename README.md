@@ -58,6 +58,7 @@ In `coc-settings.json`:
 ## Configuration
 
 Specify source directories and include directories using a yaml project config
+All settings have defaults so your config file should only specify custom values
 
 In `veridian.yml`:
 
@@ -70,26 +71,29 @@ include_dirs:
 source_dirs:
   - src
   - src2
-```
-
-There are other config options as well
-
-```yaml
 # if true, recursively search the working directory for files to run diagnostics on
 # default: true
 auto_search_workdir: true|false,
-# enable formatting with verible-verilog-format
-# default: true
-format: true|false,
-# enable linting with Cadence HAL
-# default: true
-hal: true|false,
-# path to verible-verilog-format binary, defaults to verible-verilog-format
-# default: verible-verilog-format
-verible_format_path: <path>,
-# path to hal binary, defaults to hal
-# default: hal
-hal_path: <path>,
+# verible tool configuration
+verible:
+  # verible-verilog-syntax configuration
+  syntax:
+    # default: true if in path
+    enabled: true|false,
+    path: "verible-verilog-syntax"
+    # default: none
+    args:
+        - arg1
+        - arg2
+  # verible-verilog-format configuration
+  format:
+    # default: true if in path
+    enabled: true|false,
+    path: "verible-verilog-format"
+    # default: none
+    args:
+        - arg1
+        - arg2
 # set log level
 # default: Info
 log_level: Error|Warn|Info|Debug|Trace
