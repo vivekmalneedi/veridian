@@ -36,7 +36,7 @@ jobs:
               run: |
                   wget 'https://github.com/google/verible/releases/download/v0.0-705-g75249d0/verible-v0.0-705-g75249d0-Ubuntu-20.04-focal-x86_64.tar.gz' -O verible.tar.gz
                   tar -xf verible.tar.gz
-                  cp verible-v0.0-705-g75249d0/bin/* /usr/bin
+                  sudo cp verible-v0.0-705-g75249d0/bin/* /usr/bin
 
             - name: Run cargo test
               uses: actions-rs/cargo@v1
