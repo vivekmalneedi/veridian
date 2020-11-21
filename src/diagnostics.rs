@@ -30,7 +30,7 @@ pub fn get_diagnostics(
         let paths = get_paths(files, conf.auto_search_workdir);
         let diagnostics = {
             if conf.verible.syntax.enabled {
-                match verible_syntax(rope, &conf.verible.syntax.path) {
+                match verible_syntax(rope, &conf.verible.syntax.path, &conf.verible.syntax.args) {
                     Some(diags) => diags,
                     None => Vec::new(),
                 }
@@ -64,7 +64,7 @@ pub fn get_diagnostics(
     if !(cfg!(test) && (uri.to_string().starts_with("file:///test"))) {
         let diagnostics = {
             if conf.verible.syntax.enabled {
-                match verible_syntax(rope, &conf.verible.syntax.path) {
+                match verible_syntax(rope, &conf.verible.syntax.path, &conf.verible.syntax.args) {
                     Some(diags) => diags,
                     None => Vec::new(),
                 }
@@ -187,11 +187,16 @@ fn absolute_path(path_str: &str) -> io::Result<PathBuf> {
 }
 
 /// syntax checking using verible-verilog-syntax
-fn verible_syntax(rope: &Rope, verible_syntax_path: &str) -> Option<Vec<Diagnostic>> {
+fn verible_syntax(
+    rope: &Rope,
+    verible_syntax_path: &str,
+    verible_syntax_args: &[String],
+) -> Option<Vec<Diagnostic>> {
     let mut child = Command::new(verible_syntax_path)
         .stdin(Stdio::piped())
         .stderr(Stdio::piped())
         .stdout(Stdio::piped())
+        .args(verible_syntax_args)
         .arg("-")
         .spawn()
         .ok()?;
@@ -279,7 +284,7 @@ mod tests {
 endmodule
 "#;
         let doc = Rope::from_str(&text);
-        let errors = verible_syntax(&doc, "verible-verilog-syntax").unwrap();
+        let errors = verible_syntax(&doc, "verible-verilog-syntax", &[]).unwrap();
         let expected: Vec<Diagnostic> = vec![Diagnostic {
             range: Range {
                 start: Position {

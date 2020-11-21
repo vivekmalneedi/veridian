@@ -75,6 +75,7 @@ pub struct ProjectConfig {
     pub include_dirs: Vec<String>,
     // list of directories to recursively search for SystemVerilog/Verilog sources
     pub source_dirs: Vec<String>,
+    // config options for verible tools
     pub verible: Verible,
     // log level
     pub log_level: LogLevel,
@@ -113,7 +114,7 @@ impl Default for Verible {
 pub struct VeribleSyntax {
     pub enabled: bool,
     pub path: String,
-    pub args: String,
+    pub args: Vec<String>,
 }
 
 impl Default for VeribleSyntax {
@@ -121,7 +122,7 @@ impl Default for VeribleSyntax {
         Self {
             enabled: false,
             path: "verible-verilog-syntax".to_string(),
-            args: String::new(),
+            args: Vec::new(),
         }
     }
 }
@@ -131,7 +132,7 @@ impl Default for VeribleSyntax {
 pub struct VeribleFormat {
     pub enabled: bool,
     pub path: String,
-    pub args: String,
+    pub args: Vec<String>,
 }
 
 impl Default for VeribleFormat {
@@ -139,7 +140,7 @@ impl Default for VeribleFormat {
         Self {
             enabled: false,
             path: "verible-verilog-format".to_string(),
-            args: String::new(),
+            args: Vec::new(),
         }
     }
 }
@@ -330,7 +331,8 @@ verible:
     enabled: true
     path: "verible-verilog-syntax"
   format:
-    args: "--net_variable_alignment=align"
+    args:
+      - --net_variable_alignment=align
 log_level: Info
 "#;
         let config = serde_yaml::from_str::<ProjectConfig>(config);
