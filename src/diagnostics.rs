@@ -28,18 +28,20 @@ pub fn get_diagnostics(
 ) -> PublishDiagnosticsParams {
     if !(cfg!(test) && (uri.to_string().starts_with("file:///test"))) {
         let paths = get_paths(files, conf.auto_search_workdir);
-        let diagnostics = {
+        let mut diagnostics = {
             if conf.verible.syntax.enabled {
                 match verible_syntax(rope, &conf.verible.syntax.path, &conf.verible.syntax.args) {
                     Some(diags) => diags,
                     None => Vec::new(),
                 }
-            } else if cfg!(feature = "slang") {
-                parse_report(uri.clone(), slang_compile(paths).unwrap())
             } else {
                 Vec::new()
             }
         };
+        diagnostics.append(&mut parse_report(
+            uri.clone(),
+            slang_compile(paths).unwrap(),
+        ));
         PublishDiagnosticsParams {
             uri,
             diagnostics,

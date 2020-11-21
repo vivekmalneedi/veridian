@@ -120,7 +120,7 @@ pub struct VeribleSyntax {
 impl Default for VeribleSyntax {
     fn default() -> Self {
         Self {
-            enabled: false,
+            enabled: true,
             path: "verible-verilog-syntax".to_string(),
             args: Vec::new(),
         }
@@ -138,7 +138,7 @@ pub struct VeribleFormat {
 impl Default for VeribleFormat {
     fn default() -> Self {
         Self {
-            enabled: false,
+            enabled: true,
             path: "verible-verilog-format".to_string(),
             args: Vec::new(),
         }
