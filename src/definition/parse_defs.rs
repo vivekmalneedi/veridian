@@ -1082,18 +1082,12 @@ fn list_type_assignment(
     Some(defs)
 }
 
-fn param_dec(
+pub fn param_dec(
     tree: &SyntaxTree,
-    _: &ParameterDeclaration,
+    param_dec: &ParameterDeclaration,
     event_iter: &mut EventIter,
     url: &Url,
 ) -> Option<Vec<GenericDec>> {
-    let param_dec = skip_until_enter!(
-        tree,
-        event_iter,
-        RefNode::ParameterDeclaration,
-        &ParameterDeclaration
-    )?;
     match param_dec {
         ParameterDeclaration::Param(x) => {
             let mut prepend = String::new();
@@ -1121,18 +1115,12 @@ fn param_dec(
     }
 }
 
-fn localparam_dec(
+pub fn localparam_dec(
     tree: &SyntaxTree,
-    _: &LocalParameterDeclaration,
+    localparam_dec: &LocalParameterDeclaration,
     event_iter: &mut EventIter,
     url: &Url,
 ) -> Option<Vec<GenericDec>> {
-    let localparam_dec = skip_until_enter!(
-        tree,
-        event_iter,
-        RefNode::LocalParameterDeclaration,
-        &LocalParameterDeclaration
-    )?;
     match localparam_dec {
         LocalParameterDeclaration::Param(x) => {
             let mut prepend = String::new();
@@ -1167,9 +1155,23 @@ fn param_port_dec(
     url: &Url,
 ) -> Option<Vec<GenericDec>> {
     match node {
-        ParameterPortDeclaration::ParameterDeclaration(x) => param_dec(tree, x, event_iter, url),
-        ParameterPortDeclaration::LocalParameterDeclaration(x) => {
-            localparam_dec(tree, x, event_iter, url)
+        ParameterPortDeclaration::ParameterDeclaration(_) => {
+            let param = skip_until_enter!(
+                tree,
+                event_iter,
+                RefNode::ParameterDeclaration,
+                &ParameterDeclaration
+            )?;
+            param_dec(tree, &param, event_iter, url)
+        }
+        ParameterPortDeclaration::LocalParameterDeclaration(_) => {
+            let localparam = skip_until_enter!(
+                tree,
+                event_iter,
+                RefNode::LocalParameterDeclaration,
+                &LocalParameterDeclaration
+            )?;
+            localparam_dec(tree, &localparam, event_iter, url)
         }
         ParameterPortDeclaration::ParamList(x) => {
             let mut prepend = String::new();

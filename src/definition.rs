@@ -132,7 +132,6 @@ pub fn match_definitions(
                 scopes.push(Box::new(dec?));
             }
         }
-
         RefNode::PackageDeclaration(n) => {
             let dec = package_dec(syntax_tree, n, event_iter, url);
             if dec.is_some() {
@@ -171,6 +170,22 @@ pub fn match_definitions(
             let vars = data_dec(syntax_tree, n, event_iter, url);
             if vars.is_some() {
                 definitions.append(&mut vars?);
+            }
+        }
+        RefNode::ParameterDeclaration(n) => {
+            let vars = param_dec(syntax_tree, n, event_iter, url);
+            if vars.is_some() {
+                for var in vars? {
+                    definitions.push(Box::new(var));
+                }
+            }
+        }
+        RefNode::LocalParameterDeclaration(n) => {
+            let vars = localparam_dec(syntax_tree, n, event_iter, url);
+            if vars.is_some() {
+                for var in vars? {
+                    definitions.push(Box::new(var));
+                }
             }
         }
         RefNode::FunctionDeclaration(n) => {

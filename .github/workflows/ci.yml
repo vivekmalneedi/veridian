@@ -1,8 +1,4 @@
-on:
-    push:
-        branches:
-            - master
-    pull_request:
+on: [push, pull_request, workflow_dispatch]
 
 name: CI
 
@@ -10,6 +6,7 @@ jobs:
     test:
         name: Test Suite
         runs-on: ubuntu-20.04
+        if: ${{ github.event_name != 'workflow_dispatch'}}
         steps:
             - name: Checkout sources
               uses: actions/checkout@v2
@@ -85,18 +82,15 @@ jobs:
               with:
                   command: fmt
                   args: --all -- --check
-
-            - name: Run cargo clippy
-              uses: actions-rs/cargo@v1
+            - uses: actions-rs/clippy-check@v1
               with:
-                  command: clippy
+                  token: ${{ secrets.GITHUB_TOKEN }}
                   args: --all-features -- -D warnings
 
     build_ubuntu:
         name: Build Ubuntu
-        needs: test
         runs-on: ubuntu-20.04
-        if: github.ref == 'refs/heads/master'
+        if: ${{ github.ref == 'refs/heads/master' && github.event_name == 'workflow_dispatch' }}
         steps:
             - name: Checkout sources
               uses: actions/checkout@v2
@@ -137,9 +131,8 @@ jobs:
 
     build_centos:
         name: Build Centos
-        needs: test
         runs-on: ubuntu-latest
-        if: github.ref == 'refs/heads/master'
+        if: ${{ github.ref == 'refs/heads/master' && github.event_name == 'workflow_dispatch' }}
         container:
             image: vivekmalneedi/centos7-rust
         steps:
@@ -175,9 +168,8 @@ jobs:
 
     build_vscode:
         name: Build vscode extension
-        needs: test
         runs-on: ubuntu-latest
-        if: github.ref == 'refs/heads/master'
+        if: ${{ github.ref == 'refs/heads/master' && github.event_name == 'workflow_dispatch' }}
         steps:
             - uses: actions/checkout@v2
             - uses: actions/setup-node@v2.1.2
@@ -200,7 +192,6 @@ jobs:
         name: Create Release
         needs: [build_ubuntu, build_centos, build_vscode]
         runs-on: ubuntu-latest
-        if: github.ref == 'refs/heads/master'
         steps:
             - uses: actions/download-artifact@v2
               with:
