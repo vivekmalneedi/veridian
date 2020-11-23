@@ -1,7 +1,7 @@
 use crate::server::LSPServer;
 use crate::sources::LSPSupport;
 use log::{debug, trace};
-use ropey::RopeSlice;
+use ropey::{Rope, RopeSlice};
 use std::time::Instant;
 use tower_lsp::lsp_types::*;
 
@@ -18,7 +18,11 @@ impl LSPServer {
         let file = self.srcs.get_file(file_id)?;
         let file = file.read().ok()?;
         trace!("comp read: {}", now.elapsed().as_millis());
-        let token = get_completion_token(file.text.line(doc.position.line as usize), doc.position);
+        let token = get_completion_token(
+            &file.text,
+            file.text.line(doc.position.line as usize),
+            doc.position,
+        );
         let response = match params.context {
             Some(context) => match context.trigger_kind {
                 CompletionTriggerKind::TriggerCharacter => {
@@ -85,7 +89,7 @@ impl LSPServer {
 
 /// attempt to get the token the user was trying to complete, by
 /// filtering out characters unneeded for name resolution
-fn get_completion_token(line: RopeSlice, pos: Position) -> String {
+fn get_completion_token(text: &Rope, line: RopeSlice, pos: Position) -> String {
     let mut token = String::new();
     let mut line_iter = line.chars();
     for _ in 0..(line.utf16_cu_to_char(pos.character as usize)) {
@@ -108,12 +112,40 @@ fn get_completion_token(line: RopeSlice, pos: Position) -> String {
         let l_bracket_offset = result.find('[').unwrap_or_else(|| result.len());
         result.replace_range(l_bracket_offset.., "");
     }
-    result
+    if &result == "." {
+        // probably a instantiation, the token should be what we're instatiating
+        let mut char_iter = text.chars();
+        let mut token = String::new();
+        for _ in 0..text.pos_to_char(&pos) {
+            char_iter.next();
+        }
+        let mut c = char_iter.prev();
+
+        // go to the last semicolon
+        while c.is_some() && (c.unwrap() != ';') {
+            c = char_iter.prev();
+        }
+        // go the the start of the next symbol
+        while c.is_some() && !(c.unwrap().is_alphanumeric() || c.unwrap() == '_') {
+            c = char_iter.next();
+        }
+        // then extract the next symbol
+        while c.is_some() && (c.unwrap().is_alphanumeric() || c.unwrap() == '_') {
+            token.push(c.unwrap());
+            c = char_iter.next();
+        }
+        token
+    } else {
+        result
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::definition::def_types::Scope;
+    use crate::definition::get_scopes;
+    use crate::sources::{parse, LSPSupport};
     use crate::support::test_init;
     use ropey::Rope;
 
@@ -122,6 +154,7 @@ mod tests {
         test_init();
         let text = Rope::from_str("abc abc.cba de_fg cde[4]");
         let mut result = get_completion_token(
+            &text,
             text.line(0),
             Position {
                 line: 0,
@@ -130,6 +163,7 @@ mod tests {
         );
         assert_eq!(&result, "abc");
         result = get_completion_token(
+            &text,
             text.line(0),
             Position {
                 line: 0,
@@ -138,6 +172,7 @@ mod tests {
         );
         assert_eq!(&result, "abc.cba");
         result = get_completion_token(
+            &text,
             text.line(0),
             Position {
                 line: 0,
@@ -146,6 +181,7 @@ mod tests {
         );
         assert_eq!(&result, "de_f");
         result = get_completion_token(
+            &text,
             text.line(0),
             Position {
                 line: 0,
@@ -476,6 +512,42 @@ endmodule
         } else {
             panic!();
         }
+    }
+
+    #[test]
+    fn test_dot_completion_instantiation() {
+        test_init();
+        let text = r#"interface test_inter;
+    wire wrong;
+    logic clk;
+endinterface
+module test;
+    logic clk;
+    test_inter2 t (
+        .clk(clk),
+        .
+    )
+endmodule
+interface test_inter2;
+    wire abcd;
+    logic clk;
+endinterface
+"#;
+
+        let doc = Rope::from_str(&text);
+        let url = Url::parse("file:///test.sv").unwrap();
+        let syntax_tree = parse(&doc, &url, &None, &Vec::new()).unwrap();
+        let scope_tree = get_scopes(&syntax_tree, &url).unwrap();
+        let pos = Position::new(8, 9);
+        let token = get_completion_token(&doc, doc.line(pos.line as usize), pos);
+        let completions = scope_tree.get_dot_completion(
+            token.trim_end_matches('.'),
+            doc.pos_to_byte(&pos),
+            &url,
+            &scope_tree,
+        );
+        let labels: Vec<String> = completions.iter().map(|x| x.label.clone()).collect();
+        assert_eq!(labels, vec!["abcd", "clk"]);
     }
 
     #[test]

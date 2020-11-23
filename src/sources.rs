@@ -206,6 +206,8 @@ impl Sources {
         let source_handle = source.clone();
         let scope_handle = self.scope_tree.clone();
         let inc_dirs = self.include_dirs.clone();
+
+        // spawn parse thread
         let parse_handle = thread::spawn(move || {
             let (lock, cvar) = &*valid_parse2;
             loop {

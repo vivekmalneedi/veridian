@@ -82,15 +82,21 @@ impl LSPServer {
         let file = file.read().ok()?;
         let token = get_definition_token(file.text.line(pos.line as usize), pos);
         let scope_tree = self.srcs.scope_tree.read().ok()?;
-        let def = scope_tree
-            .as_ref()?
-            .get_definition(&token, file.text.pos_to_byte(&pos), &uri)?;
+        // use the byte_idx of the definition if possible, otherwise use the cursor
+        let byte_idx =
+            match scope_tree
+                .as_ref()?
+                .get_definition(&token, file.text.pos_to_byte(&pos), &uri)
+            {
+                Some(def) => def.byte_idx,
+                None => file.text.pos_to_byte(&pos),
+            };
         let syntax_tree = file.syntax_tree.as_ref()?;
         let references = all_identifiers(syntax_tree, &token);
         Some(
             scope_tree
                 .as_ref()?
-                .document_highlights(&uri, &file.text, references, def.byte_idx),
+                .document_highlights(&uri, &file.text, references, byte_idx),
         )
     }
 }
