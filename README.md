@@ -1,8 +1,10 @@
 # veridian
 
 ![build](https://github.com/vivekmalneedi/veridian/workflows/CI/badge.svg)
+![GitHub](https://img.shields.io/github/license/vivekmalneedi/veridian)
 
-A SystemVerilog Language Server
+A SystemVerilog Language Server\
+<a href="https://asciinema.org/a/374859" target="_blank"><img src="https://asciinema.org/a/374859.svg" width="500"/></a>
 
 ## Installation
 
@@ -54,6 +56,7 @@ In `coc-settings.json`:
 }
 
 ```
+The [full list](https://github.com/vivekmalneedi/veridian/wiki/Usage-Instructions-for-various-LSP-Clients) is on the wiki and includes configuration for the neovim built-in lsp client
 
 ## Configuration
 
@@ -103,7 +106,7 @@ log_level: Error|Warn|Info|Debug|Trace
 
 See the [LSP Specification](https://microsoft.github.io/language-server-protocol/specifications/specification-current/) for more details
 
-- diagnostics (using [slang](https://github.com/MikePopoloski/slang) or hal)
+- diagnostics (using [slang](https://github.com/MikePopoloski/slang) or [verible](https://github.com/google/verible))
 - completion
   - identifier completion
   - dot completion
@@ -112,5 +115,6 @@ See the [LSP Specification](https://microsoft.github.io/language-server-protocol
 - hover (documentation)
 - definition
 - documentSymbol
+- documentHighlight
 - formatting (using [verible](https://github.com/google/verible))
 - rangeFormatting (using [verible](https://github.com/google/verible))
