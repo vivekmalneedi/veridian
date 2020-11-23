@@ -253,6 +253,7 @@ impl LanguageServer for Backend {
                 document_symbol_provider: Some(true),
                 document_formatting_provider: Some(conf.verible.format.enabled),
                 document_range_formatting_provider: Some(conf.verible.format.enabled),
+                document_highlight_provider: Some(true),
                 ..ServerCapabilities::default()
             },
         })
@@ -314,6 +315,12 @@ impl LanguageServer for Backend {
         params: DocumentRangeFormattingParams,
     ) -> Result<Option<Vec<TextEdit>>> {
         Ok(self.server.range_formatting(params))
+    }
+    async fn document_highlight(
+        &self,
+        params: DocumentHighlightParams,
+    ) -> Result<Option<Vec<DocumentHighlight>>> {
+        Ok(self.server.document_highlight(params))
     }
 }
 

@@ -3,7 +3,7 @@ use crate::definition::match_definitions;
 use sv_parser::*;
 use tower_lsp::lsp_types::*;
 
-fn get_ident(tree: &SyntaxTree, node: RefNode) -> (String, usize) {
+pub fn get_ident(tree: &SyntaxTree, node: RefNode) -> (String, usize) {
     let loc = unwrap_locate!(node).unwrap();
     let ident_str = tree.get_str(loc).unwrap().to_string();
     let byte_idx = tree.get_origin(loc).unwrap().1;

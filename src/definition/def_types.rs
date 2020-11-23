@@ -177,6 +177,7 @@ pub trait Scope: std::fmt::Debug + Definition + Sync + Send {
         }
         definition
     }
+    /// returns all symbols in a document
     fn document_symbols(&self, uri: &Url, doc: &Rope) -> Vec<DocumentSymbol> {
         let mut symbols: Vec<DocumentSymbol> = Vec::new();
         for scope in self.scopes() {
@@ -215,6 +216,35 @@ pub trait Scope: std::fmt::Debug + Definition + Sync + Send {
             })
         }
         symbols
+    }
+
+    /// highlight all references of a symbol
+    fn document_highlights(
+        &self,
+        uri: &Url,
+        doc: &Rope,
+        // all references in the doc's syntax tree
+        references: Vec<(String, usize)>,
+        // byte_idx of symbol definition
+        byte_idx: usize,
+    ) -> Vec<DocumentHighlight> {
+        // to find references we need to grab references from locations downward from the
+        // definition
+        for scope in self.scopes() {
+            if &scope.url() == uri && scope.start() <= byte_idx && byte_idx <= scope.end() {
+                return scope.document_highlights(uri, doc, references, byte_idx);
+            }
+        }
+        // we should now be in the scope of the definition, so we can grab all references
+        // in this scope. This also grabs references below this scope.
+        references
+            .iter()
+            .filter(|x| self.start() <= x.1 && x.1 <= self.end())
+            .map(|x| DocumentHighlight {
+                range: Range::new(doc.byte_to_pos(x.1), doc.byte_to_pos(x.1 + x.0.len())),
+                kind: None,
+            })
+            .collect()
     }
 }
 

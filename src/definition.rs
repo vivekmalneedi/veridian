@@ -1,3 +1,4 @@
+use crate::definition::parse_defs::get_ident;
 use crate::server::LSPServer;
 use crate::sources::LSPSupport;
 use log::{debug, trace};
@@ -68,6 +69,44 @@ impl LSPServer {
             scope_tree.as_ref()?.document_symbols(&uri, &file.text),
         ))
     }
+
+    pub fn document_highlight(
+        &self,
+        params: DocumentHighlightParams,
+    ) -> Option<Vec<DocumentHighlight>> {
+        let uri = params.text_document_position_params.text_document.uri;
+        let pos = params.text_document_position_params.position;
+        let file_id = self.srcs.get_id(&uri).to_owned();
+        self.srcs.wait_parse_ready(file_id, false);
+        let file = self.srcs.get_file(file_id)?;
+        let file = file.read().ok()?;
+        let token = get_definition_token(file.text.line(pos.line as usize), pos);
+        let scope_tree = self.srcs.scope_tree.read().ok()?;
+        let def = scope_tree
+            .as_ref()?
+            .get_definition(&token, file.text.pos_to_byte(&pos), &uri)?;
+        let syntax_tree = file.syntax_tree.as_ref()?;
+        let references = all_identifiers(syntax_tree, &token);
+        Some(
+            scope_tree
+                .as_ref()?
+                .document_highlights(&uri, &file.text, references, def.byte_idx),
+        )
+    }
+}
+
+/// return all identifiers in a syntax tree matching a given token
+fn all_identifiers(syntax_tree: &SyntaxTree, token: &str) -> Vec<(String, usize)> {
+    let mut idents: Vec<(String, usize)> = Vec::new();
+    for node in syntax_tree {
+        if let RefNode::Identifier(_) = node {
+            let (ident, byte_idx) = get_ident(syntax_tree, node);
+            if ident == token {
+                idents.push((ident, byte_idx));
+            }
+        }
+    }
+    idents
 }
 
 /// retrieve the token the user invoked goto definition or hover on
@@ -374,6 +413,7 @@ logic b;"#
 
     #[test]
     fn test_symbols() {
+        test_init();
         let text = r#"
 module test;
   logic a;
@@ -395,5 +435,55 @@ endmodule"#;
             .collect();
         assert!(names.contains(&"a".to_string()));
         assert!(names.contains(&"b".to_string()));
+    }
+
+    #[test]
+    fn test_highlight() {
+        test_init();
+        let text = r#"
+module test;
+  logic clk;
+  assign clk = 1'b1;
+endmodule"#;
+        let doc = Rope::from_str(&text);
+        let url = Url::parse("file:///test.sv").unwrap();
+        let syntax_tree = parse(&doc, &url, &None, &Vec::new()).unwrap();
+        let scope_tree = get_scopes(&syntax_tree, &url).unwrap();
+        let references = all_identifiers(&syntax_tree, "clk");
+        let highlights = scope_tree.document_highlights(
+            &url,
+            &doc,
+            references,
+            doc.pos_to_byte(&Position::new(2, 8)),
+        );
+        let expected = vec![
+            DocumentHighlight {
+                range: Range {
+                    start: Position {
+                        line: 2,
+                        character: 8,
+                    },
+                    end: Position {
+                        line: 2,
+                        character: 11,
+                    },
+                },
+                kind: None,
+            },
+            DocumentHighlight {
+                range: Range {
+                    start: Position {
+                        line: 3,
+                        character: 9,
+                    },
+                    end: Position {
+                        line: 3,
+                        character: 12,
+                    },
+                },
+                kind: None,
+            },
+        ];
+        assert_eq!(highlights, expected)
     }
 }
