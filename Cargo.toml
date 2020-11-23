@@ -24,7 +24,7 @@ which = "4.0.2"
 regex = "1.4.2"
 structopt = "0.3.20"
 strum = "0.19.5"
-strum_macros = "0.19.4"
+strum_macros = "0.20.1"
 
 [dependencies.veridian_slang]
 optional = true
