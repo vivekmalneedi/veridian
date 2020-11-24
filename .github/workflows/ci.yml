@@ -60,6 +60,7 @@ jobs:
     lints:
         name: Lints
         runs-on: ubuntu-20.04
+        if: ${{ github.event_name != 'workflow_dispatch'}}
         steps:
             - name: Checkout sources
               uses: actions/checkout@v2

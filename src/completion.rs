@@ -10,6 +10,7 @@ pub mod keyword;
 impl LSPServer {
     pub fn completion(&self, params: CompletionParams) -> Option<CompletionResponse> {
         debug!("completion requested");
+        trace!("{:#?}", &params);
         let now = Instant::now();
         let doc = params.text_document_position;
         let file_id = self.srcs.get_id(&doc.text_document.uri).to_owned();
@@ -67,23 +68,57 @@ impl LSPServer {
                 }
             },
             None => {
-                let mut comps = self.srcs.get_completions(
-                    &token,
-                    file.text.pos_to_byte(&doc.position),
-                    &doc.text_document.uri,
-                )?;
-                comps.items.extend::<Vec<CompletionItem>>(
-                    self.key_comps
-                        .iter()
-                        .filter(|x| x.label.starts_with(&token))
-                        .cloned()
-                        .collect(),
-                );
-                Some(comps)
+                let trigger = prev_char(&file.text, &doc.position);
+                match trigger {
+                    '.' => Some(self.srcs.get_dot_completions(
+                        token.trim_end_matches('.'),
+                        file.text.pos_to_byte(&doc.position),
+                        &doc.text_document.uri,
+                    )?),
+                    '$' => Some(CompletionList {
+                        is_incomplete: false,
+                        items: self.sys_tasks.clone(),
+                    }),
+                    '`' => Some(CompletionList {
+                        is_incomplete: false,
+                        items: self.directives.clone(),
+                    }),
+                    _ => {
+                        let mut comps = self.srcs.get_completions(
+                            &token,
+                            file.text.pos_to_byte(&doc.position),
+                            &doc.text_document.uri,
+                        )?;
+                        comps.items.extend::<Vec<CompletionItem>>(
+                            self.key_comps
+                                .iter()
+                                .filter(|x| x.label.starts_with(&token))
+                                .cloned()
+                                .collect(),
+                        );
+                        Some(comps)
+                    }
+                }
             }
         };
         // eprintln!("comp response: {}", now.elapsed().as_millis());
         Some(CompletionResponse::List(response?))
+    }
+}
+
+/// get the previous non-whitespace character
+fn prev_char(text: &Rope, pos: &Position) -> char {
+    let char_idx = text.pos_to_char(pos);
+    if char_idx > 0 {
+        for i in (0..char_idx).rev() {
+            let res = text.char(i);
+            if !res.is_whitespace() {
+                return res;
+            }
+        }
+        ' '
+    } else {
+        ' '
     }
 }
 
@@ -473,6 +508,92 @@ endmodule
                 trigger_kind: CompletionTriggerKind::TriggerCharacter,
                 trigger_character: Some(".".to_string()),
             }),
+        };
+        let response: CompletionResponse = server.completion(completion_params).unwrap();
+        dbg!(&response);
+        let item1 = CompletionItem {
+            label: "abcd".to_owned(),
+            kind: Some(CompletionItemKind::Variable),
+            detail: Some("wire".to_string()),
+            ..CompletionItem::default()
+        };
+        if let CompletionResponse::List(item) = response {
+            eprintln!("{:#?}", item);
+            assert!(item.items.contains(&item1));
+            assert!(item.items.len() == 1);
+        } else {
+            panic!();
+        }
+        let completion_params = CompletionParams {
+            text_document_position: TextDocumentPositionParams {
+                text_document: TextDocumentIdentifier { uri },
+                position: Position {
+                    line: 7,
+                    character: 14,
+                },
+            },
+            work_done_progress_params: WorkDoneProgressParams::default(),
+            partial_result_params: PartialResultParams::default(),
+            context: Some(CompletionContext {
+                trigger_kind: CompletionTriggerKind::TriggerCharacter,
+                trigger_character: Some(".".to_string()),
+            }),
+        };
+        let response: CompletionResponse = server.completion(completion_params).unwrap();
+        if let CompletionResponse::List(item) = response {
+            eprintln!("{:#?}", item);
+            assert!(item.items.contains(&item1));
+            assert!(item.items.len() == 1);
+        } else {
+            panic!();
+        }
+    }
+
+    #[test]
+    fn test_trigger_dot_nocontext() {
+        test_init();
+        let server = LSPServer::new(None);
+        let uri = Url::parse("file:///test.sv").unwrap();
+        let text = r#"interface test_inter;
+    wire abcd;
+endinterface
+module test(
+    test_inter abc
+);
+    abc.
+    test_inter.
+endmodule
+"#;
+        let open_params = DidOpenTextDocumentParams {
+            text_document: TextDocumentItem {
+                uri: uri.clone(),
+                language_id: "systemverilog".to_owned(),
+                version: 0,
+                text: text.to_owned(),
+            },
+        };
+        server.did_open(open_params);
+        let fid = server.srcs.get_id(&uri);
+        server.srcs.wait_parse_ready(fid, true);
+        let file = server.srcs.get_file(fid).unwrap();
+        let file = file.read().unwrap();
+        eprintln!("{}", file.syntax_tree.as_ref().unwrap());
+        eprintln!(
+            "{:#?}",
+            server.srcs.scope_tree.read().unwrap().as_ref().unwrap()
+        );
+
+        let completion_params = CompletionParams {
+            text_document_position: TextDocumentPositionParams {
+                text_document: TextDocumentIdentifier { uri: uri.clone() },
+                position: Position {
+                    line: 6,
+                    character: 8,
+                },
+            },
+            work_done_progress_params: WorkDoneProgressParams::default(),
+            partial_result_params: PartialResultParams::default(),
+            context: None,
         };
         let response: CompletionResponse = server.completion(completion_params).unwrap();
         dbg!(&response);
