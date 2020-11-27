@@ -19,7 +19,7 @@ impl LSPServer {
             Some(vec![TextEdit::new(
                 Range::new(
                     file.text.char_to_pos(0),
-                    file.text.char_to_pos(file.text.len_chars() - 1),
+                    file.text.char_to_pos(file.text.len_chars()),
                 ),
                 format_document(
                     &file.text,
