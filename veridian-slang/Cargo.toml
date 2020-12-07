@@ -17,4 +17,4 @@ tar = "0.4.30"
 
 [dev-dependencies]
 tempdir = "0.3.7"
-serial_test = "0.5.0"
+serial_test = "0.5.1"
