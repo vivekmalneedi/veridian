@@ -22,7 +22,7 @@ anyhow = "1.0.34"
 serde = "1.0.117"
 which = "4.0.2"
 regex = "1.4.2"
-structopt = "0.3.20"
+structopt = "0.3.21"
 strum = "0.20.0"
 strum_macros = "0.20.1"
 
