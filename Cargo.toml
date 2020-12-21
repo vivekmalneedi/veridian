@@ -13,7 +13,7 @@ log = "0.4.11"
 tower-lsp = "0.13.3"
 flexi_logger = "0.16.2"
 ropey = "1.2.0"
-tokio = { version = "0.2.23", features = ["macros", "io-std", "rt-threaded"] }
+tokio = { version = "0.2.24", features = ["macros", "io-std", "rt-threaded"] }
 path-clean = "0.1.0"
 pathdiff = "0.2.0"
 walkdir = "2.3.1"
