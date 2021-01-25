@@ -99,13 +99,12 @@ checksum = "904dfeac50f3cdaba28fc6f57fdcddb75f49ed61346676a78c4ffe55877802fd"
 
 [[package]]
 name = "bindgen"
-version = "0.55.1"
+version = "0.56.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "75b13ce559e6433d360c26305643803cb52cfbabbc2b9c47ce04a58493dfb443"
+checksum = "2da379dbebc0b76ef63ca68d8fc6e71c0f13e59432e0987e508c1820e6ab5239"
 dependencies = [
  "bitflags",
  "cexpr",
- "cfg-if 0.1.10",
  "clang-sys",
  "clap",
  "env_logger",
@@ -126,6 +125,18 @@ name = "bitflags"
 version = "1.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cf1de2fe8c75bc145a2f577add951f8134889b4795d47466a54a5c846d691693"
+
+[[package]]
+name = "bitvec"
+version = "0.19.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a7ba35e9565969edb811639dbebfe34edc0368e472c5018474c8eb2543397f81"
+dependencies = [
+ "funty",
+ "radium",
+ "tap",
+ "wyz",
+]
 
 [[package]]
 name = "bumpalo"
@@ -166,7 +177,7 @@ version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f4aedb84272dbe89af497cf81375129abda4fc0a9e7c5d317498c15cc30c0d27"
 dependencies = [
- "nom",
+ "nom 5.1.2",
 ]
 
 [[package]]
@@ -303,9 +314,9 @@ dependencies = [
 
 [[package]]
 name = "env_logger"
-version = "0.7.1"
+version = "0.8.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "44533bbbb3bb3c1fa17d9f2e4e38bbbaf8396ba82193c4cb1b6445d711445d36"
+checksum = "f26ecb66b4bdca6c1409b40fb255eefc2bd4f6d135dab3c3124f80ffa2a9661e"
 dependencies = [
  "atty",
  "humantime",
@@ -400,6 +411,12 @@ name = "fuchsia-zircon-sys"
 version = "0.3.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3dcaa9ae7725d12cdb85b3ad99a434db70b468c09ded17e012d86b5c1010f7a7"
+
+[[package]]
+name = "funty"
+version = "1.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fed34cd105917e91daa4da6b3728c47b068749d6a62c59811f06ed2ac71d9da7"
 
 [[package]]
 name = "futures"
@@ -590,12 +607,9 @@ checksum = "494b4d60369511e7dea41cf646832512a94e542f68bb9c49e54518e0f468eb47"
 
 [[package]]
 name = "humantime"
-version = "1.3.0"
+version = "2.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "df004cfca50ef23c36850aaaa59ad52cc70d0e90243c3c7737a4dd32dc7a3c4f"
-dependencies = [
- "quick-error",
-]
+checksum = "9a3a5bfb195931eeb336b2a7b4d761daec841b97f947d34394601737a7bba5e4"
 
 [[package]]
 name = "hyper"
@@ -884,32 +898,46 @@ dependencies = [
 ]
 
 [[package]]
-name = "nom-greedyerror"
-version = "0.2.0"
+name = "nom"
+version = "6.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "005188fda7f3ea919ee32f9c71e99a0aff25031c7403a2e1b40210627602b180"
+checksum = "ab6f70b46d6325aa300f1c7bb3d470127dfc27806d8ea6bf294ee0ce643ce2b1"
 dependencies = [
- "nom",
+ "bitvec",
+ "lexical-core",
+ "memchr",
+ "version_check",
+]
+
+[[package]]
+name = "nom-greedyerror"
+version = "0.3.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "133e5024c0b65c4235e3200a3b6e30f3875475f1e452525e1a421b7f2a997c52"
+dependencies = [
+ "nom 5.1.2",
+ "nom 6.1.0",
  "nom_locate 1.0.0",
  "nom_locate 2.0.0",
+ "nom_locate 3.0.0",
 ]
 
 [[package]]
 name = "nom-packrat"
-version = "0.4.0"
+version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c3ec62525e98be79d646fda5144d70afc71bee2375ab847a3d78ffe5eaeb8260"
+checksum = "c5c5a5a7eae83c3c9d53bdfd94e8bb1d700c6bb78f00d25af71263fc07cf477b"
 dependencies = [
  "nom-packrat-macros",
  "nom_locate 1.0.0",
- "nom_locate 2.0.0",
+ "nom_locate 3.0.0",
 ]
 
 [[package]]
 name = "nom-packrat-macros"
-version = "0.4.0"
+version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4a845d4abd19861ab38dd485e90daf0a29a4f7bdc675c4fcce4be7af788140c2"
+checksum = "7fccdfb4771d14a08918cd7b7352de2797ade66a2df9920cee13793e943c3d09"
 dependencies = [
  "quote",
  "syn",
@@ -917,20 +945,20 @@ dependencies = [
 
 [[package]]
 name = "nom-recursive"
-version = "0.2.0"
+version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b12e0cf53f6ea38a53a6a4b10e7b170ea1cc56166dcb4fcab9a53c4890b205b2"
+checksum = "e0de2967d4f9065b08596dcfa9be631abc4997951b9e0a93e2279b052370bacc"
 dependencies = [
  "nom-recursive-macros",
  "nom_locate 1.0.0",
- "nom_locate 2.0.0",
+ "nom_locate 3.0.0",
 ]
 
 [[package]]
 name = "nom-recursive-macros"
-version = "0.2.0"
+version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2d69ac6bb21fb4ffc328bcec8cea7b1a07114e1a9ed10d5a630feb7e2a243dbe"
+checksum = "07744fc6b7423baf7198f9e1200305f27eafe7395289fa7462b63dacd4eac78d"
 dependencies = [
  "quote",
  "syn",
@@ -938,21 +966,21 @@ dependencies = [
 
 [[package]]
 name = "nom-tracable"
-version = "0.6.2"
+version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1875762c6bd471741e093a85fd66f6b9b93b14203b592b66ec7b41b31f553559"
+checksum = "128b58b88f084359e18858edde832830041e0a561d23bb214e656e00972de316"
 dependencies = [
- "nom",
+ "nom 6.1.0",
  "nom-tracable-macros",
  "nom_locate 1.0.0",
- "nom_locate 2.0.0",
+ "nom_locate 3.0.0",
 ]
 
 [[package]]
 name = "nom-tracable-macros"
-version = "0.6.2"
+version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a8b4ba141c87dc4f398331f8772b629d546dc25fb469999ee0ed0c63145c13fb"
+checksum = "8416fc5553b00d217b0381929fbce7368935d609afdee46c844e09f962b379e6"
 dependencies = [
  "quote",
  "syn",
@@ -966,7 +994,7 @@ checksum = "f932834fd8e391fc7710e2ba17e8f9f8645d846b55aa63207e17e110a1e1ce35"
 dependencies = [
  "bytecount 0.3.2",
  "memchr",
- "nom",
+ "nom 5.1.2",
 ]
 
 [[package]]
@@ -977,7 +1005,18 @@ checksum = "1e4726500a3d0297dd38edc169d919ad997a9931b4645b59ce0231e88536e213"
 dependencies = [
  "bytecount 0.6.0",
  "memchr",
- "nom",
+ "nom 5.1.2",
+]
+
+[[package]]
+name = "nom_locate"
+version = "3.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7eea0a4e89c311de638c9f933521dbb8c7c4ab1cf722d0d6920aae0eb5c5c102"
+dependencies = [
+ "bytecount 0.6.0",
+ "memchr",
+ "nom 6.1.0",
 ]
 
 [[package]]
@@ -1168,12 +1207,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "quick-error"
-version = "1.2.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a1d01941d82fa2ab50be1e79e6714289dd7cde78eba4c074bc5a4374f650dfe0"
-
-[[package]]
 name = "quote"
 version = "1.0.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1181,6 +1214,12 @@ checksum = "aa563d17ecb180e500da1cfd2b028310ac758de548efdd203e18f283af693f37"
 dependencies = [
  "proc-macro2",
 ]
+
+[[package]]
+name = "radium"
+version = "0.5.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "941ba9d78d8e2f7ce474c015eea4d9c6d25b6a3327f9832ee29a4de27f91bbb8"
 
 [[package]]
 name = "rand"
@@ -1519,11 +1558,11 @@ dependencies = [
 
 [[package]]
 name = "sv-parser"
-version = "0.8.3"
+version = "0.10.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5febd467eca0820285e6d8dc7f794430c56d446f01638f320d6122931808d4ae"
+checksum = "16eacb320c0a88ba7cbf6e8525fee8715054bfa1072cf1d0c76cd6bcd629981f"
 dependencies = [
- "nom",
+ "nom 6.1.0",
  "nom-greedyerror",
  "sv-parser-error",
  "sv-parser-parser",
@@ -1533,18 +1572,18 @@ dependencies = [
 
 [[package]]
 name = "sv-parser-error"
-version = "0.8.3"
+version = "0.10.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8d4783f356ec80fb2a3f3003d9b9c743376a86069c5809dff8cd506f91d9cf30"
+checksum = "96b9a9c4cb5817ab1f058e0d3902e10cfe56ea661660106f7868942e31550e1e"
 dependencies = [
  "thiserror",
 ]
 
 [[package]]
 name = "sv-parser-macros"
-version = "0.8.3"
+version = "0.10.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1c5d18eaf59472f37a75e9f9c5b056df280eb5ffdd2aca9f677a5e34b8c31753"
+checksum = "91150147b05f2c8d3abb65806c654f641c51fc21f9ab0ae5588280e988c99a10"
 dependencies = [
  "quote",
  "syn",
@@ -1552,16 +1591,16 @@ dependencies = [
 
 [[package]]
 name = "sv-parser-parser"
-version = "0.8.3"
+version = "0.10.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cbc24d617443cda9daadd80fb60e139a1584e4e3726f2b68df50b9bfddbecb71"
+checksum = "3b7e809bfb4318e7156224d720e6c3667c800355f8a7e349487d65ba09ef2c2f"
 dependencies = [
- "nom",
+ "nom 6.1.0",
  "nom-greedyerror",
  "nom-packrat",
  "nom-recursive",
  "nom-tracable",
- "nom_locate 2.0.0",
+ "nom_locate 3.0.0",
  "str-concat",
  "sv-parser-macros",
  "sv-parser-syntaxtree",
@@ -1569,11 +1608,11 @@ dependencies = [
 
 [[package]]
 name = "sv-parser-pp"
-version = "0.8.3"
+version = "0.10.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2e1cb4ac6171b99c04e3504867c25018cbf425fe72e088e599df2c9dbe0c2a48"
+checksum = "9a480227aad704a61ec17a684bcd09fb90b925713a3f0c7432ce4edb99dac7b9"
 dependencies = [
- "nom",
+ "nom 6.1.0",
  "nom-greedyerror",
  "sv-parser-error",
  "sv-parser-parser",
@@ -1582,9 +1621,9 @@ dependencies = [
 
 [[package]]
 name = "sv-parser-syntaxtree"
-version = "0.8.3"
+version = "0.10.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a100af4bf3ce8e6650349c7f020ca715c9918d2dfd27dfac00d6148173e66670"
+checksum = "4cda512944e9fca823e4d54c10cd5eac178fd543ec1f6e3c85ecbfbf5dbe0955"
 dependencies = [
  "regex",
  "sv-parser-macros",
@@ -1601,6 +1640,12 @@ dependencies = [
  "quote",
  "unicode-xid",
 ]
+
+[[package]]
+name = "tap"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "36474e732d1affd3a6ed582781b3683df3d0563714c59c39591e8ff707cf078e"
 
 [[package]]
 name = "tar"
@@ -1759,7 +1804,7 @@ dependencies = [
  "futures",
  "log",
  "lsp-types",
- "nom",
+ "nom 5.1.2",
  "serde",
  "serde_json",
  "tokio",
@@ -2139,6 +2184,12 @@ dependencies = [
  "winapi 0.2.8",
  "winapi-build",
 ]
+
+[[package]]
+name = "wyz"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "85e60b0d1b5f99db2556934e21937020776a5d31520bf169e851ac44e6420214"
 
 [[package]]
 name = "xattr"
