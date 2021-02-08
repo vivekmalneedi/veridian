@@ -27,7 +27,7 @@ jobs:
                   override: true
 
             - name: cache cargo dirs
-              uses: actions/cache@v2
+              uses: actions/cache@v2.1.4
               with:
                   path: |
                       ~/.cargo/registry
@@ -76,7 +76,7 @@ jobs:
                   components: rustfmt, clippy
 
             - name: cache cargo dirs
-              uses: actions/cache@v2
+              uses: actions/cache@v2.1.4
               with:
                   path: |
                       ~/.cargo/registry
@@ -110,7 +110,7 @@ jobs:
                   override: true
 
             - name: cache cargo dirs
-              uses: actions/cache@v2
+              uses: actions/cache@v2.1.4
               with:
                   path: |
                       ~/.cargo/registry
@@ -147,7 +147,7 @@ jobs:
               uses: actions/checkout@v2
 
             - name: cache cargo dirs
-              uses: actions/cache@v2
+              uses: actions/cache@v2.1.4
               with:
                   path: |
                       ~/.cargo/registry
