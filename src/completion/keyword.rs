@@ -1,5 +1,38 @@
 use tower_lsp::lsp_types::*;
 
+pub fn keyword_completions(keywords: &[(&str, &str)]) -> Vec<CompletionItem> {
+    let mut items: Vec<CompletionItem> = Vec::new();
+    for key in keywords {
+        if key.1.is_empty() {
+            items.push(CompletionItem {
+                label: key.0.to_string(),
+                kind: Some(CompletionItemKind::Keyword),
+                ..CompletionItem::default()
+            });
+        } else {
+            items.push(CompletionItem {
+                label: key.0.to_string(),
+                kind: Some(CompletionItemKind::Keyword),
+                insert_text: Some(key.1.to_string()),
+                insert_text_format: Some(InsertTextFormat::Snippet),
+                ..CompletionItem::default()
+            })
+        }
+    }
+    items
+}
+
+pub fn other_completions(tasks: &[&str]) -> Vec<CompletionItem> {
+    tasks
+        .iter()
+        .map(|x| CompletionItem {
+            label: x.to_string(),
+            kind: Some(CompletionItemKind::Function),
+            ..CompletionItem::default()
+        })
+        .collect()
+}
+
 pub const KEYWORDS: &[(&str, &str)] = &[
     ("accept_on", ""),
     ("alias", ""),
@@ -250,39 +283,6 @@ pub const KEYWORDS: &[(&str, &str)] = &[
     ("xnor", ""),
     ("xor", ""),
 ];
-
-pub fn keyword_completions(keywords: &[(&str, &str)]) -> Vec<CompletionItem> {
-    let mut items: Vec<CompletionItem> = Vec::new();
-    for key in keywords {
-        if key.1.is_empty() {
-            items.push(CompletionItem {
-                label: key.0.to_string(),
-                kind: Some(CompletionItemKind::Keyword),
-                ..CompletionItem::default()
-            });
-        } else {
-            items.push(CompletionItem {
-                label: key.0.to_string(),
-                kind: Some(CompletionItemKind::Keyword),
-                insert_text: Some(key.1.to_string()),
-                insert_text_format: Some(InsertTextFormat::Snippet),
-                ..CompletionItem::default()
-            })
-        }
-    }
-    items
-}
-
-pub fn other_completions(tasks: &[&str]) -> Vec<CompletionItem> {
-    tasks
-        .iter()
-        .map(|x| CompletionItem {
-            label: x.to_string(),
-            kind: Some(CompletionItemKind::Function),
-            ..CompletionItem::default()
-        })
-        .collect()
-}
 
 pub const SYS_TASKS: &[&str] = &[
     "finish",

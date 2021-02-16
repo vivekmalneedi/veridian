@@ -1,4 +1,4 @@
-use crate::definition::parse_defs::get_ident;
+use crate::definition::extract_defs::get_ident;
 use crate::server::LSPServer;
 use crate::sources::LSPSupport;
 use log::{debug, trace};
@@ -9,8 +9,8 @@ use tower_lsp::lsp_types::*;
 pub mod def_types;
 pub use def_types::*;
 
-mod parse_defs;
-use parse_defs::*;
+mod extract_defs;
+use extract_defs::*;
 
 impl LSPServer {
     pub fn goto_definition(&self, params: GotoDefinitionParams) -> Option<GotoDefinitionResponse> {
@@ -214,7 +214,13 @@ pub fn match_definitions(
         RefNode::DataDeclaration(n) => {
             let vars = data_dec(syntax_tree, n, event_iter, url);
             if vars.is_some() {
-                definitions.append(&mut vars?);
+                for var in vars.unwrap() {
+                    match var {
+                        Declaration::Dec(dec) => definitions.push(Box::new(dec)),
+                        Declaration::Import(dec) => definitions.push(Box::new(dec)),
+                        Declaration::Scope(scope) => scopes.push(Box::new(scope)),
+                    }
+                }
             }
         }
         RefNode::ParameterDeclaration(n) => {

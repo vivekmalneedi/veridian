@@ -671,6 +671,50 @@ endinterface
         assert_eq!(labels, vec!["abcd", "clk"]);
     }
 
+    /*
+        #[test]
+        fn test_package_completion() {
+            test_init();
+            let text = r#"package p;
+      struct {int x;} s1;
+      struct {int x;} s2;
+      function void f();
+        int x;
+      endfunction
+    endpackage
+    module m;
+      import p::*;
+      if (1) begin : s1
+        initial begin
+          s1.x = 1;
+          f.x  = 1;
+        end
+        int x;
+      end
+    endmodule
+    "#;
+
+            let doc = Rope::from_str(&text);
+            let url = Url::parse("file:///test.sv").unwrap();
+            let syntax_tree = parse(&doc, &url, &None, &Vec::new()).unwrap();
+            let scope_tree = get_scopes(&syntax_tree, &url).unwrap();
+            dbg!(&scope_tree);
+            /*
+            let pos = Position::new(8, 9);
+            let token = get_completion_token(&doc, doc.line(pos.line as usize), pos);
+            let completions = scope_tree.get_dot_completion(
+                token.trim_end_matches('.'),
+                doc.pos_to_byte(&pos),
+                &url,
+                &scope_tree,
+            );
+            let labels: Vec<String> = completions.iter().map(|x| x.label.clone()).collect();
+            assert_eq!(labels, vec!["abcd", "clk"]);
+            */
+            panic!();
+        }
+        */
+
     #[test]
     fn test_inter_file_completion() {
         test_init();

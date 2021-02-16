@@ -24,6 +24,45 @@ pub fn clean_type_str(type_str: &str, ident: &str) -> String {
         .replace(" : ", ":")
 }
 
+pub fn copy_defs(defs: &Vec<Box<dyn Definition>>) -> Vec<Box<dyn Definition>> {
+    let mut decs: Vec<Box<dyn Definition>> = Vec::new();
+    for def in defs {
+        decs.push(Box::new(GenericDec {
+            ident: def.ident(),
+            byte_idx: def.byte_idx(),
+            url: def.url(),
+            type_str: def.type_str(),
+            completion_kind: def.completion_kind(),
+            symbol_kind: def.symbol_kind(),
+            def_type: def.def_type(),
+        }))
+    }
+    decs
+}
+
+pub fn copy_scopes(scopes: &Vec<Box<dyn Scope>>) -> Vec<Box<dyn Scope>> {
+    let mut scope_decs: Vec<Box<dyn Scope>> = Vec::new();
+    for scope in scopes {
+        let mut scope_copy = GenericScope {
+            ident: scope.ident(),
+            byte_idx: scope.byte_idx(),
+            start: scope.start(),
+            end: scope.end(),
+            url: scope.url(),
+            type_str: scope.type_str(),
+            completion_kind: scope.completion_kind(),
+            symbol_kind: scope.symbol_kind(),
+            def_type: scope.def_type(),
+            defs: Vec::new(),
+            scopes: Vec::new(),
+        };
+        scope_copy.defs.extend(copy_defs(scope.defs()));
+        scope_copy.scopes.extend(copy_scopes(scope.scopes()));
+        scope_decs.push(Box::new(scope_copy))
+    }
+    scope_decs
+}
+
 /// A definition of any SystemVerilog variable or construct
 pub trait Definition: std::fmt::Debug + Sync + Send {
     // identifier
@@ -40,7 +79,7 @@ pub trait Definition: std::fmt::Debug + Sync + Send {
     // for some reason this kind is different than CompletionItemKind
     fn symbol_kind(&self) -> SymbolKind;
     // the kind of this definition, simplified for internal use
-    fn def_type(&self) -> &DefinitionType;
+    fn def_type(&self) -> DefinitionType;
     // whether the definition identifier starts with the given token
     fn starts_with(&self, token: &str) -> bool;
     // constructs the completion for this definition
@@ -248,7 +287,7 @@ pub trait Scope: std::fmt::Debug + Definition + Sync + Send {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub enum DefinitionType {
     Port,
     Net,
@@ -268,7 +307,7 @@ pub struct PortDec {
     pub type_str: String,
     pub completion_kind: CompletionItemKind,
     pub symbol_kind: SymbolKind,
-    def_type: DefinitionType,
+    pub def_type: DefinitionType,
     pub interface: Option<String>,
     pub modport: Option<String>,
 }
@@ -308,8 +347,8 @@ impl Definition for PortDec {
     fn symbol_kind(&self) -> SymbolKind {
         self.symbol_kind
     }
-    fn def_type(&self) -> &DefinitionType {
-        &self.def_type
+    fn def_type(&self) -> DefinitionType {
+        self.def_type
     }
     fn starts_with(&self, token: &str) -> bool {
         self.ident.starts_with(token)
@@ -357,7 +396,7 @@ pub struct GenericDec {
     pub type_str: String,
     pub completion_kind: CompletionItemKind,
     pub symbol_kind: SymbolKind,
-    def_type: DefinitionType,
+    pub def_type: DefinitionType,
 }
 
 impl GenericDec {
@@ -393,8 +432,8 @@ impl Definition for GenericDec {
     fn symbol_kind(&self) -> SymbolKind {
         self.symbol_kind
     }
-    fn def_type(&self) -> &DefinitionType {
-        &self.def_type
+    fn def_type(&self) -> DefinitionType {
+        self.def_type
     }
     fn starts_with(&self, token: &str) -> bool {
         self.ident.starts_with(token)
@@ -420,7 +459,7 @@ pub struct PackageImport {
     pub type_str: String,
     pub completion_kind: CompletionItemKind,
     pub symbol_kind: SymbolKind,
-    def_type: DefinitionType,
+    pub def_type: DefinitionType,
     pub asterisk: bool,
     pub import_ident: Option<String>,
 }
@@ -460,8 +499,8 @@ impl Definition for PackageImport {
     fn symbol_kind(&self) -> SymbolKind {
         self.symbol_kind
     }
-    fn def_type(&self) -> &DefinitionType {
-        &self.def_type
+    fn def_type(&self) -> DefinitionType {
+        self.def_type
     }
     fn starts_with(&self, token: &str) -> bool {
         self.ident.starts_with(token)
@@ -487,7 +526,7 @@ pub struct SubDec {
     pub type_str: String,
     pub completion_kind: CompletionItemKind,
     pub symbol_kind: SymbolKind,
-    def_type: DefinitionType,
+    pub def_type: DefinitionType,
     pub start: usize,
     pub end: usize,
     pub defs: Vec<Box<dyn Definition>>,
@@ -531,8 +570,8 @@ impl Definition for SubDec {
     fn symbol_kind(&self) -> SymbolKind {
         self.symbol_kind
     }
-    fn def_type(&self) -> &DefinitionType {
-        &self.def_type
+    fn def_type(&self) -> DefinitionType {
+        self.def_type
     }
     fn starts_with(&self, token: &str) -> bool {
         self.ident.starts_with(token)
@@ -575,7 +614,7 @@ pub struct ModportDec {
     pub type_str: String,
     pub completion_kind: CompletionItemKind,
     pub symbol_kind: SymbolKind,
-    def_type: DefinitionType,
+    pub def_type: DefinitionType,
     pub ports: Vec<Box<dyn Definition>>,
 }
 
@@ -613,8 +652,8 @@ impl Definition for ModportDec {
     fn symbol_kind(&self) -> SymbolKind {
         self.symbol_kind
     }
-    fn def_type(&self) -> &DefinitionType {
-        &self.def_type
+    fn def_type(&self) -> DefinitionType {
+        self.def_type
     }
     fn starts_with(&self, token: &str) -> bool {
         self.ident.starts_with(token)
@@ -640,7 +679,7 @@ pub struct ModInst {
     pub type_str: String,
     pub completion_kind: CompletionItemKind,
     pub symbol_kind: SymbolKind,
-    def_type: DefinitionType,
+    pub def_type: DefinitionType,
     pub mod_ident: String,
 }
 
@@ -678,8 +717,8 @@ impl Definition for ModInst {
     fn symbol_kind(&self) -> SymbolKind {
         self.symbol_kind
     }
-    fn def_type(&self) -> &DefinitionType {
-        &self.def_type
+    fn def_type(&self) -> DefinitionType {
+        self.def_type
     }
     fn starts_with(&self, token: &str) -> bool {
         self.ident.starts_with(token)
@@ -717,7 +756,7 @@ pub struct GenericScope {
     pub type_str: String,
     pub completion_kind: CompletionItemKind,
     pub symbol_kind: SymbolKind,
-    def_type: DefinitionType,
+    pub def_type: DefinitionType,
     pub defs: Vec<Box<dyn Definition>>,
     pub scopes: Vec<Box<dyn Scope>>,
 }
@@ -738,6 +777,7 @@ impl GenericScope {
             scopes: Vec::new(),
         }
     }
+
     #[cfg(test)]
     pub fn contains_scope(&self, scope_ident: &str) -> bool {
         for scope in &self.scopes {
@@ -768,8 +808,8 @@ impl Definition for GenericScope {
     fn symbol_kind(&self) -> SymbolKind {
         self.symbol_kind
     }
-    fn def_type(&self) -> &DefinitionType {
-        &self.def_type
+    fn def_type(&self) -> DefinitionType {
+        self.def_type
     }
     fn starts_with(&self, token: &str) -> bool {
         self.ident.starts_with(token)
@@ -825,7 +865,7 @@ pub struct ClassDec {
     pub type_str: String,
     pub completion_kind: CompletionItemKind,
     pub symbol_kind: SymbolKind,
-    def_type: DefinitionType,
+    pub def_type: DefinitionType,
     pub defs: Vec<Box<dyn Definition>>,
     pub scopes: Vec<Box<dyn Scope>>,
     // class, package
@@ -875,8 +915,8 @@ impl Definition for ClassDec {
     fn symbol_kind(&self) -> SymbolKind {
         self.symbol_kind
     }
-    fn def_type(&self) -> &DefinitionType {
-        &self.def_type
+    fn def_type(&self) -> DefinitionType {
+        self.def_type
     }
     fn starts_with(&self, token: &str) -> bool {
         self.ident.starts_with(token)
