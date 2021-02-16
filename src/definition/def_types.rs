@@ -24,7 +24,7 @@ pub fn clean_type_str(type_str: &str, ident: &str) -> String {
         .replace(" : ", ":")
 }
 
-pub fn copy_defs(defs: &Vec<Box<dyn Definition>>) -> Vec<Box<dyn Definition>> {
+pub fn copy_defs(defs: &[Box<dyn Definition>]) -> Vec<Box<dyn Definition>> {
     let mut decs: Vec<Box<dyn Definition>> = Vec::new();
     for def in defs {
         decs.push(Box::new(GenericDec {
@@ -40,7 +40,7 @@ pub fn copy_defs(defs: &Vec<Box<dyn Definition>>) -> Vec<Box<dyn Definition>> {
     decs
 }
 
-pub fn copy_scopes(scopes: &Vec<Box<dyn Scope>>) -> Vec<Box<dyn Scope>> {
+pub fn copy_scopes(scopes: &[Box<dyn Scope>]) -> Vec<Box<dyn Scope>> {
     let mut scope_decs: Vec<Box<dyn Scope>> = Vec::new();
     for scope in scopes {
         let mut scope_copy = GenericScope {

@@ -134,32 +134,27 @@ pub fn port_dec_ansi(
             let ident = get_ident(tree, RefNode::PortIdentifier(&x.nodes.1));
             port.ident = ident.0;
             port.byte_idx = ident.1;
-            if let Some(y) = &x.nodes.0 {
-                if let NetPortHeaderOrInterfacePortHeader::InterfacePortHeader(z) = y {
-                    match &**z {
-                        InterfacePortHeader::Identifier(node) => {
-                            port.interface = Some(
-                                get_ident(tree, RefNode::InterfaceIdentifier(&node.nodes.0)).0,
-                            );
-                            match &node.nodes.1 {
-                                Some((_, mod_ident)) => {
-                                    port.modport = Some(
-                                        get_ident(tree, RefNode::ModportIdentifier(mod_ident)).0,
-                                    );
-                                }
-                                None => (),
+            if let Some(NetPortHeaderOrInterfacePortHeader::InterfacePortHeader(z)) = &x.nodes.0 {
+                match &**z {
+                    InterfacePortHeader::Identifier(node) => {
+                        port.interface =
+                            Some(get_ident(tree, RefNode::InterfaceIdentifier(&node.nodes.0)).0);
+                        match &node.nodes.1 {
+                            Some((_, mod_ident)) => {
+                                port.modport =
+                                    Some(get_ident(tree, RefNode::ModportIdentifier(mod_ident)).0);
                             }
+                            None => (),
                         }
-                        InterfacePortHeader::Interface(node) => {
-                            port.interface = Some("interface".to_string());
-                            match &node.nodes.1 {
-                                Some((_, mod_ident)) => {
-                                    port.modport = Some(
-                                        get_ident(tree, RefNode::ModportIdentifier(mod_ident)).0,
-                                    );
-                                }
-                                None => (),
+                    }
+                    InterfacePortHeader::Interface(node) => {
+                        port.interface = Some("interface".to_string());
+                        match &node.nodes.1 {
+                            Some((_, mod_ident)) => {
+                                port.modport =
+                                    Some(get_ident(tree, RefNode::ModportIdentifier(mod_ident)).0);
                             }
+                            None => (),
                         }
                     }
                 }
@@ -1785,7 +1780,7 @@ fn list_udp_port_idents(
     node: &ListOfUdpPortIdentifiers,
     _: &mut EventIter,
     url: &Url,
-) -> Option<Vec<PortDec>> {
+) -> Vec<PortDec> {
     let mut ports: Vec<PortDec> = Vec::new();
     for port_def in node.nodes.0.contents() {
         let mut port = PortDec::new(url);
@@ -1794,7 +1789,7 @@ fn list_udp_port_idents(
         port.byte_idx = ident.1;
         ports.push(port);
     }
-    Some(ports)
+    ports
 }
 
 //non-ansi udp ports
@@ -1857,7 +1852,7 @@ fn udp_port_dec(
                 RefNode::ListOfUdpPortIdentifiers,
                 &ListOfUdpPortIdentifiers
             )?;
-            let mut ports = list_udp_port_idents(tree, list_udp_ports, event_iter, url)?;
+            let mut ports = list_udp_port_idents(tree, list_udp_ports, event_iter, url);
             for port in &mut ports {
                 port.type_str = type_str.clone();
             }
@@ -1941,7 +1936,7 @@ fn udp_port_list(
             RefNode::ListOfUdpPortIdentifiers,
             &ListOfUdpPortIdentifiers
         )?;
-        let mut port_decs = list_udp_port_idents(tree, list_udp_ports, event_iter, url)?;
+        let mut port_decs = list_udp_port_idents(tree, list_udp_ports, event_iter, url);
         for port in &mut port_decs {
             port.type_str = type_str.clone();
         }

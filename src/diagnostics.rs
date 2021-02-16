@@ -6,7 +6,6 @@ use ropey::Rope;
 #[cfg(any(feature = "slang", test))]
 use std::env::current_dir;
 #[cfg(any(feature = "slang", test))]
-use std::io;
 #[cfg(any(feature = "slang", test))]
 use std::path::Path;
 #[cfg(any(feature = "slang", test))]
@@ -152,7 +151,7 @@ fn parse_report(uri: Url, report: String) -> Vec<Diagnostic> {
     let mut diagnostics: Vec<Diagnostic> = Vec::new();
     for line in report.lines() {
         let diag: Vec<&str> = line.splitn(5, ':').collect();
-        if absolute_path(diag.get(0).unwrap()).unwrap() == uri.to_file_path().unwrap().as_os_str() {
+        if absolute_path(diag.get(0).unwrap()) == uri.to_file_path().unwrap().as_os_str() {
             let pos = Position::new(
                 diag.get(1).unwrap().parse::<u64>().unwrap() - 1,
                 diag.get(2).unwrap().parse::<u64>().unwrap() - 1,
@@ -183,9 +182,9 @@ fn slang_severity(severity: &str) -> Option<DiagnosticSeverity> {
 
 #[cfg(any(feature = "slang", test))]
 // convert relative path to absolute
-fn absolute_path(path_str: &str) -> io::Result<PathBuf> {
+fn absolute_path(path_str: &str) -> PathBuf {
     let path = Path::new(path_str);
-    Ok(current_dir().unwrap().join(path).clean())
+    current_dir().unwrap().join(path).clean()
 }
 
 /// syntax checking using verible-verilog-syntax
@@ -238,8 +237,7 @@ mod tests {
     #[test]
     fn test_diagnostics() {
         test_init();
-        let uri =
-            Url::from_file_path(absolute_path("test_data/diag/diag_test.sv").unwrap()).unwrap();
+        let uri = Url::from_file_path(absolute_path("test_data/diag/diag_test.sv")).unwrap();
         let expected = PublishDiagnosticsParams::new(
             uri.clone(),
             vec![Diagnostic::new(
