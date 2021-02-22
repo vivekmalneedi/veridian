@@ -11,7 +11,7 @@ edition = "2018"
 [build-dependencies]
 bindgen = "0.56.0"
 cc = { version = "1.0.66", features = ["parallel"] }
-reqwest = {version = "0.10.9", features = ["blocking"] }
+reqwest = {version = "0.11.1", features = ["blocking"] }
 flate2 = "1.0.19"
 tar = "0.4.30"
 
