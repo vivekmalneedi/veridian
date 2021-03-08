@@ -8,7 +8,7 @@ edition = "2018"
 slang = ["veridian_slang"]
 
 [dependencies]
-sv-parser = "0.8.2"
+sv-parser = "0.11.1"
 log = "0.4.11"
 tower-lsp = "0.13.3"
 flexi_logger = "0.16.2"
