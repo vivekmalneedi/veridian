@@ -315,12 +315,13 @@ pub fn port_dec_non_ansi(
         PortDeclaration::Interface(x) => {
             let interface =
                 Some(get_ident(tree, RefNode::InterfaceIdentifier(&x.nodes.1.nodes.0)).0);
-            let modport = match &x.nodes.1.nodes.1 {
-                Some((_, mod_ident)) => {
-                    Some(get_ident(tree, RefNode::ModportIdentifier(mod_ident)).0)
-                }
-                None => None,
-            };
+            let modport = x
+                .nodes
+                .1
+                .nodes
+                .1
+                .as_ref()
+                .map(|(_, mod_ident)| get_ident(tree, RefNode::ModportIdentifier(mod_ident)).0);
             let port_list = advance_until_enter!(
                 common,
                 tree,

@@ -113,20 +113,18 @@ fn get_paths(files: Vec<Url>, search_workdir: bool) -> Vec<PathBuf> {
         if let Ok(path) = file.to_file_path() {
             if !paths.contains(&path) {
                 let walker = WalkDir::new(path.parent().unwrap()).into_iter();
-                for entry in walker.filter_entry(|e| !is_hidden(e)) {
-                    if let Ok(entry) = entry {
-                        if entry.file_type().is_file() && entry.path().extension().is_some() {
-                            let extension = entry.path().extension().unwrap();
+                for entry in walker.filter_entry(|e| !is_hidden(e)).flatten() {
+                    if entry.file_type().is_file() && entry.path().extension().is_some() {
+                        let extension = entry.path().extension().unwrap();
 
-                            if extension == "sv"
-                                || extension == "svh"
-                                || extension == "v"
-                                || extension == "vh"
-                            {
-                                let entry_path = entry.path().to_path_buf();
-                                if !paths.contains(&entry_path) {
-                                    paths.push(entry_path);
-                                }
+                        if extension == "sv"
+                            || extension == "svh"
+                            || extension == "v"
+                            || extension == "vh"
+                        {
+                            let entry_path = entry.path().to_path_buf();
+                            if !paths.contains(&entry_path) {
+                                paths.push(entry_path);
                             }
                         }
                     }
