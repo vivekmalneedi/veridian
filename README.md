@@ -22,21 +22,20 @@ A SystemVerilog Language Server\
 
 ### Install from Source
 
-- Build dependencies: Rust toolchain
+- Build dependencies: Rust toolchain (Install through system package manager or through [rustup](https://rustup.rs/]))
 - optional: C++17 compatible compiler (for linting with slang)
 
 ```bash
-# clone the repo
-git clone https://github.com/vivekmalneedi/veridian.git
 # install with slang feature, if C++17 compiler is available
-cargo install --path veridian --all-features
+cargo install --git https://github.com/vivekmalneedi/veridian.git --all-features
 # install if C++17 compiler is not available
-cargo install --path veridian
+cargo install --git https://github.com/vivekmalneedi/veridian.git
 ```
 
 ## Usage
 
 ### [vscode](https://github.com/vivekmalneedi/veridian/tree/master/extensions/vscode)
+
 - download veridian.vsix from the latest release
 - install the extension using one of the two following methods
   - In the extensions tab, click on the 3 dots, then click `Install from VSIX` and choose `veridian.vsix`
@@ -56,6 +55,7 @@ In `coc-settings.json`:
 }
 
 ```
+
 The [full list](https://github.com/vivekmalneedi/veridian/wiki/Usage-Instructions-for-various-LSP-Clients) is on the wiki and includes configuration for the neovim built-in lsp client
 
 ## Configuration
@@ -86,8 +86,8 @@ verible:
     path: "verible-verilog-syntax"
     # default: none
     args:
-        - arg1
-        - arg2
+      - arg1
+      - arg2
   # verible-verilog-format configuration
   format:
     # default: true if in path
@@ -95,8 +95,8 @@ verible:
     path: "verible-verilog-format"
     # default: none
     args:
-        - arg1
-        - arg2
+      - arg1
+      - arg2
 # set log level
 # default: Info
 log_level: Error|Warn|Info|Debug|Trace
