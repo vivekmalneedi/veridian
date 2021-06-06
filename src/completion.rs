@@ -252,7 +252,7 @@ endmodule
         let change_params = DidChangeTextDocumentParams {
             text_document: VersionedTextDocumentIdentifier {
                 uri: uri.clone(),
-                version: Some(3),
+                version: 3,
             },
             content_changes: vec![
                 TextDocumentContentChangeEvent {
@@ -370,7 +370,7 @@ endmodule
         let change_params = DidChangeTextDocumentParams {
             text_document: VersionedTextDocumentIdentifier {
                 uri: uri.clone(),
-                version: Some(3),
+                version: 3,
             },
             content_changes: vec![
                 TextDocumentContentChangeEvent {

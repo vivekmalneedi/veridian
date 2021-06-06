@@ -1,7 +1,7 @@
 use crate::sources::*;
 
 use crate::completion::keyword::*;
-use flexi_logger::ReconfigurationHandle;
+use flexi_logger::LoggerHandle;
 use log::{debug, info};
 use path_clean::PathClean;
 use serde::{Deserialize, Serialize};
@@ -22,11 +22,11 @@ pub struct LSPServer {
     pub sys_tasks: Vec<CompletionItem>,
     pub directives: Vec<CompletionItem>,
     pub conf: RwLock<ProjectConfig>,
-    pub log_handle: Mutex<Option<ReconfigurationHandle>>,
+    pub log_handle: Mutex<Option<LoggerHandle>>,
 }
 
 impl LSPServer {
-    pub fn new(log_handle: Option<ReconfigurationHandle>) -> LSPServer {
+    pub fn new(log_handle: Option<LoggerHandle>) -> LSPServer {
         LSPServer {
             srcs: Sources::new(),
             key_comps: keyword_completions(KEYWORDS),
@@ -44,7 +44,7 @@ pub struct Backend {
 }
 
 impl Backend {
-    pub fn new(client: Client, log_handle: ReconfigurationHandle) -> Backend {
+    pub fn new(client: Client, log_handle: LoggerHandle) -> Backend {
         Backend {
             client,
             server: LSPServer::new(Some(log_handle)),
@@ -247,13 +247,14 @@ impl LanguageServer for Backend {
                     work_done_progress_options: WorkDoneProgressOptions {
                         work_done_progress: None,
                     },
+                    all_commit_characters: None,
                 }),
-                definition_provider: Some(true),
+                definition_provider: Some(OneOf::Left(true)),
                 hover_provider: Some(HoverProviderCapability::Simple(true)),
-                document_symbol_provider: Some(true),
-                document_formatting_provider: Some(conf.verible.format.enabled),
-                document_range_formatting_provider: Some(conf.verible.format.enabled),
-                document_highlight_provider: Some(true),
+                document_symbol_provider: Some(OneOf::Left(true)),
+                document_formatting_provider: Some(OneOf::Left(conf.verible.format.enabled)),
+                document_range_formatting_provider: Some(OneOf::Left(conf.verible.format.enabled)),
+                document_highlight_provider: Some(OneOf::Left(true)),
                 ..ServerCapabilities::default()
             },
         })

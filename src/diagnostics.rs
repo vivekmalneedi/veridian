@@ -151,8 +151,8 @@ fn parse_report(uri: Url, report: String) -> Vec<Diagnostic> {
         let diag: Vec<&str> = line.splitn(5, ':').collect();
         if absolute_path(diag.get(0).unwrap()) == uri.to_file_path().unwrap().as_os_str() {
             let pos = Position::new(
-                diag.get(1).unwrap().parse::<u64>().unwrap() - 1,
-                diag.get(2).unwrap().parse::<u64>().unwrap() - 1,
+                diag.get(1).unwrap().parse::<u32>().unwrap() - 1,
+                diag.get(2).unwrap().parse::<u32>().unwrap() - 1,
             );
             diagnostics.push(Diagnostic::new(
                 Range::new(pos, pos),
@@ -208,8 +208,8 @@ fn verible_syntax(
         let raw_output = String::from_utf8(output.stdout).ok()?;
         for error in raw_output.lines() {
             let caps = re.captures(error)?;
-            let line: u64 = caps.name("line")?.as_str().to_string().parse().ok()?;
-            let col: u64 = caps.name("col")?.as_str().to_string().parse().ok()?;
+            let line: u32 = caps.name("line")?.as_str().to_string().parse().ok()?;
+            let col: u32 = caps.name("col")?.as_str().to_string().parse().ok()?;
             let pos = Position::new(line - 1, col - 1);
             diags.push(Diagnostic::new(
                 Range::new(pos, pos),
@@ -300,6 +300,8 @@ endmodule
             message: "syntax error, rejected \"endmodule\"".to_string(),
             related_information: None,
             tags: None,
+            code_description: None,
+            data: None,
         }];
         assert_eq!(errors, expected);
     }

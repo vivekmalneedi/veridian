@@ -5,6 +5,8 @@ on:
             - develop
     pull_request:
     workflow_dispatch:
+    schedule:
+        - cron:  '0 0 * * 0'
 
 name: CI
 
@@ -12,7 +14,6 @@ jobs:
     test:
         name: Test Suite
         runs-on: ubuntu-20.04
-        if: ${{ github.event_name != 'workflow_dispatch'}}
         steps:
             - name: Checkout sources
               uses: actions/checkout@v2
@@ -60,7 +61,6 @@ jobs:
     lints:
         name: Lints
         runs-on: ubuntu-20.04
-        if: ${{ github.event_name != 'workflow_dispatch'}}
         steps:
             - name: Checkout sources
               uses: actions/checkout@v2
@@ -97,7 +97,7 @@ jobs:
     build_ubuntu:
         name: Build Ubuntu
         runs-on: ubuntu-20.04
-        if: ${{ github.ref == 'refs/heads/master' && github.event_name == 'workflow_dispatch' }}
+        if: ${{ github.ref == 'refs/heads/master' && ( github.event_name == 'workflow_dispatch' || github.event_name == 'schedule' ) }}
         steps:
             - name: Checkout sources
               uses: actions/checkout@v2
@@ -139,7 +139,7 @@ jobs:
     build_centos:
         name: Build Centos
         runs-on: ubuntu-latest
-        if: ${{ github.ref == 'refs/heads/master' && github.event_name == 'workflow_dispatch' }}
+        if: ${{ ( github.event_name == 'workflow_dispatch' || github.event_name == 'schedule' ) }}
         container:
             image: vivekmalneedi/centos7-rust
         steps:
@@ -176,7 +176,7 @@ jobs:
     build_vscode:
         name: Build vscode extension
         runs-on: ubuntu-latest
-        if: ${{ github.ref == 'refs/heads/master' && github.event_name == 'workflow_dispatch' }}
+        if: ${{ ( github.event_name == 'workflow_dispatch' || github.event_name == 'schedule' ) }}
         steps:
             - uses: actions/checkout@v2
             - uses: actions/setup-node@v2.1.3

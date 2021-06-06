@@ -59,9 +59,7 @@ impl LSPServer {
             }
             file.last_change_range = change.range;
         }
-        if let Some(version) = params.text_document.version {
-            file.version = version;
-        }
+        file.version = params.text_document.version;
         drop(file);
 
         // invalidate syntaxtree and wake parse thread
@@ -91,7 +89,7 @@ pub struct Source {
     pub id: usize,
     pub uri: Url,
     pub text: Rope,
-    pub version: i64,
+    pub version: i32,
     pub syntax_tree: Option<SyntaxTree>,
     // if there is a parse error, we can remove the last change
     pub last_change_range: Option<Range>,
@@ -469,8 +467,8 @@ impl LSPSupport for Rope {
         let line = self.char_to_line(char_idx);
         let line_slice = self.line(line);
         Position {
-            line: line as u64,
-            character: line_slice.char_to_utf16_cu(char_idx - self.line_to_char(line)) as u64,
+            line: line as u32,
+            character: line_slice.char_to_utf16_cu(char_idx - self.line_to_char(line)) as u32,
         }
     }
     fn range_to_char_range(&self, range: &Range) -> StdRange<usize> {
@@ -508,8 +506,8 @@ impl<'a> LSPSupport for RopeSlice<'a> {
         let line = self.char_to_line(char_idx);
         let line_slice = self.line(line);
         Position {
-            line: line as u64,
-            character: line_slice.char_to_utf16_cu(char_idx - self.line_to_char(line)) as u64,
+            line: line as u32,
+            character: line_slice.char_to_utf16_cu(char_idx - self.line_to_char(line)) as u32,
         }
     }
     fn range_to_char_range(&self, range: &Range) -> StdRange<usize> {
@@ -557,10 +555,7 @@ endmodule"#;
         drop(file);
 
         let change_params = DidChangeTextDocumentParams {
-            text_document: VersionedTextDocumentIdentifier {
-                uri,
-                version: Some(1),
-            },
+            text_document: VersionedTextDocumentIdentifier { uri, version: 1 },
             content_changes: vec![TextDocumentContentChangeEvent {
                 range: Some(Range {
                     start: Position {

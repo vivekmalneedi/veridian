@@ -6,7 +6,7 @@
 #include <slang/diagnostics/DiagnosticEngine.h>
 #include <slang/diagnostics/Diagnostics.h>
 #include <slang/parsing/Preprocessor.h>
-#include <slang/symbols/TypePrinter.h>
+#include <slang/types/TypePrinter.h>
 #include <slang/syntax/SyntaxTree.h>
 #include <slang/text/SourceManager.h>
 

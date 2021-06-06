@@ -10,7 +10,7 @@ import {
   LanguageClientOptions,
   ServerOptions,
   Executable,
-} from "vscode-languageclient";
+} from "vscode-languageclient/node";
 
 let client: LanguageClient;
 const workSpaceFolder = workspace.workspaceFolders?.[0];

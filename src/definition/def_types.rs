@@ -233,6 +233,7 @@ pub trait Scope: std::fmt::Debug + Definition + Sync + Send {
                         doc.byte_to_pos(scope.byte_idx() + scope.ident().len()),
                     ),
                     children: Some(scope.document_symbols(uri, doc)),
+                    tags: None,
                 })
             }
         }
@@ -252,6 +253,7 @@ pub trait Scope: std::fmt::Debug + Definition + Sync + Send {
                     doc.byte_to_pos(def.byte_idx() + def.ident().len()),
                 ),
                 children: None,
+                tags: None,
             })
         }
         symbols

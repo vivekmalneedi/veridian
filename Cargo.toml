@@ -9,22 +9,22 @@ slang = ["veridian_slang"]
 
 [dependencies]
 sv-parser = "0.8.2"
-log = "0.4.11"
-tower-lsp = "0.13.3"
-flexi_logger = "0.16.2"
+log = "0.4.14"
+tower-lsp = "0.14.1"
+flexi_logger = "0.17.1"
 ropey = "1.2.0"
-tokio = { version = "0.2.24", features = ["macros", "io-std", "rt-threaded"] }
+tokio = { version = "1.6.1", features = ["macros", "io-std", "rt-multi-thread"] }
 path-clean = "0.1.0"
 pathdiff = "0.2.0"
-walkdir = "2.3.1"
-serde_yaml = "0.8.14"
-anyhow = "1.0.35"
-serde = "1.0.118"
-which = "4.0.2"
-regex = "1.4.2"
+walkdir = "2.3.2"
+serde_yaml = "0.8.17"
+anyhow = "1.0.40"
+serde = "1.0.126"
+which = "4.1.0"
+regex = "1.5.4"
 structopt = "0.3.21"
-strum = "0.20.0"
-strum_macros = "0.20.1"
+strum = "0.21.0"
+strum_macros = "0.21.1"
 
 [dependencies.veridian_slang]
 optional = true

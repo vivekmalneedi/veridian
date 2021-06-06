@@ -5,7 +5,7 @@ use std::path::PathBuf;
 use tar::Archive;
 
 fn download_slang() -> Result<(), Box<dyn std::error::Error>> {
-    let target = "https://github.com/MikePopoloski/slang/releases/download/v0.5/slang-linux.tar.gz";
+    let target = "https://github.com/MikePopoloski/slang/releases/download/v0.7/slang-linux.tar.gz";
     let fname = "slang-linux.tar.gz";
     let mut response = reqwest::blocking::get(target)?;
     let mut dest = File::create(fname)?;
