@@ -57,12 +57,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3b13c32d80ecc7ab747b80c3784bce54ee8a7a0cc4fbda9bf4cda2cf6fe90854"
 
 [[package]]
-name = "arrayvec"
-version = "0.5.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "23b62fc65de8e4e7f52534fb52b0f3ed04746ae267519eef2a83941e8085068b"
-
-[[package]]
 name = "async-trait"
 version = "0.1.72"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -168,18 +162,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "79296716171880943b8470b5f8d03aa55eb2e645a4874bdbb28adb49162e012c"
 
 [[package]]
-name = "bytecount"
-version = "0.3.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f861d9ce359f56dbcb6e0c2a1cb84e52ad732cadb57b806adeb3c7668caccbd8"
-
-[[package]]
-name = "bytecount"
-version = "0.6.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2c676a478f63e9fa2dd5368a42f28bba0d6c560b775f38583c8bbaa7fcd67c9c"
-
-[[package]]
 name = "bytes"
 version = "1.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -197,7 +179,7 @@ version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6fac387a98bb7c37292057cffc56d62ecb629900026402633ae9160df93a8766"
 dependencies = [
- "nom 7.1.3",
+ "nom",
 ]
 
 [[package]]
@@ -366,7 +348,7 @@ dependencies = [
  "log",
  "nu-ansi-term",
  "regex",
- "thiserror 2.0.9",
+ "thiserror",
 ]
 
 [[package]]
@@ -725,19 +707,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e2abad23fbc42b3700f2f279844dc832adb2b2eb069b2df918f455c4e18cc646"
 
 [[package]]
-name = "lexical-core"
-version = "0.7.6"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6607c62aa161d23d17a9072cc5da0be67cdfc89d3afb1e8d9c842bebc2525ffe"
-dependencies = [
- "arrayvec",
- "bitflags 1.3.2",
- "cfg-if",
- "ryu",
- "static_assertions",
-]
-
-[[package]]
 name = "libc"
 version = "0.2.152"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -855,120 +824,12 @@ dependencies = [
 
 [[package]]
 name = "nom"
-version = "5.1.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "08959a387a676302eebf4ddbcbc611da04285579f76f88ee0506c63b1a61dd4b"
-dependencies = [
- "lexical-core",
- "memchr",
- "version_check",
-]
-
-[[package]]
-name = "nom"
 version = "7.1.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d273983c5a657a70a3e8f2a01329822f3b8c8172b73826411a55751e404a0a4a"
 dependencies = [
  "memchr",
  "minimal-lexical",
-]
-
-[[package]]
-name = "nom-greedyerror"
-version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "005188fda7f3ea919ee32f9c71e99a0aff25031c7403a2e1b40210627602b180"
-dependencies = [
- "nom 5.1.3",
- "nom_locate 1.0.0",
- "nom_locate 2.1.0",
-]
-
-[[package]]
-name = "nom-packrat"
-version = "0.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c3ec62525e98be79d646fda5144d70afc71bee2375ab847a3d78ffe5eaeb8260"
-dependencies = [
- "nom-packrat-macros",
- "nom_locate 1.0.0",
- "nom_locate 2.1.0",
-]
-
-[[package]]
-name = "nom-packrat-macros"
-version = "0.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4a845d4abd19861ab38dd485e90daf0a29a4f7bdc675c4fcce4be7af788140c2"
-dependencies = [
- "quote",
- "syn 1.0.109",
-]
-
-[[package]]
-name = "nom-recursive"
-version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b12e0cf53f6ea38a53a6a4b10e7b170ea1cc56166dcb4fcab9a53c4890b205b2"
-dependencies = [
- "nom-recursive-macros",
- "nom_locate 1.0.0",
- "nom_locate 2.1.0",
-]
-
-[[package]]
-name = "nom-recursive-macros"
-version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2d69ac6bb21fb4ffc328bcec8cea7b1a07114e1a9ed10d5a630feb7e2a243dbe"
-dependencies = [
- "quote",
- "syn 1.0.109",
-]
-
-[[package]]
-name = "nom-tracable"
-version = "0.6.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1875762c6bd471741e093a85fd66f6b9b93b14203b592b66ec7b41b31f553559"
-dependencies = [
- "nom 5.1.3",
- "nom-tracable-macros",
- "nom_locate 1.0.0",
- "nom_locate 2.1.0",
-]
-
-[[package]]
-name = "nom-tracable-macros"
-version = "0.6.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a8b4ba141c87dc4f398331f8772b629d546dc25fb469999ee0ed0c63145c13fb"
-dependencies = [
- "quote",
- "syn 1.0.109",
-]
-
-[[package]]
-name = "nom_locate"
-version = "1.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f932834fd8e391fc7710e2ba17e8f9f8645d846b55aa63207e17e110a1e1ce35"
-dependencies = [
- "bytecount 0.3.2",
- "memchr",
- "nom 5.1.3",
-]
-
-[[package]]
-name = "nom_locate"
-version = "2.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a67484adf5711f94f2f28b653bf231bff8e438be33bf5b0f35935a0db4f618a2"
-dependencies = [
- "bytecount 0.6.3",
- "memchr",
- "nom 5.1.3",
 ]
 
 [[package]]
@@ -1543,18 +1404,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "static_assertions"
-version = "1.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a2eb9349b6444b326872e140eb1cf5e7c522154d69e7a0ffb0fb81c06b37543f"
-
-[[package]]
-name = "str-concat"
-version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3468939e48401c4fe3cdf5e5cef50951c2808ed549d1467fde249f1fcb602634"
-
-[[package]]
 name = "str_indices"
 version = "0.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1607,80 +1456,6 @@ dependencies = [
  "quote",
  "rustversion",
  "syn 2.0.91",
-]
-
-[[package]]
-name = "sv-parser"
-version = "0.8.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5febd467eca0820285e6d8dc7f794430c56d446f01638f320d6122931808d4ae"
-dependencies = [
- "nom 5.1.3",
- "nom-greedyerror",
- "sv-parser-error",
- "sv-parser-parser",
- "sv-parser-pp",
- "sv-parser-syntaxtree",
-]
-
-[[package]]
-name = "sv-parser-error"
-version = "0.8.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8d4783f356ec80fb2a3f3003d9b9c743376a86069c5809dff8cd506f91d9cf30"
-dependencies = [
- "thiserror 1.0.44",
-]
-
-[[package]]
-name = "sv-parser-macros"
-version = "0.8.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1c5d18eaf59472f37a75e9f9c5b056df280eb5ffdd2aca9f677a5e34b8c31753"
-dependencies = [
- "quote",
- "syn 1.0.109",
-]
-
-[[package]]
-name = "sv-parser-parser"
-version = "0.8.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cbc24d617443cda9daadd80fb60e139a1584e4e3726f2b68df50b9bfddbecb71"
-dependencies = [
- "nom 5.1.3",
- "nom-greedyerror",
- "nom-packrat",
- "nom-recursive",
- "nom-tracable",
- "nom_locate 2.1.0",
- "str-concat",
- "sv-parser-macros",
- "sv-parser-syntaxtree",
-]
-
-[[package]]
-name = "sv-parser-pp"
-version = "0.8.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2e1cb4ac6171b99c04e3504867c25018cbf425fe72e088e599df2c9dbe0c2a48"
-dependencies = [
- "nom 5.1.3",
- "nom-greedyerror",
- "sv-parser-error",
- "sv-parser-parser",
- "sv-parser-syntaxtree",
-]
-
-[[package]]
-name = "sv-parser-syntaxtree"
-version = "0.8.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a100af4bf3ce8e6650349c7f020ca715c9918d2dfd27dfac00d6148173e66670"
-dependencies = [
- "regex",
- "sv-parser-macros",
- "walkdir",
 ]
 
 [[package]]
@@ -1777,31 +1552,11 @@ dependencies = [
 
 [[package]]
 name = "thiserror"
-version = "1.0.44"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "611040a08a0439f8248d1990b111c95baa9c704c805fa1f62104b39655fd7f90"
-dependencies = [
- "thiserror-impl 1.0.44",
-]
-
-[[package]]
-name = "thiserror"
 version = "2.0.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f072643fd0190df67a8bab670c20ef5d8737177d6ac6b2e9a236cb096206b2cc"
 dependencies = [
- "thiserror-impl 2.0.9",
-]
-
-[[package]]
-name = "thiserror-impl"
-version = "1.0.44"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "090198534930841fab3a5d1bb637cde49e339654e606195f8d9c76eeb081dc96"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn 2.0.91",
+ "thiserror-impl",
 ]
 
 [[package]]
@@ -1977,6 +1732,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "tree-sitter"
+version = "0.17.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d18dcb776d3affaba6db04d11d645946d34a69b3172e588af96ce9fecd20faac"
+dependencies = [
+ "cc",
+ "regex",
+]
+
+[[package]]
+name = "tree-sitter-verilog"
+version = "0.0.1"
+source = "git+https://github.com/tree-sitter/tree-sitter-verilog#1b624ab8b3f8d54ecc37847aa04512844f0226ac"
+dependencies = [
+ "cc",
+ "tree-sitter",
+]
+
+[[package]]
 name = "try-lock"
 version = "0.2.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2061,10 +1835,11 @@ dependencies = [
  "structopt",
  "strum",
  "strum_macros",
- "sv-parser",
  "tempdir",
  "tokio",
  "tower-lsp",
+ "tree-sitter",
+ "tree-sitter-verilog",
  "veridian_slang",
  "walkdir",
  "which",

@@ -1,4 +1,5 @@
-#![recursion_limit = "256"]
+#[allow(unused)]
+mod symbol;
 
 use log::info;
 use std::sync::Arc;
