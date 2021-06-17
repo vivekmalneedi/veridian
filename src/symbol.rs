@@ -1,6 +1,6 @@
+use std::time::{Duration, Instant};
 use tower_lsp::lsp_types::*;
 use tree_sitter::{Node, Query, QueryCursor, Tree};
-use std::time::{Duration, Instant};
 
 #[derive(Debug, Copy, Clone)]
 pub struct Symbol {
@@ -15,29 +15,29 @@ pub struct Symbol {
     direction: PortDirection,
 }
 
-impl Symbol{
-    fn is_port(&self) -> bool{
+impl Symbol {
+    fn is_port(&self) -> bool {
         self.direction != PortDirection::None
     }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub struct ByteRange{
+pub struct ByteRange {
     start: usize,
     end: usize,
 }
 
-impl ByteRange{
-    fn contains(&self, idx: usize) -> bool{
+impl ByteRange {
+    fn contains(&self, idx: usize) -> bool {
         return idx >= self.start && idx < self.end;
     }
 }
 
-impl From<std::ops::Range<usize>> for ByteRange{
+impl From<std::ops::Range<usize>> for ByteRange {
     fn from(range: std::ops::Range<usize>) -> Self {
-        Self{
+        Self {
             start: range.start,
-            end: range.end
+            end: range.end,
         }
     }
 }
@@ -52,7 +52,7 @@ enum PortDirection {
     Interface((ByteRange, Option<ByteRange>)),
 }
 
-impl From<&str> for PortDirection{
+impl From<&str> for PortDirection {
     fn from(direction: &str) -> Self {
         match direction {
             "input" => PortDirection::Input,
@@ -138,7 +138,7 @@ impl SymbolBuilder {
 
     /// Set the symbol builder's direction.
     fn direction(&mut self, direction: &str) {
-        self.direction  = direction.into();
+        self.direction = direction.into();
     }
 
     fn direction_interface(&mut self, interface: ByteRange) {
@@ -168,7 +168,7 @@ pub fn index(text: &str, tree: &Tree, query: &Query) -> Vec<Symbol> {
     let text_callback = move |node: Node| &text.as_bytes()[node.start_byte()..node.end_byte()];
     let mut cursor = QueryCursor::new();
     let mats = cursor.matches(&query, tree.root_node(), text_callback);
-    let mut parent : Option<(ByteRange, ByteRange)> = None;
+    let mut parent: Option<(ByteRange, ByteRange)> = None;
     for m in mats {
         // scopes
         if m.pattern_index == 0 {
@@ -236,7 +236,11 @@ pub fn index(text: &str, tree: &Tree, query: &Query) -> Vec<Symbol> {
             symbols.extend(builder.build());
         }
     }
-    println!("indexed {} symbols in {} ms", symbols.len(), now.elapsed().as_millis());
+    println!(
+        "indexed {} symbols in {} ms",
+        symbols.len(),
+        now.elapsed().as_millis()
+    );
     symbols
 }
 
@@ -359,7 +363,7 @@ const SYMBOL_QUERY: &str = r#"
 
 fn range_text(range: ByteRange, text: &str) -> &str {
     let ret = std::str::from_utf8(&text.as_bytes()[range.start..range.end]);
-    match ret{
+    match ret {
         Ok(s) => s,
         Err(e) => {
             println!("{}", e);
@@ -369,17 +373,28 @@ fn range_text(range: ByteRange, text: &str) -> &str {
 }
 
 #[cfg(test)]
-mod tests{
+mod tests {
     use super::*;
 
-    fn port(query: &Query, port_str: &str, direction: &str, signed: bool, type_str: &str, ident_str: &str, parent_str: &str){
-        let text = format!("
+    fn port(
+        query: &Query,
+        port_str: &str,
+        direction: &str,
+        signed: bool,
+        type_str: &str,
+        ident_str: &str,
+        parent_str: &str,
+    ) {
+        let text = format!(
+            "
 interface a;
     modport b (input c);
 endinterface
 module test ({});
 endmodule
-        ", port_str);
+        ",
+            port_str
+        );
         let tree = parse(&text).unwrap();
         let mut ind = index(&text, &tree, query);
         ind.retain(|s| s.is_port());
@@ -389,28 +404,51 @@ endmodule
         assert_eq!(port.direction, direction.into());
         assert_eq!(port.signed, signed);
         assert_eq!(range_text(port.ident_node, &text), ident_str);
-        if let Some(type_node) = port.type_node{
+        if let Some(type_node) = port.type_node {
             assert_eq!(range_text(type_node, &text), type_str);
-        }
-        else{
+        } else {
             assert_eq!("", type_str);
         }
         assert_eq!(range_text(port.parent.unwrap(), &text), parent_str);
     }
 
     #[test]
-    fn ansi_ports(){
+    fn ansi_ports() {
         let query = &Query::new(tree_sitter_verilog::language(), SYMBOL_QUERY).unwrap();
         port(query, "wire x", "inout", false, "wire", "x", "test");
         port(query, "integer x", "inout", false, "integer", "x", "test");
-        port(query, "inout integer x", "inout", false, "integer", "x", "test");
+        port(
+            query,
+            "inout integer x",
+            "inout",
+            false,
+            "integer",
+            "x",
+            "test",
+        );
         port(query, "[5:0] x", "inout", false, "", "x", "test");
         port(query, "input x", "input", false, "", "x", "test");
         port(query, "input var x", "input", false, "var", "x", "test");
-        port(query, "input var integer x", "input", false, "var", "x", "test");
+        port(
+            query,
+            "input var integer x",
+            "input",
+            false,
+            "var",
+            "x",
+            "test",
+        );
         port(query, "output x", "output", false, "", "x", "test");
         port(query, "output var x", "output", false, "var", "x", "test");
-        port(query, "output integer x", "output", false, "integer", "x", "test");
+        port(
+            query,
+            "output integer x",
+            "output",
+            false,
+            "integer",
+            "x",
+            "test",
+        );
         port(query, "ref [5:0] x", "ref", false, "", "x", "test");
         port(query, "ref x [5:0]", "ref", false, "", "x", "test");
     }
