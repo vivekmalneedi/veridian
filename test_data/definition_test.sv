@@ -16,5 +16,6 @@ endinterface: simple_bus
 
 module test;
     logic clk;
+    logic clk;
     simple_bus bus (.*);
 endmodule
