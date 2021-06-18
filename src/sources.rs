@@ -5,6 +5,7 @@ use crate::server::LSPServer;
 use log::{debug, error, trace};
 use pathdiff::diff_paths;
 use ropey::{Rope, RopeSlice};
+use std::cmp::min;
 use std::collections::HashMap;
 use std::env::current_dir;
 use std::fs;
@@ -461,7 +462,7 @@ impl LSPSupport for Rope {
         self.line_to_char(pos.line as usize) + line_slice.utf16_cu_to_char(pos.character as usize)
     }
     fn byte_to_pos(&self, byte_idx: usize) -> Position {
-        self.char_to_pos(self.byte_to_char(byte_idx))
+        self.char_to_pos(self.byte_to_char(min(byte_idx, self.len_bytes() - 1)))
     }
     fn char_to_pos(&self, char_idx: usize) -> Position {
         let line = self.char_to_line(char_idx);
@@ -500,7 +501,7 @@ impl<'a> LSPSupport for RopeSlice<'a> {
         self.line_to_char(pos.line as usize) + line_slice.utf16_cu_to_char(pos.character as usize)
     }
     fn byte_to_pos(&self, byte_idx: usize) -> Position {
-        self.char_to_pos(self.byte_to_char(byte_idx))
+        self.char_to_pos(self.byte_to_char(min(byte_idx, self.len_bytes() - 1)))
     }
     fn char_to_pos(&self, char_idx: usize) -> Position {
         let line = self.char_to_line(char_idx);
