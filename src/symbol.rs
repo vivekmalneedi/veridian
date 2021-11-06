@@ -1,6 +1,7 @@
+use ropey::{iter::Bytes, Rope};
 use std::time::{Duration, Instant};
 use tower_lsp::lsp_types::*;
-use tree_sitter::{Node, Query, QueryCursor, Tree};
+use tree_sitter::{Node, Point, Query, QueryCursor, QueryError, TextProvider, Tree};
 
 #[derive(Debug, Copy, Clone)]
 pub struct Symbol {
@@ -157,18 +158,41 @@ impl SymbolBuilder {
     }
 }
 
-pub fn parse(text: &str) -> Option<Tree> {
-    let mut parser = tree_sitter::Parser::new();
-    parser.set_language(tree_sitter_verilog::language()).ok()?;
-    parser.parse(text, None)
+struct RopeChunks<'a>(ropey::iter::Chunks<'a>);
+
+impl<'a> RopeChunks<'a> {
+    fn new(chunks: ropey::iter::Chunks<'a>) -> Self {
+        Self(chunks)
+    }
 }
 
-pub fn index(text: &str, tree: &Tree, query: &Query) -> Vec<Symbol> {
+impl<'a> Iterator for RopeChunks<'a> {
+    type Item = &'a [u8];
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.0.next().map(|s| s.as_bytes())
+    }
+}
+
+pub fn parse(text: &Rope) -> Option<Tree> {
+    let mut parser = tree_sitter::Parser::new();
+    parser.set_language(tree_sitter_verilog::language()).ok()?;
+    parser.parse_with(
+        &mut |offset: usize, pos: Point| {
+            let (chunk, chunk_byte_idx, _, _) = text.chunk_at_byte(offset);
+            &chunk.as_bytes()[(offset - chunk_byte_idx)..]
+        },
+        None,
+    )
+}
+
+pub fn index(text: &Rope, tree: &Tree, query: &Query) -> Vec<Symbol> {
     let mut symbols: Vec<Symbol> = Vec::new();
     let mut struct_members: Vec<SymbolBuilder> = Vec::new();
-    let text_callback = move |node: Node| &text.as_bytes()[node.start_byte()..node.end_byte()];
     let mut cursor = QueryCursor::new();
-    let mats = cursor.matches(query, tree.root_node(), text_callback);
+    let mats = cursor.matches(query, tree.root_node(), |node: Node| {
+        RopeChunks::new(text.slice(node.byte_range()).chunks())
+    });
     let mut parent: Option<(ByteRange, ByteRange)> = None;
     for m in mats {
         // scopes
@@ -180,24 +204,30 @@ pub fn index(text: &str, tree: &Tree, query: &Query) -> Vec<Symbol> {
                     "ident" => builder.ident_node(cap.node.byte_range().into()),
                     "keyword" => {
                         builder.type_node(cap.node.byte_range().into());
-                        builder.kind(match cap.node.utf8_text(text.as_bytes()).unwrap_or("") {
-                            "module" | "macromodule" | "primitive" | "program" | "checker" => {
-                                Some((CompletionItemKind::Module, SymbolKind::Module))
-                            }
-                            "interface" => {
-                                Some((CompletionItemKind::Interface, SymbolKind::Interface))
-                            }
-                            "task" => Some((CompletionItemKind::Function, SymbolKind::Function)),
-                            "function" => {
-                                Some((CompletionItemKind::Function, SymbolKind::Function))
-                            }
-                            "package" => Some((CompletionItemKind::Module, SymbolKind::Package)),
-                            "class" => Some((CompletionItemKind::Class, SymbolKind::Class)),
-                            "struct" => Some((CompletionItemKind::Struct, SymbolKind::Struct)),
-                            "union" => Some((CompletionItemKind::Enum, SymbolKind::Enum)),
-                            "enum" => Some((CompletionItemKind::Enum, SymbolKind::Enum)),
-                            _ => None,
-                        });
+                        builder.kind(
+                            match text.slice(cap.node.byte_range()).to_string().as_str() {
+                                "module" | "macromodule" | "primitive" | "program" | "checker" => {
+                                    Some((CompletionItemKind::Module, SymbolKind::Module))
+                                }
+                                "interface" => {
+                                    Some((CompletionItemKind::Interface, SymbolKind::Interface))
+                                }
+                                "task" => {
+                                    Some((CompletionItemKind::Function, SymbolKind::Function))
+                                }
+                                "function" => {
+                                    Some((CompletionItemKind::Function, SymbolKind::Function))
+                                }
+                                "package" => {
+                                    Some((CompletionItemKind::Module, SymbolKind::Package))
+                                }
+                                "class" => Some((CompletionItemKind::Class, SymbolKind::Class)),
+                                "struct" => Some((CompletionItemKind::Struct, SymbolKind::Struct)),
+                                "union" => Some((CompletionItemKind::Enum, SymbolKind::Enum)),
+                                "enum" => Some((CompletionItemKind::Enum, SymbolKind::Enum)),
+                                _ => None,
+                            },
+                        );
                     }
                     "scope" => builder.scope_node(cap.node.byte_range().into()),
                     _ => (),
@@ -243,7 +273,7 @@ pub fn index(text: &str, tree: &Tree, query: &Query) -> Vec<Symbol> {
                     "port" => builder.scope_node(cap.node.byte_range().into()),
                     "type" => builder.type_node(cap.node.byte_range().into()),
                     "direction" => {
-                        builder.direction(cap.node.utf8_text(text.as_bytes()).unwrap_or(""))
+                        builder.direction(text.slice(cap.node.byte_range()).to_string().as_str())
                     }
                     "signed" => builder.signed(),
                     "interface" => builder.direction_interface(cap.node.byte_range().into()),
@@ -371,6 +401,17 @@ const SYMBOL_QUERY: &str = include_str!("query.scm");
 mod tests {
     use super::*;
 
+    fn test_index(text: &str) -> Vec<Symbol> {
+        let rope = Rope::from(text);
+        let tree = parse(&rope).unwrap();
+        let query = &Query::new(tree_sitter_verilog::language(), SYMBOL_QUERY).unwrap();
+        let symbols = index(&rope, &tree, &query);
+        for symbol in &symbols {
+            println!("{}", range_text(symbol.ident_node, text));
+        }
+        symbols
+    }
+
     fn port(
         ansi: bool,
         query: &Query,
@@ -405,8 +446,7 @@ endmodule
                 port_str
             )
         };
-        let tree = parse(&text).unwrap();
-        let mut ind = index(&text, &tree, query);
+        let mut ind = test_index(&text);
         ind.retain(|s| s.is_port());
         let port = ind.get(0).unwrap();
         assert_eq!(port.direction, direction.into());
@@ -591,7 +631,6 @@ endmodule
 
     #[test]
     fn udp() {
-        let query = Query::new(tree_sitter_verilog::language(), SYMBOL_QUERY).unwrap();
         let text = r#"
 primitive multiplexera(mux, control, dataA, dataB);
   output mux;
@@ -601,8 +640,7 @@ primitive multiplexera(mux, control, dataA, dataB);
   endtable
 endprimitive
 "#;
-        let tree = parse(&text).unwrap();
-        let symbols = index(text, &tree, &query);
+        let symbols = test_index(text);
         check_symbol(
             text,
             &symbols,
@@ -636,8 +674,7 @@ primitive multiplexerb(output mux, input control, input dataA, input dataB);
   endtable
 endprimitive
 "#;
-        let tree = parse(&text).unwrap();
-        let symbols = index(text, &tree, &query);
+        let symbols = test_index(text);
         check_symbol(
             text,
             &symbols,
@@ -668,7 +705,6 @@ endprimitive
 
     #[test]
     fn struct_union_enum() {
-        let query = Query::new(tree_sitter_verilog::language(), SYMBOL_QUERY).unwrap();
         let text = r#"
 struct {
   bit [7:0]  opcode;
@@ -684,11 +720,7 @@ enum {red, yellow, green} light1, light2;
 
 typedef union { int i; shortreal f; } num;
 "#;
-        let tree = parse(&text).unwrap();
-        let symbols = index(text, &tree, &query);
-        for symbol in &symbols {
-            println!("{}", range_text(symbol.ident_node, text));
-        }
+        let symbols = test_index(text);
         check_symbol(
             text,
             &symbols,
@@ -726,7 +758,6 @@ typedef union { int i; shortreal f; } num;
 
     #[test]
     fn params() {
-        let query = Query::new(tree_sitter_verilog::language(), SYMBOL_QUERY).unwrap();
         let text = r#"
 parameter logic [7:0] My_DataIn = 8'hFF;
 
@@ -744,8 +775,7 @@ endmodule
 extern module a #(parameter size= 8, parameter type TP = logic [7:0])
 (input [size:0] a, output TP b);
 "#;
-        let tree = parse(&text).unwrap();
-        let symbols = index(text, &tree, &query);
+        let symbols = test_index(text);
         check_symbol(
             text,
             &symbols,
@@ -782,7 +812,6 @@ extern module a #(parameter size= 8, parameter type TP = logic [7:0])
 
     #[test]
     fn tf() {
-        let query = Query::new(tree_sitter_verilog::language(), SYMBOL_QUERY).unwrap();
         let text = r#"
 task mytask1 (output int x, input logic y);
 endtask
@@ -808,11 +837,7 @@ endfunction
 function [3:0][7:0] myfunc4(input [3:0][7:0] p, q[3:0]);
 endfunction
 "#;
-        let tree = parse(&text).unwrap();
-        let symbols = index(text, &tree, &query);
-        for symbol in &symbols {
-            println!("{}", range_text(symbol.ident_node, text));
-        }
+        let symbols = test_index(text);
         check_symbol(
             text,
             &symbols,
@@ -929,7 +954,6 @@ endfunction
 
     #[test]
     fn import() {
-        let query = Query::new(tree_sitter_verilog::language(), SYMBOL_QUERY).unwrap();
         let text = r#"
 module top1 ;
     import p::*;
@@ -950,11 +974,7 @@ module top2 ;
     end
 endmodule
 "#;
-        let tree = parse(text).unwrap();
-        let symbols = index(text, &tree, &query);
-        for symbol in &symbols {
-            println!("{}", range_text(symbol.ident_node, text));
-        }
+        let symbols = test_index(text);
         check_symbol(
             text,
             &symbols,
@@ -975,7 +995,6 @@ endmodule
 
     #[test]
     fn instantiation() {
-        let query = Query::new(tree_sitter_verilog::language(), SYMBOL_QUERY).unwrap();
         let text = r#"
 module alu_accum1;
   alu alu1 (
@@ -997,11 +1016,7 @@ module alu_accum1;
   );
 endmodule
 "#;
-        let tree = parse(text).unwrap();
-        let symbols = index(text, &tree, &query);
-        for symbol in &symbols {
-            println!("{}", range_text(symbol.ident_node, text));
-        }
+        let symbols = test_index(text);
         check_symbol(
             text,
             &symbols,
@@ -1030,7 +1045,6 @@ endmodule
 
     #[test]
     fn scope() {
-        let query = Query::new(tree_sitter_verilog::language(), SYMBOL_QUERY).unwrap();
         let text = r#"
 module test1;
 endmodule
@@ -1055,11 +1069,7 @@ endpackage
 class test7;
 endclass
     "#;
-        let tree = parse(text).unwrap();
-        let symbols = index(text, &tree, &query);
-        for symbol in &symbols {
-            println!("{}", range_text(symbol.ident_node, text));
-        }
+        let symbols = test_index(text);
         check_symbol(
             text,
             &symbols,
@@ -1120,7 +1130,6 @@ endclass
 
     #[test]
     fn net_dec() {
-        let query = Query::new(tree_sitter_verilog::language(), SYMBOL_QUERY).unwrap();
         let t = r#"
 module test;
     wire a;
@@ -1148,11 +1157,7 @@ module test;
     wire struct packed { logic ecc; logic [7:0] data; } memsig;
 endmodule
     "#;
-        let tree = parse(t).unwrap();
-        let s = index(t, &tree, &query);
-        for symbol in &s {
-            println!("{}", range_text(symbol.ident_node, t));
-        }
+        let s = test_index(t);
         check_symbol(t, &s, "a", "wire", "test", CompletionItemKind::Variable);
         check_symbol(t, &s, "b", "wand", "test", CompletionItemKind::Variable);
         check_symbol(t, &s, "c", "wor", "test", CompletionItemKind::Variable);
@@ -1203,7 +1208,6 @@ endmodule
 
     #[test]
     fn data_dec() {
-        let query = Query::new(tree_sitter_verilog::language(), SYMBOL_QUERY).unwrap();
         let t = r#"
 module test;
     var byte a;
@@ -1225,11 +1229,7 @@ module test;
     typedef logic [15:0] r_t;
 endmodule
     "#;
-        let tree = parse(t).unwrap();
-        let s = index(t, &tree, &query);
-        for symbol in &s {
-            println!("{}", range_text(symbol.ident_node, t));
-        }
+        let s = test_index(t);
         check_symbol(t, &s, "a", "byte", "test", CompletionItemKind::Variable);
         check_symbol(t, &s, "b", "int", "test", CompletionItemKind::Variable);
         check_symbol(t, &s, "c", "shortint", "test", CompletionItemKind::Variable);
