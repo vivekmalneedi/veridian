@@ -118,3 +118,6 @@ See the [LSP Specification](https://microsoft.github.io/language-server-protocol
 - documentHighlight
 - formatting (using [verible](https://github.com/google/verible))
 - rangeFormatting (using [verible](https://github.com/google/verible))
+
+## Alternatives
+The Verible project is working on a language server for SystemVerilog, check it out [here](https://github.com/chipsalliance/verible/tree/master/verilog/tools/ls)
