@@ -200,13 +200,13 @@ jobs:
         needs: [build_ubuntu, build_centos, build_vscode]
         runs-on: ubuntu-latest
         steps:
-            - uses: actions/download-artifact@v2
+            - uses: actions/download-artifact@v3
               with:
                   name: veridian-ubuntu-20.04.tar.gz
-            - uses: actions/download-artifact@v2
+            - uses: actions/download-artifact@v3
               with:
                   name: veridian-centos-7.tar.gz
-            - uses: actions/download-artifact@v2
+            - uses: actions/download-artifact@v3
               with:
                   name: veridian.vsix
             - uses: marvinpinto/action-automatic-releases@latest
