@@ -130,7 +130,7 @@ jobs:
                   cp target/release/veridian .
                   tar -czvf veridian-ubuntu-20.04.tar.gz veridian
 
-            - uses: actions/upload-artifact@v2
+            - uses: actions/upload-artifact@v3
               with:
                   name: veridian-ubuntu-20.04.tar.gz
                   path: veridian-ubuntu-20.04.tar.gz
@@ -167,7 +167,7 @@ jobs:
                   cp target/release/veridian .
                   tar -czvf veridian-centos-7.tar.gz veridian
 
-            - uses: actions/upload-artifact@v2
+            - uses: actions/upload-artifact@v3
               with:
                   name: veridian-centos-7.tar.gz
                   path: veridian-centos-7.tar.gz
@@ -189,7 +189,7 @@ jobs:
                   npm install -g vsce@1.103.1
                   vsce package -o veridian.vsix
 
-            - uses: actions/upload-artifact@v2
+            - uses: actions/upload-artifact@v3
               with:
                   name: veridian.vsix
                   path: extensions/vscode/veridian.vsix
