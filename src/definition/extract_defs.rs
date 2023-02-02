@@ -256,7 +256,7 @@ pub fn port_dec_non_ansi(
                 RefNode::ListOfPortIdentifiers,
                 &ListOfPortIdentifiers
             )?;
-            ports = list_port_idents(tree, &port_list, event_iter, url)?;
+            ports = list_port_idents(tree, port_list, event_iter, url)?;
         }
         PortDeclaration::Input(x) => match &x.nodes.1 {
             InputDeclaration::Net(_) => {
@@ -267,7 +267,7 @@ pub fn port_dec_non_ansi(
                     RefNode::ListOfPortIdentifiers,
                     &ListOfPortIdentifiers
                 )?;
-                ports = list_port_idents(tree, &port_list, event_iter, url)?;
+                ports = list_port_idents(tree, port_list, event_iter, url)?;
             }
             InputDeclaration::Variable(_) => {
                 let port_list = advance_until_enter!(
@@ -277,7 +277,7 @@ pub fn port_dec_non_ansi(
                     RefNode::ListOfVariableIdentifiers,
                     &ListOfVariableIdentifiers
                 )?;
-                ports = list_variable_idents(tree, &port_list, event_iter, url)?;
+                ports = list_variable_idents(tree, port_list, event_iter, url)?;
             }
         },
         PortDeclaration::Output(x) => match &x.nodes.1 {
@@ -289,7 +289,7 @@ pub fn port_dec_non_ansi(
                     RefNode::ListOfPortIdentifiers,
                     &ListOfPortIdentifiers
                 )?;
-                ports = list_port_idents(tree, &port_list, event_iter, url)?;
+                ports = list_port_idents(tree, port_list, event_iter, url)?;
             }
             OutputDeclaration::Variable(_) => {
                 let port_list = advance_until_enter!(
@@ -299,7 +299,7 @@ pub fn port_dec_non_ansi(
                     RefNode::ListOfVariableIdentifiers,
                     &ListOfVariableIdentifiers
                 )?;
-                ports = list_variable_idents(tree, &port_list, event_iter, url)?;
+                ports = list_variable_idents(tree, port_list, event_iter, url)?;
             }
         },
         PortDeclaration::Ref(_) => {
@@ -310,7 +310,7 @@ pub fn port_dec_non_ansi(
                 RefNode::ListOfVariableIdentifiers,
                 &ListOfVariableIdentifiers
             )?;
-            ports = list_variable_idents(tree, &port_list, event_iter, url)?;
+            ports = list_variable_idents(tree, port_list, event_iter, url)?;
         }
         PortDeclaration::Interface(x) => {
             let interface =
@@ -329,7 +329,7 @@ pub fn port_dec_non_ansi(
                 RefNode::ListOfInterfaceIdentifiers,
                 &ListOfInterfaceIdentifiers
             )?;
-            ports = list_interface_idents(tree, &port_list, event_iter, url)?;
+            ports = list_interface_idents(tree, port_list, event_iter, url)?;
             for port in &mut ports {
                 port.interface = interface.clone();
                 port.modport = modport.clone();
@@ -504,7 +504,7 @@ fn struct_union(
     advance_until_leave!(type_str, tree, event_iter, RefNode::Symbol)?;
     let mut members = vec![&(node.nodes.2.nodes.1).0];
     for member_def in &(node.nodes.2.nodes.1).1 {
-        members.push(&member_def);
+        members.push(member_def);
     }
     for member_def in members {
         match member_def.nodes.2 {
@@ -1126,7 +1126,7 @@ pub fn modport_dec(
                                     event_iter,
                                     RefNode::ModportSimplePortNamed
                                 );
-                                port.type_str = format!("{} {}", prepend, append);
+                                port.type_str = format!("{prepend} {append}");
                                 modport.ports.push(Box::new(port));
                             }
                         }
@@ -1195,7 +1195,7 @@ pub fn modport_dec(
                             },
                             ModportTfPort::TfIdentifier(y) => {
                                 let mut port = SubDec::new(url);
-                                let ident = get_ident(tree, RefNode::TfIdentifier(&y));
+                                let ident = get_ident(tree, RefNode::TfIdentifier(y));
                                 port.ident = ident.0;
                                 port.byte_idx = ident.1;
                                 port.type_str = prepend.clone();
@@ -1420,7 +1420,7 @@ fn param_port_dec(
                 RefNode::ParameterDeclaration,
                 &ParameterDeclaration
             )?;
-            param_dec(tree, &param, event_iter, url)
+            param_dec(tree, param, event_iter, url)
         }
         ParameterPortDeclaration::LocalParameterDeclaration(_) => {
             let localparam = skip_until_enter!(
@@ -1429,7 +1429,7 @@ fn param_port_dec(
                 RefNode::LocalParameterDeclaration,
                 &LocalParameterDeclaration
             )?;
-            localparam_dec(tree, &localparam, event_iter, url)
+            localparam_dec(tree, localparam, event_iter, url)
         }
         ParameterPortDeclaration::ParamList(x) => {
             let mut prepend = String::new();
@@ -1506,7 +1506,7 @@ pub fn module_dec(
             let type_str = &mut scope.type_str;
             advance_until_leave!(type_str, tree, event_iter, RefNode::ModuleIdentifier);
             for import_dec in &x.nodes.0.nodes.4 {
-                let imports = package_import(tree, &import_dec, event_iter, url)?;
+                let imports = package_import(tree, import_dec, event_iter, url)?;
                 for import in imports {
                     scope.defs.push(Box::new(import));
                 }
@@ -1527,7 +1527,7 @@ pub fn module_dec(
             let type_str = &mut scope.type_str;
             advance_until_leave!(type_str, tree, event_iter, RefNode::ModuleIdentifier);
             for import_dec in &x.nodes.0.nodes.4 {
-                let imports = package_import(tree, &import_dec, event_iter, url)?;
+                let imports = package_import(tree, import_dec, event_iter, url)?;
                 for import in imports {
                     scope.defs.push(Box::new(import));
                 }
@@ -1578,7 +1578,7 @@ pub fn module_dec(
             let type_str = &mut scope.type_str;
             advance_until_leave!(type_str, tree, event_iter, RefNode::ModuleIdentifier);
             for import_dec in &x.nodes.1.nodes.4 {
-                let imports = package_import(tree, &import_dec, event_iter, url)?;
+                let imports = package_import(tree, import_dec, event_iter, url)?;
                 for import in imports {
                     scope.defs.push(Box::new(import));
                 }
@@ -1599,7 +1599,7 @@ pub fn module_dec(
             let type_str = &mut scope.type_str;
             advance_until_leave!(type_str, tree, event_iter, RefNode::ModuleIdentifier);
             for import_dec in &x.nodes.1.nodes.4 {
-                let imports = package_import(tree, &import_dec, event_iter, url)?;
+                let imports = package_import(tree, import_dec, event_iter, url)?;
                 for import in imports {
                     scope.defs.push(Box::new(import));
                 }
@@ -1652,7 +1652,7 @@ pub fn interface_dec(
             let type_str = &mut scope.type_str;
             advance_until_leave!(type_str, tree, event_iter, RefNode::InterfaceIdentifier);
             for import_dec in &x.nodes.0.nodes.4 {
-                let imports = package_import(tree, &import_dec, event_iter, url)?;
+                let imports = package_import(tree, import_dec, event_iter, url)?;
                 for import in imports {
                     scope.defs.push(Box::new(import));
                 }
@@ -1673,7 +1673,7 @@ pub fn interface_dec(
             let type_str = &mut scope.type_str;
             advance_until_leave!(type_str, tree, event_iter, RefNode::InterfaceIdentifier);
             for import_dec in &x.nodes.0.nodes.4 {
-                let imports = package_import(tree, &import_dec, event_iter, url)?;
+                let imports = package_import(tree, import_dec, event_iter, url)?;
                 for import in imports {
                     scope.defs.push(Box::new(import));
                 }
@@ -1718,7 +1718,7 @@ pub fn interface_dec(
             let type_str = &mut scope.type_str;
             advance_until_leave!(type_str, tree, event_iter, RefNode::InterfaceIdentifier);
             for import_dec in &x.nodes.1.nodes.4 {
-                let imports = package_import(tree, &import_dec, event_iter, url)?;
+                let imports = package_import(tree, import_dec, event_iter, url)?;
                 for import in imports {
                     scope.defs.push(Box::new(import));
                 }
@@ -1739,7 +1739,7 @@ pub fn interface_dec(
             let type_str = &mut scope.type_str;
             advance_until_leave!(type_str, tree, event_iter, RefNode::InterfaceIdentifier);
             for import_dec in &x.nodes.1.nodes.4 {
-                let imports = package_import(tree, &import_dec, event_iter, url)?;
+                let imports = package_import(tree, import_dec, event_iter, url)?;
                 for import in imports {
                     scope.defs.push(Box::new(import));
                 }
@@ -1785,7 +1785,7 @@ fn list_udp_port_idents(
     let mut ports: Vec<PortDec> = Vec::new();
     for port_def in node.nodes.0.contents() {
         let mut port = PortDec::new(url);
-        let ident = get_ident(tree, RefNode::PortIdentifier(&port_def));
+        let ident = get_ident(tree, RefNode::PortIdentifier(port_def));
         port.ident = ident.0;
         port.byte_idx = ident.1;
         ports.push(port);
@@ -2050,7 +2050,7 @@ pub fn program_dec(
             let type_str = &mut scope.type_str;
             advance_until_leave!(type_str, tree, event_iter, RefNode::InterfaceIdentifier);
             for import_dec in &x.nodes.0.nodes.4 {
-                let imports = package_import(tree, &import_dec, event_iter, url)?;
+                let imports = package_import(tree, import_dec, event_iter, url)?;
                 for import in imports {
                     scope.defs.push(Box::new(import));
                 }
@@ -2072,7 +2072,7 @@ pub fn program_dec(
             let type_str = &mut scope.type_str;
             advance_until_leave!(type_str, tree, event_iter, RefNode::ProgramIdentifier);
             for import_dec in &x.nodes.0.nodes.4 {
-                let imports = package_import(tree, &import_dec, event_iter, url)?;
+                let imports = package_import(tree, import_dec, event_iter, url)?;
                 for import in imports {
                     scope.defs.push(Box::new(import));
                 }
@@ -2117,7 +2117,7 @@ pub fn program_dec(
             let type_str = &mut scope.type_str;
             advance_until_leave!(type_str, tree, event_iter, RefNode::ProgramIdentifier);
             for import_dec in &x.nodes.1.nodes.4 {
-                let imports = package_import(tree, &import_dec, event_iter, url)?;
+                let imports = package_import(tree, import_dec, event_iter, url)?;
                 for import in imports {
                     scope.defs.push(Box::new(import));
                 }
@@ -2138,7 +2138,7 @@ pub fn program_dec(
             let type_str = &mut scope.type_str;
             advance_until_leave!(type_str, tree, event_iter, RefNode::ProgramIdentifier);
             for import_dec in &x.nodes.1.nodes.4 {
-                let imports = package_import(tree, &import_dec, event_iter, url)?;
+                let imports = package_import(tree, import_dec, event_iter, url)?;
                 for import in imports {
                     scope.defs.push(Box::new(import));
                 }

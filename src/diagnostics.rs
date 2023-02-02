@@ -149,7 +149,7 @@ fn parse_report(uri: Url, report: String) -> Vec<Diagnostic> {
     let mut diagnostics: Vec<Diagnostic> = Vec::new();
     for line in report.lines() {
         let diag: Vec<&str> = line.splitn(5, ':').collect();
-        if absolute_path(diag.get(0).unwrap()) == uri.to_file_path().unwrap().as_os_str() {
+        if absolute_path(diag.first().unwrap()) == uri.to_file_path().unwrap().as_os_str() {
             let pos = Position::new(
                 diag.get(1).unwrap().parse::<u32>().unwrap() - 1,
                 diag.get(2).unwrap().parse::<u32>().unwrap() - 1,

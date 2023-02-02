@@ -213,7 +213,7 @@ pub fn match_definitions(
         }
         RefNode::DataDeclaration(n) => {
             let vars = data_dec(syntax_tree, n, event_iter, url);
-            if vars.is_some() {
+            if let Some(..) = vars {
                 for var in vars.unwrap() {
                     match var {
                         Declaration::Dec(dec) => definitions.push(Box::new(dec)),
@@ -431,7 +431,7 @@ module test;
   logic a;
   logic b;
 endmodule"#;
-        let doc = Rope::from_str(&text);
+        let doc = Rope::from_str(text);
         let url = Url::parse("file:///test.sv").unwrap();
         let syntax_tree = parse(&doc, &url, &None, &Vec::new()).unwrap();
         let scope_tree = get_scopes(&syntax_tree, &url).unwrap();
@@ -457,7 +457,7 @@ module test;
   logic clk;
   assign clk = 1'b1;
 endmodule"#;
-        let doc = Rope::from_str(&text);
+        let doc = Rope::from_str(text);
         let url = Url::parse("file:///test.sv").unwrap();
         let syntax_tree = parse(&doc, &url, &None, &Vec::new()).unwrap();
         let scope_tree = get_scopes(&syntax_tree, &url).unwrap();
