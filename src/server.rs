@@ -52,7 +52,7 @@ impl Backend {
     }
 }
 
-#[derive(strum_macros::ToString, Debug, Serialize, Deserialize)]
+#[derive(strum_macros::Display, Debug, Serialize, Deserialize)]
 pub enum LogLevel {
     #[strum(serialize = "error")]
     Error,
@@ -229,7 +229,7 @@ impl LanguageServer for Backend {
                 text_document_sync: Some(TextDocumentSyncCapability::Options(
                     TextDocumentSyncOptions {
                         open_close: Some(true),
-                        change: Some(TextDocumentSyncKind::Incremental),
+                        change: Some(TextDocumentSyncKind::INCREMENTAL),
                         will_save: None,
                         will_save_wait_until: None,
                         save: Some(TextDocumentSyncSaveOptions::SaveOptions(SaveOptions {
@@ -261,7 +261,7 @@ impl LanguageServer for Backend {
     }
     async fn initialized(&self, _: InitializedParams) {
         self.client
-            .log_message(MessageType::Info, "veridian initialized!")
+            .log_message(MessageType::INFO, "veridian initialized!")
             .await;
     }
     async fn shutdown(&self) -> Result<()> {

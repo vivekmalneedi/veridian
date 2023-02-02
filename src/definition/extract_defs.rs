@@ -411,8 +411,8 @@ pub fn net_dec(
         }
     }
     for net in &mut nets {
-        net.completion_kind = CompletionItemKind::Variable;
-        net.symbol_kind = SymbolKind::Variable;
+        net.completion_kind = CompletionItemKind::VARIABLE;
+        net.symbol_kind = SymbolKind::VARIABLE;
         net.type_str = format!("{} {}", common, net.type_str);
     }
     Some(nets)
@@ -498,8 +498,8 @@ fn struct_union(
     let mut scope = GenericScope::new(url);
     scope.start = get_loc(tree, RefNode::StructUnion(&node.nodes.0));
     scope.end = get_loc(tree, RefNode::Symbol(&node.nodes.2.nodes.2));
-    scope.completion_kind = CompletionItemKind::Struct;
-    scope.symbol_kind = SymbolKind::Struct;
+    scope.completion_kind = CompletionItemKind::STRUCT;
+    scope.symbol_kind = SymbolKind::STRUCT;
     let type_str = &mut scope.type_str;
     advance_until_leave!(type_str, tree, event_iter, RefNode::Symbol)?;
     let mut members = vec![&(node.nodes.2.nodes.1).0];
@@ -526,8 +526,8 @@ fn struct_union(
                         advance_until_leave!(common, tree, event_iter, RefNode::StructUnionMember);
                         for var in &mut decs {
                             var.type_str = format!("{} {} {}", common, x.type_str, var.type_str);
-                            var.completion_kind = CompletionItemKind::Variable;
-                            var.symbol_kind = SymbolKind::Variable;
+                            var.completion_kind = CompletionItemKind::VARIABLE;
+                            var.symbol_kind = SymbolKind::VARIABLE;
                         }
                         for var in decs {
                             scope.defs.push(Box::new(var));
@@ -545,8 +545,8 @@ fn struct_union(
                         advance_until_leave!(common, tree, event_iter, RefNode::StructUnionMember);
                         for var in &mut decs {
                             var.type_str = format!("{} {} {}", common, x.type_str, var.type_str);
-                            var.completion_kind = CompletionItemKind::Variable;
-                            var.symbol_kind = SymbolKind::Variable;
+                            var.completion_kind = CompletionItemKind::VARIABLE;
+                            var.symbol_kind = SymbolKind::VARIABLE;
                         }
                         for var in decs {
                             let mut member_scope = GenericScope::new(url);
@@ -578,8 +578,8 @@ fn struct_union(
                 advance_until_leave!(common, tree, event_iter, RefNode::StructUnionMember);
                 for var in &mut decs {
                     var.type_str = format!("{} {}", common, var.type_str);
-                    var.completion_kind = CompletionItemKind::Variable;
-                    var.symbol_kind = SymbolKind::Variable;
+                    var.completion_kind = CompletionItemKind::VARIABLE;
+                    var.symbol_kind = SymbolKind::VARIABLE;
                 }
                 for var in decs {
                     scope.defs.push(Box::new(var));
@@ -644,16 +644,16 @@ fn data_type(
             let mut scope = GenericScope::new(url);
             scope.start = get_loc(tree, RefNode::Symbol(&node.nodes.2.nodes.0));
             scope.end = get_loc(tree, RefNode::Symbol(&node.nodes.2.nodes.2));
-            scope.completion_kind = CompletionItemKind::Enum;
-            scope.symbol_kind = SymbolKind::Enum;
+            scope.completion_kind = CompletionItemKind::ENUM;
+            scope.symbol_kind = SymbolKind::ENUM;
             let mut decs: Vec<GenericDec> = Vec::new();
             for emem in node.nodes.2.nodes.1.contents() {
                 let mut dec = GenericDec::new(url);
                 let ident = get_ident(tree, RefNode::EnumIdentifier(&emem.nodes.0));
                 dec.ident = ident.0;
                 dec.byte_idx = ident.1;
-                dec.completion_kind = CompletionItemKind::EnumMember;
-                dec.symbol_kind = SymbolKind::EnumMember;
+                dec.completion_kind = CompletionItemKind::ENUM_MEMBER;
+                dec.symbol_kind = SymbolKind::ENUM_MEMBER;
                 let tokens = &mut dec.type_str;
                 advance_until_leave!(tokens, tree, event_iter, RefNode::EnumNameDeclaration);
                 decs.push(dec);
@@ -707,8 +707,8 @@ pub fn data_dec(
                         let mut decs = list_var_decl(tree, var_list, event_iter, url)?;
                         for var in &mut decs {
                             var.type_str = format!("{} {} {}", common, x.type_str, var.type_str);
-                            var.completion_kind = CompletionItemKind::Variable;
-                            var.symbol_kind = SymbolKind::Variable;
+                            var.completion_kind = CompletionItemKind::VARIABLE;
+                            var.symbol_kind = SymbolKind::VARIABLE;
                         }
                         for var in decs {
                             data.push(Declaration::Dec(var));
@@ -725,8 +725,8 @@ pub fn data_dec(
                         let mut decs = list_var_decl(tree, var_list, event_iter, url)?;
                         for var in &mut decs {
                             var.type_str = format!("{} {} {}", common, x.type_str, var.type_str);
-                            var.completion_kind = CompletionItemKind::Variable;
-                            var.symbol_kind = SymbolKind::Variable;
+                            var.completion_kind = CompletionItemKind::VARIABLE;
+                            var.symbol_kind = SymbolKind::VARIABLE;
                         }
                         for var in decs {
                             data.push(Declaration::Scope(GenericScope {
@@ -762,8 +762,8 @@ pub fn data_dec(
                 data = Vec::new();
                 for var in &mut decs {
                     var.type_str = format!("{} {}", common, var.type_str);
-                    var.completion_kind = CompletionItemKind::Variable;
-                    var.symbol_kind = SymbolKind::Variable;
+                    var.completion_kind = CompletionItemKind::VARIABLE;
+                    var.symbol_kind = SymbolKind::VARIABLE;
                 }
                 for var in decs {
                     data.push(Declaration::Dec(var));
@@ -834,8 +834,8 @@ pub fn data_dec(
                 );
                 var.type_str = tokens;
                 var.type_str = format!("{} {}", common, var.type_str);
-                var.completion_kind = CompletionItemKind::Interface;
-                var.symbol_kind = SymbolKind::Interface;
+                var.completion_kind = CompletionItemKind::INTERFACE;
+                var.symbol_kind = SymbolKind::INTERFACE;
                 data = vec![Declaration::Dec(var)];
             }
             TypeDeclaration::Reserved(y) => {
@@ -853,8 +853,8 @@ pub fn data_dec(
                 );
                 var.type_str = tokens;
                 var.type_str = format!("{} {}", common, var.type_str);
-                var.completion_kind = CompletionItemKind::Variable;
-                var.symbol_kind = SymbolKind::Variable;
+                var.completion_kind = CompletionItemKind::VARIABLE;
+                var.symbol_kind = SymbolKind::VARIABLE;
                 data = vec![Declaration::Dec(var)];
             }
         },
@@ -916,8 +916,8 @@ pub fn data_dec(
                 advance_until_leave!(tokens, tree, event_iter, RefNode::NetTypeIdentifier);
                 var.type_str = tokens;
                 var.type_str = format!("{} {}", common, var.type_str);
-                var.completion_kind = CompletionItemKind::Variable;
-                var.symbol_kind = SymbolKind::Variable;
+                var.completion_kind = CompletionItemKind::VARIABLE;
+                var.symbol_kind = SymbolKind::VARIABLE;
                 data = vec![Declaration::Dec(var)];
             }
         },
@@ -1277,8 +1277,8 @@ fn param_assignment(
     def.ident = ident.0;
     def.byte_idx = ident.1;
     let type_str = &mut def.type_str;
-    def.completion_kind = CompletionItemKind::TypeParameter;
-    def.symbol_kind = SymbolKind::TypeParameter;
+    def.completion_kind = CompletionItemKind::TYPE_PARAMETER;
+    def.symbol_kind = SymbolKind::TYPE_PARAMETER;
     advance_until_leave!(type_str, tree, event_iter, RefNode::ParamAssignment);
     Some(def)
 }
@@ -1314,8 +1314,8 @@ fn type_assignment(
     let ident = get_ident(tree, RefNode::TypeIdentifier(&type_assign.nodes.0));
     def.ident = ident.0;
     def.byte_idx = ident.1;
-    def.completion_kind = CompletionItemKind::TypeParameter;
-    def.symbol_kind = SymbolKind::TypeParameter;
+    def.completion_kind = CompletionItemKind::TYPE_PARAMETER;
+    def.symbol_kind = SymbolKind::TYPE_PARAMETER;
     let type_str = &mut def.type_str;
     advance_until_leave!(type_str, tree, event_iter, RefNode::TypeAssignment);
     Some(def)
@@ -1353,8 +1353,8 @@ pub fn param_dec(
             let mut defs = list_param_assignment(tree, &x.nodes.2, event_iter, url)?;
             for def in &mut defs {
                 def.type_str = format!("{} {}", prepend, def.type_str);
-                def.completion_kind = CompletionItemKind::TypeParameter;
-                def.symbol_kind = SymbolKind::TypeParameter;
+                def.completion_kind = CompletionItemKind::TYPE_PARAMETER;
+                def.symbol_kind = SymbolKind::TYPE_PARAMETER;
             }
             Some(defs)
         }
@@ -1365,8 +1365,8 @@ pub fn param_dec(
             let mut defs = list_type_assignment(tree, &x.nodes.2, event_iter, url)?;
             for def in &mut defs {
                 def.type_str = format!("{} {}", prepend, def.type_str);
-                def.completion_kind = CompletionItemKind::TypeParameter;
-                def.symbol_kind = SymbolKind::TypeParameter;
+                def.completion_kind = CompletionItemKind::TYPE_PARAMETER;
+                def.symbol_kind = SymbolKind::TYPE_PARAMETER;
             }
             Some(defs)
         }
@@ -1386,8 +1386,8 @@ pub fn localparam_dec(
             let mut defs = list_param_assignment(tree, &x.nodes.2, event_iter, url)?;
             for def in &mut defs {
                 def.type_str = format!("{} {}", prepend, def.type_str);
-                def.completion_kind = CompletionItemKind::TypeParameter;
-                def.symbol_kind = SymbolKind::TypeParameter;
+                def.completion_kind = CompletionItemKind::TYPE_PARAMETER;
+                def.symbol_kind = SymbolKind::TYPE_PARAMETER;
             }
             Some(defs)
         }
@@ -1398,8 +1398,8 @@ pub fn localparam_dec(
             let mut defs = list_type_assignment(tree, &x.nodes.2, event_iter, url)?;
             for def in &mut defs {
                 def.type_str = format!("{} {}", prepend, def.type_str);
-                def.completion_kind = CompletionItemKind::TypeParameter;
-                def.symbol_kind = SymbolKind::TypeParameter;
+                def.completion_kind = CompletionItemKind::TYPE_PARAMETER;
+                def.symbol_kind = SymbolKind::TYPE_PARAMETER;
             }
             Some(defs)
         }
@@ -1437,8 +1437,8 @@ fn param_port_dec(
             let mut defs = list_param_assignment(tree, &x.nodes.1, event_iter, url)?;
             for def in &mut defs {
                 def.type_str = format!("{} {}", prepend, def.type_str);
-                def.completion_kind = CompletionItemKind::TypeParameter;
-                def.symbol_kind = SymbolKind::TypeParameter;
+                def.completion_kind = CompletionItemKind::TYPE_PARAMETER;
+                def.symbol_kind = SymbolKind::TYPE_PARAMETER;
             }
             Some(defs)
         }
@@ -1448,8 +1448,8 @@ fn param_port_dec(
             let mut defs = list_type_assignment(tree, &x.nodes.1, event_iter, url)?;
             for def in &mut defs {
                 def.type_str = format!("{} {}", prepend, def.type_str);
-                def.completion_kind = CompletionItemKind::TypeParameter;
-                def.symbol_kind = SymbolKind::TypeParameter;
+                def.completion_kind = CompletionItemKind::TYPE_PARAMETER;
+                def.symbol_kind = SymbolKind::TYPE_PARAMETER;
             }
             Some(defs)
         }
@@ -1630,8 +1630,8 @@ pub fn module_dec(
     let (scopes, mut defs) = match_until_leave!(tree, event_iter, url, RefNode::ModuleDeclaration)?;
     scope.scopes = scopes;
     scope.defs.append(&mut defs);
-    scope.completion_kind = CompletionItemKind::Module;
-    scope.symbol_kind = SymbolKind::Module;
+    scope.completion_kind = CompletionItemKind::MODULE;
+    scope.symbol_kind = SymbolKind::MODULE;
     Some(scope)
 }
 
@@ -1771,8 +1771,8 @@ pub fn interface_dec(
         match_until_leave!(tree, event_iter, url, RefNode::InterfaceDeclaration)?;
     scope.scopes = scopes;
     scope.defs.append(&mut defs);
-    scope.completion_kind = CompletionItemKind::Interface;
-    scope.symbol_kind = SymbolKind::Interface;
+    scope.completion_kind = CompletionItemKind::INTERFACE;
+    scope.symbol_kind = SymbolKind::INTERFACE;
     Some(scope)
 }
 
@@ -2028,8 +2028,8 @@ pub fn udp_dec(
     let (scopes, mut defs) = match_until_leave!(tree, event_iter, url, RefNode::UdpDeclaration)?;
     scope.scopes = scopes;
     scope.defs.append(&mut defs);
-    scope.completion_kind = CompletionItemKind::Module;
-    scope.symbol_kind = SymbolKind::Module;
+    scope.completion_kind = CompletionItemKind::MODULE;
+    scope.symbol_kind = SymbolKind::MODULE;
     Some(scope)
 }
 
@@ -2171,8 +2171,8 @@ pub fn program_dec(
         match_until_leave!(tree, event_iter, url, RefNode::ProgramDeclaration)?;
     scope.scopes = scopes;
     scope.defs.append(&mut defs);
-    scope.completion_kind = CompletionItemKind::Module;
-    scope.symbol_kind = SymbolKind::Module;
+    scope.completion_kind = CompletionItemKind::MODULE;
+    scope.symbol_kind = SymbolKind::MODULE;
     Some(scope)
 }
 
@@ -2195,8 +2195,8 @@ pub fn package_dec(
         match_until_leave!(tree, event_iter, url, RefNode::PackageDeclaration)?;
     scope.scopes = scopes;
     scope.defs.append(&mut defs);
-    scope.completion_kind = CompletionItemKind::Module;
-    scope.symbol_kind = SymbolKind::Package;
+    scope.completion_kind = CompletionItemKind::MODULE;
+    scope.symbol_kind = SymbolKind::PACKAGE;
     Some(scope)
 }
 
@@ -2224,8 +2224,8 @@ pub fn config_dec(
     let (scopes, mut defs) = match_until_leave!(tree, event_iter, url, RefNode::ConfigDeclaration)?;
     scope.scopes = scopes;
     scope.defs.append(&mut defs);
-    scope.completion_kind = CompletionItemKind::Module;
-    scope.symbol_kind = SymbolKind::Module;
+    scope.completion_kind = CompletionItemKind::MODULE;
+    scope.symbol_kind = SymbolKind::MODULE;
     Some(scope)
 }
 
@@ -2308,7 +2308,7 @@ pub fn text_macro_def(
         RefNode::TextMacroIdentifier,
         &TextMacroIdentifier
     );
-    text_macro.completion_kind = CompletionItemKind::Function;
-    text_macro.symbol_kind = SymbolKind::Function;
+    text_macro.completion_kind = CompletionItemKind::FUNCTION;
+    text_macro.symbol_kind = SymbolKind::FUNCTION;
     Some(text_macro)
 }

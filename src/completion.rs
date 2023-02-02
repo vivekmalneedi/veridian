@@ -26,7 +26,7 @@ impl LSPServer {
         );
         let response = match params.context {
             Some(context) => match context.trigger_kind {
-                CompletionTriggerKind::TriggerCharacter => {
+                CompletionTriggerKind::TRIGGER_CHARACTER => {
                     debug!(
                         "trigger char completion: {}",
                         context.trigger_character.clone()?.as_str()
@@ -48,8 +48,8 @@ impl LSPServer {
                         _ => None,
                     }
                 }
-                CompletionTriggerKind::TriggerForIncompleteCompletions => None,
-                CompletionTriggerKind::Invoked => {
+                CompletionTriggerKind::TRIGGER_FOR_INCOMPLETE_COMPLETIONS => None,
+                CompletionTriggerKind::INVOKED => {
                     debug!("Invoked Completion");
                     let mut comps = self.srcs.get_completions(
                         &token,
@@ -65,7 +65,8 @@ impl LSPServer {
                             .collect(),
                     );
                     Some(comps)
-                }
+                },
+                _ => None
             },
             None => {
                 let trigger = prev_char(&file.text, &doc.position);
@@ -144,7 +145,7 @@ fn get_completion_token(text: &Rope, line: RopeSlice, pos: Position) -> String {
     }
     let mut result: String = token.chars().rev().collect();
     if result.contains('[') {
-        let l_bracket_offset = result.find('[').unwrap_or_else(|| result.len());
+        let l_bracket_offset = result.find('[').unwrap_or(result.len());
         result.replace_range(l_bracket_offset.., "");
     }
     if &result == "." {
@@ -313,20 +314,20 @@ endmodule
             work_done_progress_params: WorkDoneProgressParams::default(),
             partial_result_params: PartialResultParams::default(),
             context: Some(CompletionContext {
-                trigger_kind: CompletionTriggerKind::Invoked,
+                trigger_kind: CompletionTriggerKind::INVOKED,
                 trigger_character: None,
             }),
         };
         let response: CompletionResponse = server.completion(completion_params).unwrap();
         let item1 = CompletionItem {
             label: "abc".to_owned(),
-            kind: Some(CompletionItemKind::Variable),
+            kind: Some(CompletionItemKind::VARIABLE),
             detail: Some("logic".to_string()),
             ..CompletionItem::default()
         };
         let item2 = CompletionItem {
             label: "abcd".to_owned(),
-            kind: Some(CompletionItemKind::Variable),
+            kind: Some(CompletionItemKind::VARIABLE),
             detail: Some("logic".to_string()),
             ..CompletionItem::default()
         };
@@ -431,20 +432,20 @@ endmodule
             work_done_progress_params: WorkDoneProgressParams::default(),
             partial_result_params: PartialResultParams::default(),
             context: Some(CompletionContext {
-                trigger_kind: CompletionTriggerKind::Invoked,
+                trigger_kind: CompletionTriggerKind::INVOKED,
                 trigger_character: None,
             }),
         };
         let response: CompletionResponse = server.completion(completion_params).unwrap();
         let item1 = CompletionItem {
             label: "abc".to_owned(),
-            kind: Some(CompletionItemKind::Variable),
+            kind: Some(CompletionItemKind::VARIABLE),
             detail: Some("logic".to_string()),
             ..CompletionItem::default()
         };
         let item3 = CompletionItem {
             label: "aouter".to_owned(),
-            kind: Some(CompletionItemKind::Variable),
+            kind: Some(CompletionItemKind::VARIABLE),
             detail: Some("logic".to_string()),
             ..CompletionItem::default()
         };
@@ -505,7 +506,7 @@ endmodule
             work_done_progress_params: WorkDoneProgressParams::default(),
             partial_result_params: PartialResultParams::default(),
             context: Some(CompletionContext {
-                trigger_kind: CompletionTriggerKind::TriggerCharacter,
+                trigger_kind: CompletionTriggerKind::TRIGGER_CHARACTER,
                 trigger_character: Some(".".to_string()),
             }),
         };
@@ -513,7 +514,7 @@ endmodule
         dbg!(&response);
         let item1 = CompletionItem {
             label: "abcd".to_owned(),
-            kind: Some(CompletionItemKind::Variable),
+            kind: Some(CompletionItemKind::VARIABLE),
             detail: Some("wire".to_string()),
             ..CompletionItem::default()
         };
@@ -535,7 +536,7 @@ endmodule
             work_done_progress_params: WorkDoneProgressParams::default(),
             partial_result_params: PartialResultParams::default(),
             context: Some(CompletionContext {
-                trigger_kind: CompletionTriggerKind::TriggerCharacter,
+                trigger_kind: CompletionTriggerKind::TRIGGER_CHARACTER,
                 trigger_character: Some(".".to_string()),
             }),
         };
@@ -599,7 +600,7 @@ endmodule
         dbg!(&response);
         let item1 = CompletionItem {
             label: "abcd".to_owned(),
-            kind: Some(CompletionItemKind::Variable),
+            kind: Some(CompletionItemKind::VARIABLE),
             detail: Some("wire".to_string()),
             ..CompletionItem::default()
         };
@@ -621,7 +622,7 @@ endmodule
             work_done_progress_params: WorkDoneProgressParams::default(),
             partial_result_params: PartialResultParams::default(),
             context: Some(CompletionContext {
-                trigger_kind: CompletionTriggerKind::TriggerCharacter,
+                trigger_kind: CompletionTriggerKind::TRIGGER_CHARACTER,
                 trigger_character: Some(".".to_string()),
             }),
         };
@@ -762,7 +763,7 @@ endinterface"#;
             work_done_progress_params: WorkDoneProgressParams::default(),
             partial_result_params: PartialResultParams::default(),
             context: Some(CompletionContext {
-                trigger_kind: CompletionTriggerKind::Invoked,
+                trigger_kind: CompletionTriggerKind::INVOKED,
                 trigger_character: None,
             }),
         };

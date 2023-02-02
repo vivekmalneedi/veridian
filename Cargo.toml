@@ -8,23 +8,23 @@ edition = "2018"
 slang = ["veridian_slang"]
 
 [dependencies]
-sv-parser = "0.8.2"
-log = "0.4.14"
-tower-lsp = "0.14.1"
-flexi_logger = "0.17.1"
-ropey = "1.2.0"
-tokio = { version = "1.6.1", features = ["macros", "io-std", "rt-multi-thread"] }
+sv-parser = "0.12.2"
+log = "0.4.17"
+tower-lsp = "0.18.0"
+flexi_logger = "0.24.2"
+ropey = "1.6.0"
+tokio = { version = "1.25.0", features = ["macros", "io-std", "rt-multi-thread"] }
 path-clean = "0.1.0"
-pathdiff = "0.2.0"
+pathdiff = "0.2.1"
 walkdir = "2.3.2"
-serde_yaml = "0.8.17"
-anyhow = "1.0.40"
-serde = "1.0.126"
-which = "4.1.0"
-regex = "1.5.4"
-structopt = "0.3.21"
-strum = "0.21.0"
-strum_macros = "0.21.1"
+serde_yaml = "0.9.17"
+anyhow = "1.0.68"
+serde = "1.0.152"
+which = "4.4.0"
+regex = "1.7.1"
+structopt = "0.3.26"
+strum = "0.24.1"
+strum_macros = "0.24.3"
 
 [dependencies.veridian_slang]
 optional = true

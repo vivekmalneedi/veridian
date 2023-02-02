@@ -213,7 +213,7 @@ fn verible_syntax(
             let pos = Position::new(line - 1, col - 1);
             diags.push(Diagnostic::new(
                 Range::new(pos, pos),
-                Some(DiagnosticSeverity::Error),
+                Some(DiagnosticSeverity::ERROR),
                 None,
                 Some("verible".to_string()),
                 caps.name("message")?.as_str().to_string(),
@@ -240,7 +240,7 @@ mod tests {
             uri.clone(),
             vec![Diagnostic::new(
                 Range::new(Position::new(3, 13), Position::new(3, 13)),
-                Some(DiagnosticSeverity::Error),
+                Some(DiagnosticSeverity::ERROR),
                 None,
                 Some("slang".to_owned()),
                 " cannot refer to element 2 of \'logic[1:0]\'".to_owned(),
@@ -294,7 +294,7 @@ endmodule
                     character: 0,
                 },
             },
-            severity: Some(DiagnosticSeverity::Error),
+            severity: Some(DiagnosticSeverity::ERROR),
             code: None,
             source: Some("verible".to_string()),
             message: "syntax error, rejected \"endmodule\"".to_string(),
