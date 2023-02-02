@@ -171,9 +171,9 @@ fn parse_report(uri: Url, report: String) -> Vec<Diagnostic> {
 #[cfg(feature = "slang")]
 fn slang_severity(severity: &str) -> Option<DiagnosticSeverity> {
     match severity {
-        " error" => Some(DiagnosticSeverity::Error),
-        " warning" => Some(DiagnosticSeverity::Warning),
-        " note" => Some(DiagnosticSeverity::Information),
+        " error" => Some(DiagnosticSeverity::ERROR),
+        " warning" => Some(DiagnosticSeverity::WARNING),
+        " note" => Some(DiagnosticSeverity::INFORMATION),
         _ => None,
     }
 }

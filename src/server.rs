@@ -199,7 +199,9 @@ impl LanguageServer for Backend {
             let mut log_handle = self.server.log_handle.lock().unwrap();
             let log_handle = log_handle.as_mut();
             if let Some(handle) = log_handle {
-                handle.parse_and_push_temp_spec(&conf.log_level.to_string());
+                handle
+                    .parse_and_push_temp_spec(&conf.log_level.to_string())
+                    .expect("log level");
             }
             *self.server.conf.write().unwrap() = conf;
         } else {
