@@ -1,4 +1,5 @@
 use crate::server::ProjectConfig;
+use log::info;
 #[cfg(any(feature = "slang", test))]
 use path_clean::PathClean;
 use regex::Regex;
@@ -64,7 +65,16 @@ pub fn get_diagnostics(
 ) -> PublishDiagnosticsParams {
     if !(cfg!(test) && (uri.to_string().starts_with("file:///test"))) {
         let diagnostics = {
-            if conf.verible.syntax.enabled {
+            if conf.verilator.syntax.enabled {
+                match verilator_syntax(
+                    rope,
+                    &conf.verilator.syntax.path,
+                    &conf.verilator.syntax.args,
+                ) {
+                    Some(diags) => diags,
+                    None => Vec::new(),
+                }
+            } else if conf.verible.syntax.enabled {
                 match verible_syntax(rope, &conf.verible.syntax.path, &conf.verible.syntax.args) {
                     Some(diags) => diags,
                     None => Vec::new(),
@@ -183,6 +193,49 @@ fn slang_severity(severity: &str) -> Option<DiagnosticSeverity> {
 fn absolute_path(path_str: &str) -> PathBuf {
     let path = Path::new(path_str);
     current_dir().unwrap().join(path).clean()
+}
+
+/// syntax checking using verilator --lint-only
+fn verilator_syntax(
+    rope: &Rope,
+    verilator_syntax_path: &str,
+    verilator_syntax_args: &[String],
+) -> Option<Vec<Diagnostic>> {
+    let mut child = Command::new(verilator_syntax_path)
+        .stdin(Stdio::piped())
+        .stderr(Stdio::piped())
+        .stdout(Stdio::piped())
+        .args(verilator_syntax_args)
+        .arg("-")
+        .spawn()
+        .ok()?;
+    let re = Regex::new(r"^.+:(?P<line>.*):(?P<col>.*):\s(?P<message>.*)\s.*$").ok()?;
+    // write file to stdin, read output from stdout
+    rope.write_to(child.stdin.as_mut()?).ok()?;
+    let output = child.wait_with_output().ok()?;
+    if !output.status.success() {
+        let mut diags: Vec<Diagnostic> = Vec::new();
+        let raw_output = String::from_utf8(output.stdout).ok()?;
+        info!("verilator diagnostics: {:#?}", raw_output);
+        for error in raw_output.lines() {
+            let caps = re.captures(error)?;
+            let line: u32 = caps.name("line")?.as_str().to_string().parse().ok()?;
+            let col: u32 = caps.name("col")?.as_str().to_string().parse().ok()?;
+            let pos = Position::new(line - 1, col - 1);
+            diags.push(Diagnostic::new(
+                Range::new(pos, pos),
+                Some(DiagnosticSeverity::Error),
+                None,
+                Some("verilator".to_string()),
+                caps.name("message")?.as_str().to_string(),
+                None,
+                None,
+            ));
+        }
+        Some(diags)
+    } else {
+        None
+    }
 }
 
 /// syntax checking using verible-verilog-syntax
