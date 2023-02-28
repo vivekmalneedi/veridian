@@ -149,7 +149,13 @@ impl Default for VerilatorSyntax {
         Self {
             enabled: true,
             path: "verilator".to_string(),
-            args: vec!["--lint-only".to_string(), "-Wall".to_string()],
+            args: vec![
+                "--lint-only".to_string(),
+                "--sv".to_string(),
+                "--language 1800-2012".to_string(),
+                "--timing".to_string(),
+                "-Wall".to_string(),
+            ],
         }
     }
 }
