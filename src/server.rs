@@ -2,7 +2,7 @@ use crate::sources::*;
 
 use crate::completion::keyword::*;
 use flexi_logger::LoggerHandle;
-use log::{debug, info};
+use log::{debug, info, warn};
 use path_clean::PathClean;
 use serde::{Deserialize, Serialize};
 use std::env::current_dir;
@@ -215,7 +215,8 @@ impl LanguageServer for Backend {
         // grab include dirs and source dirs from config, and convert to abs path
         let mut inc_dirs = self.server.srcs.include_dirs.write().unwrap();
         let mut src_dirs = self.server.srcs.source_dirs.write().unwrap();
-        if let Ok(conf) = read_config(params.root_uri) {
+        match read_config(params.root_uri) {
+          Ok(conf) => {
             inc_dirs.extend(conf.include_dirs.iter().filter_map(|x| absolute_path(x)));
             debug!("{:#?}", inc_dirs);
             src_dirs.extend(conf.source_dirs.iter().filter_map(|x| absolute_path(x)));
@@ -232,8 +233,10 @@ impl LanguageServer for Backend {
                     })?;
             }
             *self.server.conf.write().unwrap() = conf;
-        } else {
-            info!("no config file found");
+          },
+          Err(e) => {
+            warn!("found errors in config file: {:#?}", e);
+          }
         }
         let mut conf = self.server.conf.write().unwrap();
         conf.verible.syntax.enabled = which(&conf.verible.syntax.path).is_ok();
