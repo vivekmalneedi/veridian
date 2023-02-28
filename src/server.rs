@@ -138,7 +138,7 @@ pub struct VerilatorSyntax {
 impl Default for VerilatorSyntax {
     fn default() -> Self {
         Self {
-            enabled: true,
+            enabled: false,
             path: "verilator".to_string(),
             args: vec![
                 "--lint-only".to_string(),
@@ -243,7 +243,9 @@ impl LanguageServer for Backend {
         if cfg!(feature = "slang") {
             info!("enabled linting with slang");
         }
-        if conf.verible.syntax.enabled {
+        if conf.verilator.syntax.enabled {
+            info!("enabled linting with verilator")
+        } else if conf.verible.syntax.enabled {
             info!("enabled linting with verible-verilog-syntax")
         }
         conf.verible.format.enabled = which(&conf.verible.format.path).is_ok();
