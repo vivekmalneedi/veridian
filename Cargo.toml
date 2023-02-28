@@ -29,3 +29,6 @@ strum_macros = "0.21.1"
 [dependencies.veridian_slang]
 optional = true
 path = "veridian-slang"
+
+[patch.crates-io]
+lexical-core = {git = 'https://github.com/Gelbpunkt/rust-lexical', branch = 'fix-warnings-and-update-deps'}
