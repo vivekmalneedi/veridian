@@ -77,6 +77,8 @@ pub struct ProjectConfig {
     pub source_dirs: Vec<String>,
     // config options for verible tools
     pub verible: Verible,
+    // config options for verible tools
+    pub verilator: Verilator,
     // log level
     pub log_level: LogLevel,
 }
@@ -88,6 +90,7 @@ impl Default for ProjectConfig {
             include_dirs: Vec::new(),
             source_dirs: Vec::new(),
             verible: Verible::default(),
+            verilator: Verilator::default(),
             log_level: LogLevel::Info,
         }
     }
@@ -98,6 +101,12 @@ impl Default for ProjectConfig {
 pub struct Verible {
     pub syntax: VeribleSyntax,
     pub format: VeribleFormat,
+}
+
+#[derive(Debug, Default, Serialize, Deserialize)]
+#[serde(default)]
+pub struct Verilator {
+    pub syntax: VerilatorSyntax,
 }
 
 impl Default for Verible {
@@ -123,6 +132,24 @@ impl Default for VeribleSyntax {
             enabled: true,
             path: "verible-verilog-syntax".to_string(),
             args: Vec::new(),
+        }
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(default)]
+pub struct VerilatorSyntax {
+    pub enabled: bool,
+    pub path: String,
+    pub args: Vec<String>,
+}
+
+impl Default for VerilatorSyntax {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            path: "verilator".to_string(),
+            args: vec!["--lint-only".to_string(), "-Wall".to_string()],
         }
     }
 }
