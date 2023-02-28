@@ -103,19 +103,27 @@ pub struct Verible {
     pub format: VeribleFormat,
 }
 
-#[derive(Debug, Default, Serialize, Deserialize)]
+impl Default for Verible {
+  fn default() -> Self {
+    Self {
+      syntax: VeribleSyntax::default(),
+      format: VeribleFormat::default(),
+    }
+  }
+}
+
+#[derive(Debug, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Verilator {
     pub syntax: VerilatorSyntax,
 }
 
-impl Default for Verible {
-    fn default() -> Self {
-        Self {
-            syntax: VeribleSyntax::default(),
-            format: VeribleFormat::default(),
-        }
+impl Default for Verilator {
+  fn default() -> Self {
+    Self {
+      syntax: VerilatorSyntax::default(),
     }
+  }
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -147,7 +155,7 @@ pub struct VerilatorSyntax {
 impl Default for VerilatorSyntax {
     fn default() -> Self {
         Self {
-            enabled: true,
+            enabled: false,
             path: "verilator".to_string(),
             args: vec![
                 "--lint-only".to_string(),
@@ -246,7 +254,9 @@ impl LanguageServer for Backend {
         if cfg!(feature = "slang") {
             info!("enabled linting with slang");
         }
-        if conf.verible.syntax.enabled {
+        if conf.verilator.syntax.enabled {
+            info!("enabled linting with verilator")
+        } else if conf.verible.syntax.enabled {
             info!("enabled linting with verible-verilog-syntax")
         }
         conf.verible.format.enabled = which(&conf.verible.format.path).is_ok();
