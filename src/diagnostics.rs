@@ -227,20 +227,22 @@ fn verilator_syntax(
                 Some(caps) => caps,
                 None => break, // return accumulated diagnostics
             };
-            let diag_severity = match caps.name("severity")?.as_str() {
+            let raw_severity = caps.name("severity")?.as_str();
+            let diag_severity = match raw_severity {
                 "Error" => DiagnosticSeverity::Error,
-                "Warning" => DiagnosticSeverity::Warning,
+                s if s.starts_with("Warning") => DiagnosticSeverity::Warning,
                 _ => DiagnosticSeverity::Hint,
             };
             let line: u32 = caps.name("line")?.as_str().to_string().parse().ok()?;
             let col: u32 = caps.name("col")?.as_str().to_string().parse().ok()?;
             let pos = Position::new(line - 1, col - 1);
+            let msg = raw_severity.to_string() + ": " + caps.name("message")?.as_str();
             diags.push(Diagnostic::new(
                 Range::new(pos, pos),
                 Some(diag_severity),
                 None,
                 Some("verilator".to_string()),
-                caps.name("message")?.as_str().to_string(),
+                msg,
                 None,
                 None,
             ));
