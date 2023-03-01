@@ -1,5 +1,4 @@
 use crate::server::ProjectConfig;
-use log::info;
 #[cfg(any(feature = "slang", test))]
 use path_clean::PathClean;
 use regex::Regex;
@@ -68,6 +67,7 @@ pub fn get_diagnostics(
             if conf.verilator.syntax.enabled {
                 match verilator_syntax(
                     rope,
+                    &uri,
                     &conf.verilator.syntax.path,
                     &conf.verilator.syntax.args,
                 ) {
@@ -198,6 +198,7 @@ fn absolute_path(path_str: &str) -> PathBuf {
 /// syntax checking using verilator --lint-only
 fn verilator_syntax(
     rope: &Rope,
+    verilator_syntax_uri: &Url,
     verilator_syntax_path: &str,
     verilator_syntax_args: &[String],
 ) -> Option<Vec<Diagnostic>> {
@@ -206,25 +207,37 @@ fn verilator_syntax(
         .stderr(Stdio::piped())
         .stdout(Stdio::piped())
         .args(verilator_syntax_args)
-        .arg("-")
+        .arg(verilator_syntax_uri.to_file_path().ok()?.to_str()?)
         .spawn()
         .ok()?;
-    let re = Regex::new(r"^.+:(?P<line>.*):(?P<col>.*):\s(?P<message>.*)\s.*$").ok()?;
+    let re =
+        Regex::new(r"%(?P<severity>.*?):.*?:(?P<line>\d*):(?P<col>\d*):\s(?P<message>.*)$").ok()?;
     // write file to stdin, read output from stdout
     rope.write_to(child.stdin.as_mut()?).ok()?;
     let output = child.wait_with_output().ok()?;
     if !output.status.success() {
         let mut diags: Vec<Diagnostic> = Vec::new();
-        let raw_output = String::from_utf8(output.stdout).ok()?;
-        info!("verilator diagnostics: {:#?}", raw_output);
-        for error in raw_output.lines() {
-            let caps = re.captures(error)?;
+        let raw_output = String::from_utf8(output.stderr).ok()?;
+        let filtered_output = raw_output
+            .lines()
+            .filter(|line| line.starts_with("%"))
+            .collect::<Vec<&str>>();
+        for error in filtered_output {
+            let caps = match re.captures(error) {
+                Some(caps) => caps,
+                None => break, // return accumulated diagnostics
+            };
+            let diag_severity = match caps.name("severity")?.as_str() {
+                "Error" => DiagnosticSeverity::Error,
+                "Warning" => DiagnosticSeverity::Warning,
+                _ => DiagnosticSeverity::Hint,
+            };
             let line: u32 = caps.name("line")?.as_str().to_string().parse().ok()?;
             let col: u32 = caps.name("col")?.as_str().to_string().parse().ok()?;
             let pos = Position::new(line - 1, col - 1);
             diags.push(Diagnostic::new(
                 Range::new(pos, pos),
-                Some(DiagnosticSeverity::Error),
+                Some(diag_severity),
                 None,
                 Some("verilator".to_string()),
                 caps.name("message")?.as_str().to_string(),
