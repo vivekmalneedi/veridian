@@ -4,6 +4,7 @@ use crate::diagnostics::{get_diagnostics, is_hidden};
 use crate::server::LSPServer;
 use log::{debug, error, trace};
 use pathdiff::diff_paths;
+use regex::bytes;
 use ropey::{Rope, RopeSlice};
 use std::cmp::min;
 use std::collections::HashMap;
@@ -378,7 +379,7 @@ pub fn parse(
             &HashMap::new(),
             &includes,
             false,
-            true
+            false
         ) {
             Ok((syntax_tree, _)) => {
                 debug!("parse complete of {}", uri);
@@ -390,8 +391,10 @@ pub fn parse(
                     // syntax error
                     sv_parser::Error::Parse(trace) => match trace {
                         Some((_, bpos)) => {
-                            let mut line_start = text.byte_to_line(bpos);
-                            let mut line_end = text.byte_to_line(bpos) + 1;
+                            let byte_start = if bpos > 1 {bpos - 3} else {bpos};
+                            let mut line_start = text.byte_to_line(byte_start);
+                            let mut line_end = text.byte_to_line(byte_start) + 1;
+                            // try to revert last change
                             if !reverted_change {
                                 if let Some(range) = last_change_range {
                                     line_start = range.start.line as usize;
@@ -399,12 +402,26 @@ pub fn parse(
                                     reverted_change = true;
                                 }
                             }
+                            // try to remove lines until parse succeeds
+                            trace!("line: {line_start}");
                             for line_idx in line_start..line_end {
                                 let line = text.line(line_idx);
+                                let line_str = line.to_string();
+                                let text_str = text.to_string();
+                                trace!("{text_str}");
+                                trace!("{line_str}");
                                 let start_char = text.line_to_char(line_idx);
                                 let line_length = line.len_chars();
+                                // trace!("orig: {}", &text.len_bytes());
                                 text.remove(start_char..(start_char + line_length - 1));
-                                text.insert(start_char, &" ".to_owned().repeat(line_length));
+                                // trace!("remove: {}", &text.len_bytes());
+                                text.insert(start_char, &" ".to_owned().repeat(line_length - 1));
+                                // trace!("insert: {}", &text.len_bytes());
+                            }
+                            if parse_iterations == 5
+                            {
+                                error!("parse exceeded {parse_iterations} iterations");
+                                return None
                             }
                             parse_iterations += 1;
                         }

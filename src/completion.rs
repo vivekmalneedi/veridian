@@ -332,6 +332,7 @@ endmodule
             ..CompletionItem::default()
         };
         if let CompletionResponse::List(item) = response {
+            dbg!(&item);
             assert!(item.items.contains(&item1));
             assert!(item.items.contains(&item2));
         } else {
@@ -450,7 +451,7 @@ endmodule
             ..CompletionItem::default()
         };
         if let CompletionResponse::List(item) = response {
-            eprintln!("{:#?}", item);
+            eprintln!("{item:#?}");
             assert!(item.items.contains(&item1));
             for comp in &item.items {
                 assert!(comp.label != "abcd");
@@ -519,7 +520,7 @@ endmodule
             ..CompletionItem::default()
         };
         if let CompletionResponse::List(item) = response {
-            eprintln!("{:#?}", item);
+            eprintln!("{item:#?}");
             assert!(item.items.contains(&item1));
             assert!(item.items.len() == 1);
         } else {
@@ -542,7 +543,7 @@ endmodule
         };
         let response: CompletionResponse = server.completion(completion_params).unwrap();
         if let CompletionResponse::List(item) = response {
-            eprintln!("{:#?}", item);
+            eprintln!("{item:#?}");
             assert!(item.items.contains(&item1));
             assert!(item.items.len() == 1);
         } else {
@@ -605,7 +606,7 @@ endmodule
             ..CompletionItem::default()
         };
         if let CompletionResponse::List(item) = response {
-            eprintln!("{:#?}", item);
+            eprintln!("{item:#?}");
             assert!(item.items.contains(&item1));
             assert!(item.items.len() == 1);
         } else {
@@ -628,7 +629,7 @@ endmodule
         };
         let response: CompletionResponse = server.completion(completion_params).unwrap();
         if let CompletionResponse::List(item) = response {
-            eprintln!("{:#?}", item);
+            eprintln!("{item:#?}");
             assert!(item.items.contains(&item1));
             assert!(item.items.len() == 1);
         } else {
@@ -656,7 +657,7 @@ interface test_inter2;
 endinterface
 "#;
 
-        let doc = Rope::from_str(&text);
+        let doc = Rope::from_str(text);
         let url = Url::parse("file:///test.sv").unwrap();
         let syntax_tree = parse(&doc, &url, &None, &Vec::new()).unwrap();
         let scope_tree = get_scopes(&syntax_tree, &url).unwrap();
