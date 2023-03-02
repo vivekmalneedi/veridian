@@ -248,7 +248,7 @@ fn verilator_syntax(
         let raw_output = String::from_utf8(output.stderr).ok()?;
         let filtered_output = raw_output
             .lines()
-            .filter(|line| line.starts_with("%"))
+            .filter(|line| line.chars().nth(0) == Some('%'))
             .collect::<Vec<&str>>();
         for error in filtered_output {
             let caps = match re.captures(error) {
