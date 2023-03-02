@@ -1,4 +1,6 @@
 use crate::server::ProjectConfig;
+use lazy_static::lazy_static;
+use log::info;
 #[cfg(any(feature = "slang", test))]
 use path_clean::PathClean;
 use regex::Regex;
@@ -195,14 +197,22 @@ fn absolute_path(path_str: &str) -> PathBuf {
     current_dir().unwrap().join(path).clean()
 }
 
+/// convert captured severity string to DiagnosticSeverity
 fn verilator_severity(severity: &str) -> Option<DiagnosticSeverity> {
+    info!("verilator severity: {}", severity);
     match severity {
         "Error" => Some(DiagnosticSeverity::ERROR),
         s if s.starts_with("Warning") => Some(DiagnosticSeverity::WARNING),
         // NOTE: afaik, verilator doesn't have an info or hint severity
-        _ => Some(DiagnosticSeverity::HINT),
-    };
-    None
+        _ => Some(DiagnosticSeverity::INFORMATION),
+    }
+}
+
+lazy_static! {
+    /// lazily compiled regex for verilator syntax checking
+    static ref VERILATOR_RE: Regex =
+        Regex::new(r"%(?P<severity>Warning|Error)(?:-(?P<warning_type>.*))?:.*?:(?P<line>\d*):(?P<col>\d*):\s(?P<message>.*)$")
+            .unwrap();
 }
 
 /// syntax checking using verilator --lint-only
@@ -220,8 +230,7 @@ fn verilator_syntax(
         .arg(verilator_syntax_uri.to_file_path().ok()?.to_str()?)
         .spawn()
         .ok()?;
-    let re =
-        Regex::new(r"%(?P<severity>.*?):.*?:(?P<line>\d*):(?P<col>\d*):\s(?P<message>.*)$").ok()?;
+
     // write file to stdin, read output from stdout
     rope.write_to(child.stdin.as_mut()?).ok()?;
     let output = child.wait_with_output().ok()?;
@@ -233,18 +242,26 @@ fn verilator_syntax(
             .filter(|line| line.starts_with("%"))
             .collect::<Vec<&str>>();
         for error in filtered_output {
-            let caps = match re.captures(error) {
+            let caps = match VERILATOR_RE.captures(error) {
                 Some(caps) => caps,
                 None => break, // return accumulated diagnostics
             };
-            let raw_severity = caps.name("severity")?.as_str();
+            let severity = verilator_severity(caps.name("severity")?.as_str());
             let line: u32 = caps.name("line")?.as_str().to_string().parse().ok()?;
             let col: u32 = caps.name("col")?.as_str().to_string().parse().ok()?;
             let pos = Position::new(line - 1, col - 1);
-            let msg = raw_severity.to_string() + ": " + caps.name("message")?.as_str();
+            let msg = match severity {
+                Some(DiagnosticSeverity::ERROR) => caps.name("message")?.as_str().to_string(),
+                Some(DiagnosticSeverity::WARNING) => format!(
+                    "{}: {}",
+                    caps.name("warning_type")?.as_str(),
+                    caps.name("message")?.as_str()
+                ),
+                _ => "".to_string(),
+            };
             diags.push(Diagnostic::new(
                 Range::new(pos, pos),
-                verilator_severity(raw_severity),
+                severity,
                 None,
                 Some("verilator".to_string()),
                 msg,
