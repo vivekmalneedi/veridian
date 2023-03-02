@@ -1,3 +1,4 @@
 pub fn test_init() {
-    let _ = flexi_logger::Logger::with_str("info").start();
+    // NOTE: I'll just do a unwrap here as the given string is valid.
+    let _ = flexi_logger::Logger::try_with_str("info").unwrap().start();
 }

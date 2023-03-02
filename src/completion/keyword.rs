@@ -6,15 +6,15 @@ pub fn keyword_completions(keywords: &[(&str, &str)]) -> Vec<CompletionItem> {
         if key.1.is_empty() {
             items.push(CompletionItem {
                 label: key.0.to_string(),
-                kind: Some(CompletionItemKind::Keyword),
+                kind: Some(CompletionItemKind::KEYWORD),
                 ..CompletionItem::default()
             });
         } else {
             items.push(CompletionItem {
                 label: key.0.to_string(),
-                kind: Some(CompletionItemKind::Keyword),
+                kind: Some(CompletionItemKind::KEYWORD),
                 insert_text: Some(key.1.to_string()),
-                insert_text_format: Some(InsertTextFormat::Snippet),
+                insert_text_format: Some(InsertTextFormat::SNIPPET),
                 ..CompletionItem::default()
             })
         }
@@ -27,7 +27,7 @@ pub fn other_completions(tasks: &[&str]) -> Vec<CompletionItem> {
         .iter()
         .map(|x| CompletionItem {
             label: x.to_string(),
-            kind: Some(CompletionItemKind::Function),
+            kind: Some(CompletionItemKind::FUNCTION),
             ..CompletionItem::default()
         })
         .collect()
