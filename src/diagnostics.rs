@@ -195,6 +195,16 @@ fn absolute_path(path_str: &str) -> PathBuf {
     current_dir().unwrap().join(path).clean()
 }
 
+fn verilator_severity(severity: &str) -> Option<DiagnosticSeverity> {
+    match severity {
+        "Error" => Some(DiagnosticSeverity::ERROR),
+        s if s.starts_with("Warning") => Some(DiagnosticSeverity::WARNING),
+        // NOTE: afaik, verilator doesn't have an info or hint severity
+        _ => Some(DiagnosticSeverity::HINT),
+    };
+    None
+}
+
 /// syntax checking using verilator --lint-only
 fn verilator_syntax(
     rope: &Rope,
@@ -228,18 +238,13 @@ fn verilator_syntax(
                 None => break, // return accumulated diagnostics
             };
             let raw_severity = caps.name("severity")?.as_str();
-            let diag_severity = match raw_severity {
-                "Error" => DiagnosticSeverity::ERROR,
-                s if s.starts_with("Warning") => DiagnosticSeverity::WARNING,
-                _ => DiagnosticSeverity::HINT,
-            };
             let line: u32 = caps.name("line")?.as_str().to_string().parse().ok()?;
             let col: u32 = caps.name("col")?.as_str().to_string().parse().ok()?;
             let pos = Position::new(line - 1, col - 1);
             let msg = raw_severity.to_string() + ": " + caps.name("message")?.as_str();
             diags.push(Diagnostic::new(
                 Range::new(pos, pos),
-                Some(diag_severity),
+                verilator_severity(raw_severity),
                 None,
                 Some("verilator".to_string()),
                 msg,
