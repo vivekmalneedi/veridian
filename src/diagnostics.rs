@@ -181,9 +181,9 @@ fn parse_report(uri: Url, report: String) -> Vec<Diagnostic> {
 #[cfg(feature = "slang")]
 fn slang_severity(severity: &str) -> Option<DiagnosticSeverity> {
     match severity {
-        " error" => Some(DiagnosticSeverity::Error),
-        " warning" => Some(DiagnosticSeverity::Warning),
-        " note" => Some(DiagnosticSeverity::Information),
+        " error" => Some(DiagnosticSeverity::ERROR),
+        " warning" => Some(DiagnosticSeverity::WARNING),
+        " note" => Some(DiagnosticSeverity::INFORMATION),
         _ => None,
     }
 }
@@ -229,9 +229,9 @@ fn verilator_syntax(
             };
             let raw_severity = caps.name("severity")?.as_str();
             let diag_severity = match raw_severity {
-                "Error" => DiagnosticSeverity::Error,
-                s if s.starts_with("Warning") => DiagnosticSeverity::Warning,
-                _ => DiagnosticSeverity::Hint,
+                "Error" => DiagnosticSeverity::ERROR,
+                s if s.starts_with("Warning") => DiagnosticSeverity::WARNING,
+                _ => DiagnosticSeverity::HINT,
             };
             let line: u32 = caps.name("line")?.as_str().to_string().parse().ok()?;
             let col: u32 = caps.name("col")?.as_str().to_string().parse().ok()?;
@@ -281,7 +281,7 @@ fn verible_syntax(
             let pos = Position::new(line - 1, col - 1);
             diags.push(Diagnostic::new(
                 Range::new(pos, pos),
-                Some(DiagnosticSeverity::Error),
+                Some(DiagnosticSeverity::ERROR),
                 None,
                 Some("verible".to_string()),
                 caps.name("message")?.as_str().to_string(),
@@ -308,7 +308,7 @@ mod tests {
             uri.clone(),
             vec![Diagnostic::new(
                 Range::new(Position::new(3, 13), Position::new(3, 13)),
-                Some(DiagnosticSeverity::Error),
+                Some(DiagnosticSeverity::ERROR),
                 None,
                 Some("slang".to_owned()),
                 " cannot refer to element 2 of \'logic[1:0]\'".to_owned(),
@@ -362,7 +362,7 @@ endmodule
                     character: 0,
                 },
             },
-            severity: Some(DiagnosticSeverity::Error),
+            severity: Some(DiagnosticSeverity::ERROR),
             code: None,
             source: Some("verible".to_string()),
             message: "syntax error, rejected \"endmodule\"".to_string(),
