@@ -1958,6 +1958,7 @@ version = "0.2.0"
 dependencies = [
  "anyhow",
  "flexi_logger",
+ "lazy_static",
  "log",
  "path-clean",
  "pathdiff",
