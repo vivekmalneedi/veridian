@@ -1,6 +1,6 @@
 [package]
 name = "veridian"
-version = "0.1.1"
+version = "0.2.0"
 authors = ["Vivek Malneedi <vivekmalneedi@gmail.com>"]
 edition = "2018"
 
@@ -8,27 +8,25 @@ edition = "2018"
 slang = ["veridian_slang"]
 
 [dependencies]
-sv-parser = "0.8.2"
+sv-parser = "0.13.0"
 log = "0.4.14"
-tower-lsp = "0.14.1"
-flexi_logger = "0.17.1"
+tower-lsp = "0.19.0"
+flexi_logger = "0.25.1"
 ropey = "1.2.0"
 tokio = { version = "1.6.1", features = ["macros", "io-std", "rt-multi-thread"] }
-path-clean = "0.1.0"
+path-clean = "1.0.1"
 pathdiff = "0.2.0"
 walkdir = "2.3.2"
-serde_yaml = "0.8.17"
+serde_yaml = "0.9.17"
 anyhow = "1.0.40"
 serde = "1.0.126"
 which = "4.1.0"
 regex = "1.5.4"
 structopt = "0.3.21"
-strum = "0.21.0"
-strum_macros = "0.21.1"
+strum = "0.24.1"
+strum_macros = "0.24.3"
 
 [dependencies.veridian_slang]
 optional = true
 path = "veridian-slang"
 
-[patch.crates-io]
-lexical-core = {git = 'https://github.com/Gelbpunkt/rust-lexical', branch = 'fix-warnings-and-update-deps'}
