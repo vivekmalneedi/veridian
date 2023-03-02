@@ -209,7 +209,7 @@ fn verilator_severity(severity: &str) -> Option<DiagnosticSeverity> {
 }
 
 lazy_static! {
-    /// lazily compiled regex for verilator syntax checking
+    /// lazy compiled regex for verilator syntax checking
     static ref VERILATOR_RE: Regex =
         Regex::new(r"%(?P<severity>Warning|Error)(?:-(?P<warning_type>.*))?:.*?:(?P<line>\d*):(?P<col>\d*):\s(?P<message>.*)$")
             .unwrap();
@@ -275,6 +275,13 @@ fn verilator_syntax(
     }
 }
 
+lazy_static! {
+  /// lazy compiled regex for verible syntax checking
+  static ref VERIBLE_RE: Regex =
+      Regex::new(r"^.+:(?P<line>.*):(?P<col>.*)-.*:\s(?P<message>.*)$")
+          .unwrap();
+}
+
 /// syntax checking using verible-verilog-syntax
 fn verible_syntax(
     rope: &Rope,
@@ -289,7 +296,6 @@ fn verible_syntax(
         .arg("-")
         .spawn()
         .ok()?;
-    let re = Regex::new(r"^.+:(?P<line>.*):(?P<col>.*)-.*:\s(?P<message>.*)$").ok()?;
     // write file to stdin, read output from stdout
     rope.write_to(child.stdin.as_mut()?).ok()?;
     let output = child.wait_with_output().ok()?;
@@ -297,7 +303,7 @@ fn verible_syntax(
         let mut diags: Vec<Diagnostic> = Vec::new();
         let raw_output = String::from_utf8(output.stdout).ok()?;
         for error in raw_output.lines() {
-            let caps = re.captures(error)?;
+            let caps = VERIBLE_RE.captures(error)?;
             let line: u32 = caps.name("line")?.as_str().to_string().parse().ok()?;
             let col: u32 = caps.name("col")?.as_str().to_string().parse().ok()?;
             let pos = Position::new(line - 1, col - 1);
