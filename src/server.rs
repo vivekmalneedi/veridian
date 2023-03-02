@@ -77,7 +77,7 @@ pub struct ProjectConfig {
     pub source_dirs: Vec<String>,
     // config options for verible tools
     pub verible: Verible,
-    // config options for verible tools
+    // config options for verilator tools
     pub verilator: Verilator,
     // log level
     pub log_level: LogLevel,
