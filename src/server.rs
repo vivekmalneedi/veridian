@@ -2,7 +2,7 @@ use crate::sources::*;
 
 use crate::completion::keyword::*;
 use flexi_logger::LoggerHandle;
-use log::{debug, info};
+use log::{debug, error, info};
 use path_clean::PathClean;
 use serde::{Deserialize, Serialize};
 use std::env::current_dir;
@@ -145,7 +145,7 @@ impl Default for VeribleFormat {
     }
 }
 
-fn read_config(root_uri: Option<Url>) -> anyhow::Result<ProjectConfig> {
+fn read_config(root_uri: Option<Url>) -> anyhow::Result<Option<ProjectConfig>> {
     let path = root_uri
         .ok_or_else(|| anyhow::anyhow!("couldn't resolve workdir path"))?
         .to_file_path()
@@ -166,10 +166,13 @@ fn read_config(root_uri: Option<Url>) -> anyhow::Result<ProjectConfig> {
         }
     }
     let mut contents = String::new();
-    File::open(config.ok_or_else(|| anyhow::anyhow!("unable to read config file"))?)?
+    let Some(config) = config else {
+        return Ok(None);
+    };
+    File::open(config)?
         .read_to_string(&mut contents)?;
     info!("reading config file");
-    Ok(serde_yaml::from_str(&contents)?)
+    Ok(Some(serde_yaml::from_str(&contents)?))
 }
 
 // convert string path to absolute path
@@ -191,19 +194,25 @@ impl LanguageServer for Backend {
         // grab include dirs and source dirs from config, and convert to abs path
         let mut inc_dirs = self.server.srcs.include_dirs.write().unwrap();
         let mut src_dirs = self.server.srcs.source_dirs.write().unwrap();
-        if let Ok(conf) = read_config(params.root_uri) {
-            inc_dirs.extend(conf.include_dirs.iter().filter_map(|x| absolute_path(x)));
-            debug!("{:#?}", inc_dirs);
-            src_dirs.extend(conf.source_dirs.iter().filter_map(|x| absolute_path(x)));
-            debug!("{:#?}", src_dirs);
-            let mut log_handle = self.server.log_handle.lock().unwrap();
-            let log_handle = log_handle.as_mut();
-            if let Some(handle) = log_handle {
-                handle.parse_and_push_temp_spec(&conf.log_level.to_string());
+        match read_config(params.root_uri) {
+            Ok(Some(conf)) => {
+                inc_dirs.extend(conf.include_dirs.iter().filter_map(|x| absolute_path(x)));
+                debug!("{:#?}", inc_dirs);
+                src_dirs.extend(conf.source_dirs.iter().filter_map(|x| absolute_path(x)));
+                debug!("{:#?}", src_dirs);
+                let mut log_handle = self.server.log_handle.lock().unwrap();
+                let log_handle = log_handle.as_mut();
+                if let Some(handle) = log_handle {
+                    handle.parse_and_push_temp_spec(&conf.log_level.to_string());
+                }
+                *self.server.conf.write().unwrap() = conf;
             }
-            *self.server.conf.write().unwrap() = conf;
-        } else {
-            info!("no config file found");
+            Ok(None) => {
+                info!("no config file found");
+            }
+            Err(e) => {
+                error!("{}", e)
+            }
         }
         let mut conf = self.server.conf.write().unwrap();
         conf.verible.syntax.enabled = which(&conf.verible.syntax.path).is_ok();
