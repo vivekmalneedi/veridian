@@ -24,7 +24,7 @@ jobs:
               uses: actions-rs/toolchain@v1
               with:
                   profile: minimal
-                  toolchain: 1.52.1
+                  toolchain: 1.68.0
                   override: true
 
             - name: cache cargo dirs
@@ -38,9 +38,9 @@ jobs:
 
             - name: Install Deps
               run: |
-                  wget 'https://github.com/google/verible/releases/download/v0.0-705-g75249d0/verible-v0.0-705-g75249d0-Ubuntu-20.04-focal-x86_64.tar.gz' -O verible.tar.gz
+                  wget 'https://github.com/chipsalliance/verible/releases/download/v0.0-3389-ga1cd07b1/verible-v0.0-3389-ga1cd07b1-Ubuntu-20.04-focal-x86_64.tar.gz' -O verible.tar.gz
                   tar -xf verible.tar.gz
-                  sudo cp verible-v0.0-705-g75249d0/bin/* /usr/bin
+                  sudo cp verible-v0.0-3389-ga1cd07b1/bin/* /usr/bin
 
             - name: Run cargo test
               uses: actions-rs/cargo@v1
@@ -71,7 +71,7 @@ jobs:
               uses: actions-rs/toolchain@v1
               with:
                   profile: minimal
-                  toolchain: 1.52.1
+                  toolchain: 1.68.0
                   override: true
                   components: rustfmt, clippy
 
@@ -106,7 +106,7 @@ jobs:
               uses: actions-rs/toolchain@v1
               with:
                   profile: minimal
-                  toolchain: 1.52.1
+                  toolchain: 1.68.0
                   override: true
 
             - name: cache cargo dirs

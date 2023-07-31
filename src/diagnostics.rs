@@ -199,7 +199,10 @@ fn verible_syntax(
         .arg("-")
         .spawn()
         .ok()?;
-    let re = Regex::new(r"^.+:(?P<line>.*):(?P<col>.*):\s(?P<message>.*)\s.*$").ok()?;
+    let re = Regex::new(
+        r"^.+:(?P<line>\d*):(?P<startcol>\d*)(?:-(?P<endcol>\d*))?:\s(?P<message>.*)\s.*$",
+    )
+    .ok()?;
     // write file to stdin, read output from stdout
     rope.write_to(child.stdin.as_mut()?).ok()?;
     let output = child.wait_with_output().ok()?;
@@ -208,11 +211,17 @@ fn verible_syntax(
         let raw_output = String::from_utf8(output.stdout).ok()?;
         for error in raw_output.lines() {
             let caps = re.captures(error)?;
-            let line: u32 = caps.name("line")?.as_str().to_string().parse().ok()?;
-            let col: u32 = caps.name("col")?.as_str().to_string().parse().ok()?;
-            let pos = Position::new(line - 1, col - 1);
+            let line: u32 = caps.name("line")?.as_str().parse().ok()?;
+            let startcol: u32 = caps.name("startcol")?.as_str().parse().ok()?;
+            let endcol: Option<u32> = match caps.name("endcol").map(|e| e.as_str().parse()) {
+                Some(Ok(e)) => Some(e),
+                None => None,
+                Some(Err(_)) => return None,
+            };
+            let start_pos = Position::new(line - 1, startcol - 1);
+            let end_pos = Position::new(line - 1, endcol.unwrap_or(startcol) - 1);
             diags.push(Diagnostic::new(
-                Range::new(pos, pos),
+                Range::new(start_pos, end_pos),
                 Some(DiagnosticSeverity::Error),
                 None,
                 Some("verible".to_string()),
@@ -291,13 +300,13 @@ endmodule
                 },
                 end: Position {
                     line: 5,
-                    character: 0,
+                    character: 8,
                 },
             },
             severity: Some(DiagnosticSeverity::Error),
             code: None,
             source: Some("verible".to_string()),
-            message: "syntax error, rejected \"endmodule\"".to_string(),
+            message: "syntax error at token".to_string(),
             related_information: None,
             tags: None,
             code_description: None,
