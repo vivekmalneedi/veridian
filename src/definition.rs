@@ -213,8 +213,8 @@ pub fn match_definitions(
         }
         RefNode::DataDeclaration(n) => {
             let vars = data_dec(syntax_tree, n, event_iter, url);
-            if vars.is_some() {
-                for var in vars.unwrap() {
+            if let Some(vars) = vars {
+                for var in vars {
                     match var {
                         Declaration::Dec(dec) => definitions.push(Box::new(dec)),
                         Declaration::Import(dec) => definitions.push(Box::new(dec)),
