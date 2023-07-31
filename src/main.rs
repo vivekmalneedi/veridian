@@ -22,15 +22,14 @@ struct Opt {}
 #[tokio::main]
 async fn main() {
     let _ = Opt::from_args();
-    let log_handle = flexi_logger::Logger::with_str("info").start().unwrap();
+    let log_handle = flexi_logger::Logger::with(flexi_logger::LogSpecification::info())
+        .start()
+        .unwrap();
     info!("starting veridian...");
 
     let stdin = tokio::io::stdin();
     let stdout = tokio::io::stdout();
 
     let (service, messages) = LspService::new(|client| Arc::new(Backend::new(client, log_handle)));
-    Server::new(stdin, stdout)
-        .interleave(messages)
-        .serve(service)
-        .await;
+    Server::new(stdin, stdout, messages).serve(service).await;
 }

@@ -7,7 +7,7 @@ use tower_lsp::lsp_types::*;
 pub fn clean_type_str(type_str: &str, ident: &str) -> String {
     let endings: &[_] = &[';', ','];
     // remove anything after an equals sign
-    let eq_offset = type_str.find('=').unwrap_or_else(|| type_str.len());
+    let eq_offset = type_str.find('=').unwrap_or(type_str.len());
     let mut result = type_str.to_string();
     result.replace_range(eq_offset.., "");
     result
@@ -15,7 +15,6 @@ pub fn clean_type_str(type_str: &str, ident: &str) -> String {
         .trim_end()
         .trim_end_matches(endings)
         .trim_end_matches(ident)
-        .trim_end()
         .split_whitespace()
         .collect::<Vec<&str>>()
         .join(" ")
@@ -320,8 +319,8 @@ impl PortDec {
             ident: String::new(),
             byte_idx: 0,
             type_str: String::new(),
-            completion_kind: CompletionItemKind::Property,
-            symbol_kind: SymbolKind::Property,
+            completion_kind: CompletionItemKind::PROPERTY,
+            symbol_kind: SymbolKind::PROPERTY,
             def_type: DefinitionType::Port,
             interface: None,
             modport: None,
@@ -370,7 +369,7 @@ impl Definition for PortDec {
                     return match &self.modport {
                         Some(modport) => {
                             for def in scope.defs() {
-                                if def.starts_with(&modport) {
+                                if def.starts_with(modport) {
                                     return def.dot_completion(scope_tree);
                                 }
                             }
@@ -408,8 +407,9 @@ impl GenericDec {
             byte_idx: 0,
             url: url.clone(),
             type_str: String::new(),
-            completion_kind: CompletionItemKind::Variable,
-            symbol_kind: SymbolKind::Unknown,
+            completion_kind: CompletionItemKind::VARIABLE,
+            // FIXME: check if this replacement is correct
+            symbol_kind: SymbolKind::NULL,
             def_type: DefinitionType::Net,
         }
     }
@@ -473,8 +473,8 @@ impl PackageImport {
             byte_idx: 0,
             url: url.clone(),
             type_str: String::new(),
-            completion_kind: CompletionItemKind::Text,
-            symbol_kind: SymbolKind::Namespace,
+            completion_kind: CompletionItemKind::TEXT,
+            symbol_kind: SymbolKind::NAMESPACE,
             def_type: DefinitionType::Data,
             asterisk: false,
             import_ident: None,
@@ -542,8 +542,8 @@ impl SubDec {
             byte_idx: 0,
             url: url.clone(),
             type_str: String::new(),
-            completion_kind: CompletionItemKind::Function,
-            symbol_kind: SymbolKind::Function,
+            completion_kind: CompletionItemKind::FUNCTION,
+            symbol_kind: SymbolKind::FUNCTION,
             def_type: DefinitionType::Subroutine,
             start: 0,
             end: 0,
@@ -627,8 +627,8 @@ impl ModportDec {
             byte_idx: 0,
             url: url.clone(),
             type_str: String::new(),
-            completion_kind: CompletionItemKind::Interface,
-            symbol_kind: SymbolKind::Interface,
+            completion_kind: CompletionItemKind::INTERFACE,
+            symbol_kind: SymbolKind::INTERFACE,
             def_type: DefinitionType::Modport,
             ports: Vec::new(),
         }
@@ -692,8 +692,8 @@ impl ModInst {
             byte_idx: 0,
             url: url.clone(),
             type_str: String::new(),
-            completion_kind: CompletionItemKind::Module,
-            symbol_kind: SymbolKind::Module,
+            completion_kind: CompletionItemKind::MODULE,
+            symbol_kind: SymbolKind::MODULE,
             def_type: DefinitionType::ModuleInstantiation,
             mod_ident: String::new(),
         }
@@ -772,8 +772,8 @@ impl GenericScope {
             end: 0,
             url: url.clone(),
             type_str: String::new(),
-            completion_kind: CompletionItemKind::Module,
-            symbol_kind: SymbolKind::Module,
+            completion_kind: CompletionItemKind::MODULE,
+            symbol_kind: SymbolKind::MODULE,
             def_type: DefinitionType::GenericScope,
             defs: Vec::new(),
             scopes: Vec::new(),
@@ -886,8 +886,8 @@ impl ClassDec {
             end: 0,
             url: url.clone(),
             type_str: String::new(),
-            completion_kind: CompletionItemKind::Class,
-            symbol_kind: SymbolKind::Class,
+            completion_kind: CompletionItemKind::CLASS,
+            symbol_kind: SymbolKind::CLASS,
             def_type: DefinitionType::Class,
             defs: Vec::new(),
             scopes: Vec::new(),
