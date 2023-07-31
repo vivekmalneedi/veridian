@@ -22,7 +22,7 @@ struct Opt {}
 #[tokio::main]
 async fn main() {
     let _ = Opt::from_args();
-    let log_handle = flexi_logger::Logger::with_str("info").start().unwrap();
+    let log_handle = flexi_logger::Logger::with(flexi_logger::LogSpecification::info()).start().unwrap();
     info!("starting veridian...");
 
     let stdin = tokio::io::stdin();

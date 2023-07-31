@@ -11,7 +11,7 @@ slang = ["veridian_slang"]
 sv-parser = "0.8.2"
 log = "0.4.19"
 tower-lsp = "0.19.0"
-flexi_logger = "0.17.1"
+flexi_logger = "0.25.6"
 ropey = "1.2.0"
 tokio = { version = "1.6.1", features = ["macros", "io-std", "rt-multi-thread"] }
 path-clean = "0.1.0"
