@@ -11,7 +11,7 @@ use std::io::Read;
 use std::path::PathBuf;
 use std::string::ToString;
 use std::sync::{Mutex, RwLock};
-use tower_lsp::jsonrpc::{Result, Error, ErrorCode};
+use tower_lsp::jsonrpc::{Error, ErrorCode, Result};
 use tower_lsp::lsp_types::*;
 use tower_lsp::{Client, LanguageServer};
 use which::which;
@@ -52,7 +52,7 @@ impl Backend {
     }
 }
 
-#[derive(strum_macros::ToString, Debug, Serialize, Deserialize)]
+#[derive(strum_macros::Display, Debug, Serialize, Deserialize)]
 pub enum LogLevel {
     #[strum(serialize = "error")]
     Error,
@@ -190,11 +190,13 @@ impl LanguageServer for Backend {
             let mut log_handle = self.server.log_handle.lock().unwrap();
             let log_handle = log_handle.as_mut();
             if let Some(handle) = log_handle {
-                handle.parse_and_push_temp_spec(&conf.log_level.to_string()).map_err(|e| Error {
-                    code: ErrorCode::InvalidParams,
-                    message: e.to_string(),
-                    data: None,
-                })?;
+                handle
+                    .parse_and_push_temp_spec(&conf.log_level.to_string())
+                    .map_err(|e| Error {
+                        code: ErrorCode::InvalidParams,
+                        message: e.to_string(),
+                        data: None,
+                    })?;
             }
             *self.server.conf.write().unwrap() = conf;
         } else {
