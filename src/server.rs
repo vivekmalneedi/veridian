@@ -220,7 +220,7 @@ impl LanguageServer for Backend {
                 text_document_sync: Some(TextDocumentSyncCapability::Options(
                     TextDocumentSyncOptions {
                         open_close: Some(true),
-                        change: Some(TextDocumentSyncKind::Incremental),
+                        change: Some(TextDocumentSyncKind::INCREMENTAL),
                         will_save: None,
                         will_save_wait_until: None,
                         save: Some(TextDocumentSyncSaveOptions::SaveOptions(SaveOptions {
@@ -239,6 +239,8 @@ impl LanguageServer for Backend {
                         work_done_progress: None,
                     },
                     all_commit_characters: None,
+                    //TODO: check if corect
+                    completion_item: None,
                 }),
                 definition_provider: Some(OneOf::Left(true)),
                 hover_provider: Some(HoverProviderCapability::Simple(true)),
@@ -252,7 +254,7 @@ impl LanguageServer for Backend {
     }
     async fn initialized(&self, _: InitializedParams) {
         self.client
-            .log_message(MessageType::Info, "veridian initialized!")
+            .log_message(MessageType::INFO, "veridian initialized!")
             .await;
     }
     async fn shutdown(&self) -> Result<()> {

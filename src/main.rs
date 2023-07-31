@@ -29,8 +29,5 @@ async fn main() {
     let stdout = tokio::io::stdout();
 
     let (service, messages) = LspService::new(|client| Arc::new(Backend::new(client, log_handle)));
-    Server::new(stdin, stdout)
-        .interleave(messages)
-        .serve(service)
-        .await;
+    Server::new(stdin, stdout, messages).serve(service).await;
 }

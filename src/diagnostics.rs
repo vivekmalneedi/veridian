@@ -171,9 +171,9 @@ fn parse_report(uri: Url, report: String) -> Vec<Diagnostic> {
 #[cfg(feature = "slang")]
 fn slang_severity(severity: &str) -> Option<DiagnosticSeverity> {
     match severity {
-        " error" => Some(DiagnosticSeverity::Error),
-        " warning" => Some(DiagnosticSeverity::Warning),
-        " note" => Some(DiagnosticSeverity::Information),
+        " error" => Some(DiagnosticSeverity::ERROR),
+        " warning" => Some(DiagnosticSeverity::WARNING),
+        " note" => Some(DiagnosticSeverity::INFORMATION),
         _ => None,
     }
 }
@@ -222,7 +222,7 @@ fn verible_syntax(
             let end_pos = Position::new(line - 1, endcol.unwrap_or(startcol) - 1);
             diags.push(Diagnostic::new(
                 Range::new(start_pos, end_pos),
-                Some(DiagnosticSeverity::Error),
+                Some(DiagnosticSeverity::ERROR),
                 None,
                 Some("verible".to_string()),
                 caps.name("message")?.as_str().to_string(),
@@ -249,7 +249,7 @@ mod tests {
             uri.clone(),
             vec![Diagnostic::new(
                 Range::new(Position::new(3, 13), Position::new(3, 13)),
-                Some(DiagnosticSeverity::Error),
+                Some(DiagnosticSeverity::ERROR),
                 None,
                 Some("slang".to_owned()),
                 " cannot refer to element 2 of \'logic[1:0]\'".to_owned(),
@@ -303,7 +303,7 @@ endmodule
                     character: 8,
                 },
             },
-            severity: Some(DiagnosticSeverity::Error),
+            severity: Some(DiagnosticSeverity::ERROR),
             code: None,
             source: Some("verible".to_string()),
             message: "syntax error at token".to_string(),
