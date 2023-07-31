@@ -144,7 +144,7 @@ fn get_completion_token(text: &Rope, line: RopeSlice, pos: Position) -> String {
     }
     let mut result: String = token.chars().rev().collect();
     if result.contains('[') {
-        let l_bracket_offset = result.find('[').unwrap_or_else(|| result.len());
+        let l_bracket_offset = result.find('[').unwrap_or(result.len());
         result.replace_range(l_bracket_offset.., "");
     }
     if &result == "." {

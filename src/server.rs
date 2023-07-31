@@ -93,20 +93,11 @@ impl Default for ProjectConfig {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Default, Debug, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Verible {
     pub syntax: VeribleSyntax,
     pub format: VeribleFormat,
-}
-
-impl Default for Verible {
-    fn default() -> Self {
-        Self {
-            syntax: VeribleSyntax::default(),
-            format: VeribleFormat::default(),
-        }
-    }
 }
 
 #[derive(Debug, Serialize, Deserialize)]

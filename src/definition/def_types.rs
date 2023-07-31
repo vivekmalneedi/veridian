@@ -7,7 +7,7 @@ use tower_lsp::lsp_types::*;
 pub fn clean_type_str(type_str: &str, ident: &str) -> String {
     let endings: &[_] = &[';', ','];
     // remove anything after an equals sign
-    let eq_offset = type_str.find('=').unwrap_or_else(|| type_str.len());
+    let eq_offset = type_str.find('=').unwrap_or(type_str.len());
     let mut result = type_str.to_string();
     result.replace_range(eq_offset.., "");
     result
@@ -15,7 +15,6 @@ pub fn clean_type_str(type_str: &str, ident: &str) -> String {
         .trim_end()
         .trim_end_matches(endings)
         .trim_end_matches(ident)
-        .trim_end()
         .split_whitespace()
         .collect::<Vec<&str>>()
         .join(" ")
@@ -370,7 +369,7 @@ impl Definition for PortDec {
                     return match &self.modport {
                         Some(modport) => {
                             for def in scope.defs() {
-                                if def.starts_with(&modport) {
+                                if def.starts_with(modport) {
                                     return def.dot_completion(scope_tree);
                                 }
                             }

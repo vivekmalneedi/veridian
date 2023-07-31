@@ -217,7 +217,7 @@ impl Sources {
                 let range = &file.last_change_range.clone();
                 drop(file);
                 trace!("{}, parse read: {}", uri, now.elapsed().as_millis());
-                let syntax_tree = parse(&text, &uri, &range, &*inc_dirs.read().unwrap());
+                let syntax_tree = parse(&text, uri, range, &inc_dirs.read().unwrap());
                 let mut scope_tree = match &syntax_tree {
                     Some(tree) => get_scopes(tree, uri),
                     None => None,
