@@ -331,10 +331,8 @@ fn get_hover(doc: &Rope, line: usize) -> String {
             } else if currentl.starts_with("/*") {
                 multiline = false;
                 valid = true;
-            } else if currentl.starts_with("//") || multiline {
-                valid = true;
             } else {
-                valid = false;
+                valid = currentl.starts_with("//") || multiline;
             }
         }
     }
