@@ -200,19 +200,13 @@ fn verible_syntax(
         .spawn()
         .ok()?;
 
-    static RE: std::sync::OnceLock<Result<Regex, regex::Error>> = std::sync::OnceLock::new();
-    let re = RE
-        .get_or_init(|| {
-            Regex::new(
-                r"^.+:(?P<line>\d*):(?P<startcol>\d*)(?:-(?P<endcol>\d*))?:\s(?P<message>.*)\s.*$",
-            )
-            .map_err(|e| {
-                eprint!("{e}");
-                e
-            })
-        })
-        .as_ref()
-        .ok()?;
+    static RE: std::sync::OnceLock<Regex> = std::sync::OnceLock::new();
+    let re = RE.get_or_init(|| {
+        Regex::new(
+            r"^.+:(?P<line>\d*):(?P<startcol>\d*)(?:-(?P<endcol>\d*))?:\s(?P<message>.*)\s.*$",
+        )
+        .unwrap()
+    });
     // write file to stdin, read output from stdout
     rope.write_to(child.stdin.as_mut()?).ok()?;
     let output = child.wait_with_output().ok()?;
