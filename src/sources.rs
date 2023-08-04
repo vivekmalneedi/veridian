@@ -378,7 +378,6 @@ pub fn parse(
             &HashMap::new(),
             &includes,
             false,
-            true,
         ) {
             Ok((syntax_tree, _)) => {
                 debug!("parse complete of {}", uri);
