@@ -149,7 +149,7 @@ fn parse_report(uri: Url, report: String) -> Vec<Diagnostic> {
     let mut diagnostics: Vec<Diagnostic> = Vec::new();
     for line in report.lines() {
         let diag: Vec<&str> = line.splitn(5, ':').collect();
-        if absolute_path(diag.get(0).unwrap()) == uri.to_file_path().unwrap().as_os_str() {
+        if absolute_path(diag.first().unwrap()) == uri.to_file_path().unwrap().as_os_str() {
             let pos = Position::new(
                 diag.get(1).unwrap().parse::<u32>().unwrap() - 1,
                 diag.get(2).unwrap().parse::<u32>().unwrap() - 1,
@@ -171,9 +171,9 @@ fn parse_report(uri: Url, report: String) -> Vec<Diagnostic> {
 #[cfg(feature = "slang")]
 fn slang_severity(severity: &str) -> Option<DiagnosticSeverity> {
     match severity {
-        " error" => Some(DiagnosticSeverity::Error),
-        " warning" => Some(DiagnosticSeverity::Warning),
-        " note" => Some(DiagnosticSeverity::Information),
+        " error" => Some(DiagnosticSeverity::ERROR),
+        " warning" => Some(DiagnosticSeverity::WARNING),
+        " note" => Some(DiagnosticSeverity::INFORMATION),
         _ => None,
     }
 }
@@ -199,7 +199,14 @@ fn verible_syntax(
         .arg("-")
         .spawn()
         .ok()?;
-    let re = Regex::new(r"^.+:(?P<line>.*):(?P<col>.*):\s(?P<message>.*)\s.*$").ok()?;
+
+    static RE: std::sync::OnceLock<Regex> = std::sync::OnceLock::new();
+    let re = RE.get_or_init(|| {
+        Regex::new(
+            r"^.+:(?P<line>\d*):(?P<startcol>\d*)(?:-(?P<endcol>\d*))?:\s(?P<message>.*)\s.*$",
+        )
+        .unwrap()
+    });
     // write file to stdin, read output from stdout
     rope.write_to(child.stdin.as_mut()?).ok()?;
     let output = child.wait_with_output().ok()?;
@@ -208,12 +215,18 @@ fn verible_syntax(
         let raw_output = String::from_utf8(output.stdout).ok()?;
         for error in raw_output.lines() {
             let caps = re.captures(error)?;
-            let line: u32 = caps.name("line")?.as_str().to_string().parse().ok()?;
-            let col: u32 = caps.name("col")?.as_str().to_string().parse().ok()?;
-            let pos = Position::new(line - 1, col - 1);
+            let line: u32 = caps.name("line")?.as_str().parse().ok()?;
+            let startcol: u32 = caps.name("startcol")?.as_str().parse().ok()?;
+            let endcol: Option<u32> = match caps.name("endcol").map(|e| e.as_str().parse()) {
+                Some(Ok(e)) => Some(e),
+                None => None,
+                Some(Err(_)) => return None,
+            };
+            let start_pos = Position::new(line - 1, startcol - 1);
+            let end_pos = Position::new(line - 1, endcol.unwrap_or(startcol) - 1);
             diags.push(Diagnostic::new(
-                Range::new(pos, pos),
-                Some(DiagnosticSeverity::Error),
+                Range::new(start_pos, end_pos),
+                Some(DiagnosticSeverity::ERROR),
                 None,
                 Some("verible".to_string()),
                 caps.name("message")?.as_str().to_string(),
@@ -240,7 +253,7 @@ mod tests {
             uri.clone(),
             vec![Diagnostic::new(
                 Range::new(Position::new(3, 13), Position::new(3, 13)),
-                Some(DiagnosticSeverity::Error),
+                Some(DiagnosticSeverity::ERROR),
                 None,
                 Some("slang".to_owned()),
                 " cannot refer to element 2 of \'logic[1:0]\'".to_owned(),
@@ -291,13 +304,13 @@ endmodule
                 },
                 end: Position {
                     line: 5,
-                    character: 0,
+                    character: 8,
                 },
             },
-            severity: Some(DiagnosticSeverity::Error),
+            severity: Some(DiagnosticSeverity::ERROR),
             code: None,
             source: Some("verible".to_string()),
-            message: "syntax error, rejected \"endmodule\"".to_string(),
+            message: "syntax error at token".to_string(),
             related_information: None,
             tags: None,
             code_description: None,
