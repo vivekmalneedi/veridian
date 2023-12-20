@@ -56,6 +56,18 @@ In `coc-settings.json`:
 
 ```
 
+### Emacs
+
+- Install the [`verilog-ext`](https://github.com/gmlarumbe/verilog-ext/) package
+- Copy the following snippet into your init file:
+
+```elisp
+(require 'verilog-ext)
+(verilog-ext-mode-setup)
+(verilog-ext-eglot-set-server 've-veridian) ;`eglot' config
+(verilog-ext-lsp-set-server 've-veridian)   ; `lsp' config
+```
+
 The [full list](https://github.com/vivekmalneedi/veridian/wiki/Usage-Instructions-for-various-LSP-Clients) is on the wiki and includes configuration for the neovim built-in lsp client
 
 ## Configuration
