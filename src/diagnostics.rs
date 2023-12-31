@@ -295,7 +295,8 @@ mod tests {
 endmodule
 "#;
         let doc = Rope::from_str(&text);
-        let errors = verible_syntax(&doc, "verible-verilog-syntax", &[]).unwrap();
+        let errors = verible_syntax(&doc, "verible-verilog-syntax", &[])
+            .expect("verible-verilog-syntax not found, test can not run");
         let expected: Vec<Diagnostic> = vec![Diagnostic {
             range: Range {
                 start: Position {
