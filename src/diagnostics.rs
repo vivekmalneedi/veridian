@@ -1,5 +1,4 @@
 use crate::server::ProjectConfig;
-use log::info;
 #[cfg(any(feature = "slang", test))]
 use path_clean::PathClean;
 use regex::Regex;
@@ -208,7 +207,6 @@ fn absolute_path(path_str: &str) -> PathBuf {
 
 /// convert captured severity string to DiagnosticSeverity
 fn verilator_severity(severity: &str) -> Option<DiagnosticSeverity> {
-    info!("verilator severity: {}", severity);
     match severity {
         "Error" => Some(DiagnosticSeverity::ERROR),
         s if s.starts_with("Warning") => Some(DiagnosticSeverity::WARNING),
