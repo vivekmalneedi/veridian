@@ -215,27 +215,27 @@ impl LanguageServer for Backend {
         let mut inc_dirs = self.server.srcs.include_dirs.write().unwrap();
         let mut src_dirs = self.server.srcs.source_dirs.write().unwrap();
         match read_config(params.root_uri) {
-          Ok(conf) => {
-            inc_dirs.extend(conf.include_dirs.iter().filter_map(|x| absolute_path(x)));
-            debug!("{:#?}", inc_dirs);
-            src_dirs.extend(conf.source_dirs.iter().filter_map(|x| absolute_path(x)));
-            debug!("{:#?}", src_dirs);
-            let mut log_handle = self.server.log_handle.lock().unwrap();
-            let log_handle = log_handle.as_mut();
-            if let Some(handle) = log_handle {
-                handle
-                    .parse_and_push_temp_spec(&conf.log_level.to_string())
-                    .map_err(|e| Error {
-                        code: ErrorCode::InvalidParams,
-                        message: e.to_string().into(),
-                        data: None,
-                    })?;
+            Ok(conf) => {
+                inc_dirs.extend(conf.include_dirs.iter().filter_map(|x| absolute_path(x)));
+                debug!("{:#?}", inc_dirs);
+                src_dirs.extend(conf.source_dirs.iter().filter_map(|x| absolute_path(x)));
+                debug!("{:#?}", src_dirs);
+                let mut log_handle = self.server.log_handle.lock().unwrap();
+                let log_handle = log_handle.as_mut();
+                if let Some(handle) = log_handle {
+                    handle
+                        .parse_and_push_temp_spec(&conf.log_level.to_string())
+                        .map_err(|e| Error {
+                            code: ErrorCode::InvalidParams,
+                            message: e.to_string().into(),
+                            data: None,
+                        })?;
+                }
+                *self.server.conf.write().unwrap() = conf;
             }
-            *self.server.conf.write().unwrap() = conf;
-          },
-          Err(e) => {
-            warn!("found errors in config file: {:#?}", e);
-          }
+            Err(e) => {
+                warn!("found errors in config file: {:#?}", e);
+            }
         }
         let mut conf = self.server.conf.write().unwrap();
         conf.verible.syntax.enabled = which(&conf.verible.syntax.path).is_ok();
