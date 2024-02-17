@@ -138,7 +138,7 @@ pub struct VerilatorSyntax {
 impl Default for VerilatorSyntax {
     fn default() -> Self {
         Self {
-            enabled: false,
+            enabled: true,
             path: "verilator".to_string(),
             args: vec![
                 "--lint-only".to_string(),

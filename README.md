@@ -13,6 +13,7 @@ A SystemVerilog Language Server\
 - It is recommended to install the [verible](https://github.com/google/verible) tools for
   - formatting support with `verible-verilog-format`
   - syntax checking support with `verible-verilog-syntax`
+- It is recommended to install [verilator](https://www.veripool.org/verilator/) for additional linting
 
 ### Install from Release
 
@@ -33,6 +34,20 @@ cargo install --git https://github.com/vivekmalneedi/veridian.git
 ```
 
 ## Usage
+
+### [neovim]
+```lua
+local lspconfutil = require 'lspconfig/util'
+local root_pattern = lspconfutil.root_pattern("veridian.yml", "veridian.yaml", ".git")
+require('lspconfig').veridian.setup {
+    cmd = { 'veridian' },
+    root_dir = function(fname)
+        local filename = lspconfutil.path.is_absolute(fname) and fname
+        or lspconfutil.path.join(vim.loop.cwd(), fname)
+        return root_pattern(filename) or lspconfutil.path.dirname(filename)
+    end;
+}
+````
 
 ### [vscode](https://github.com/vivekmalneedi/veridian/tree/master/extensions/vscode)
 
@@ -68,7 +83,7 @@ In `coc-settings.json`:
 (verilog-ext-lsp-set-server 've-veridian)   ; `lsp' config
 ```
 
-The [full list](https://github.com/vivekmalneedi/veridian/wiki/Usage-Instructions-for-various-LSP-Clients) is on the wiki and includes configuration for the neovim built-in lsp client
+The [full list](https://github.com/vivekmalneedi/veridian/wiki/Usage-Instructions-for-various-LSP-Clients) is on the wiki
 
 ## Configuration
 
@@ -109,6 +124,18 @@ verible:
     args:
       - arg1
       - arg2
+verilator:
+  # verible-verilog-syntax configuration
+  syntax:
+    # default: true if in path
+    enabled: true|false,
+    path: "verilator"
+    # default: specified below
+    args:
+      - --lint-only
+      - --sv
+      - --timing
+      - -Wall
 # set log level
 # default: Info
 log_level: Error|Warn|Info|Debug|Trace

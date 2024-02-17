@@ -1,20 +1,18 @@
 use crate::server::ProjectConfig;
-#[cfg(any(feature = "slang", test))]
-use path_clean::PathClean;
 use regex::Regex;
 use ropey::Rope;
-#[cfg(any(feature = "slang", test))]
-use std::env::current_dir;
-#[cfg(any(feature = "slang", test))]
-#[cfg(any(feature = "slang", test))]
-use std::path::Path;
-#[cfg(any(feature = "slang", test))]
+use walkdir::DirEntry;
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
 use tower_lsp::lsp_types::*;
 #[cfg(feature = "slang")]
+use path_clean::PathClean;
+#[cfg(feature = "slang")]
+use std::env::current_dir;
+#[cfg(feature = "slang")]
+use std::path::Path;
+#[cfg(feature = "slang")]
 use veridian_slang::slang_compile;
-use walkdir::DirEntry;
 #[cfg(feature = "slang")]
 use walkdir::WalkDir;
 
@@ -31,7 +29,7 @@ pub fn get_diagnostics(
             if conf.verilator.syntax.enabled {
                 match verilator_syntax(
                     rope,
-                    &uri,
+                    uri.to_file_path().unwrap(),
                     &conf.verilator.syntax.path,
                     &conf.verilator.syntax.args,
                 ) {
@@ -77,7 +75,7 @@ pub fn get_diagnostics(
             if conf.verilator.syntax.enabled {
                 match verilator_syntax(
                     rope,
-                    &uri,
+                    uri.to_file_path().unwrap(),
                     &conf.verilator.syntax.path,
                     &conf.verilator.syntax.args,
                 ) {
@@ -198,7 +196,7 @@ fn slang_severity(severity: &str) -> Option<DiagnosticSeverity> {
     }
 }
 
-#[cfg(any(feature = "slang", test))]
+#[cfg(feature = "slang")]
 // convert relative path to absolute
 fn absolute_path(path_str: &str) -> PathBuf {
     let path = Path::new(path_str);
@@ -218,7 +216,7 @@ fn verilator_severity(severity: &str) -> Option<DiagnosticSeverity> {
 /// syntax checking using verilator --lint-only
 fn verilator_syntax(
     rope: &Rope,
-    verilator_syntax_uri: &Url,
+    file_path: PathBuf,
     verilator_syntax_path: &str,
     verilator_syntax_args: &[String],
 ) -> Option<Vec<Diagnostic>> {
@@ -227,7 +225,7 @@ fn verilator_syntax(
         .stderr(Stdio::piped())
         .stdout(Stdio::piped())
         .args(verilator_syntax_args)
-        .arg(verilator_syntax_uri.to_file_path().ok()?.to_str()?)
+        .arg(file_path.to_str()?)
         .spawn()
         .ok()?;
 
@@ -341,8 +339,12 @@ fn verible_syntax(
 mod tests {
     use super::*;
     use crate::support::test_init;
+    use std::fs::File;
+    use std::io::Write;
+    use tempdir::TempDir;
 
     #[test]
+    #[cfg(feature = "slang")]
     fn test_diagnostics() {
         test_init();
         let uri = Url::from_file_path(absolute_path("test_data/diag/diag_test.sv")).unwrap();
@@ -391,7 +393,7 @@ mod tests {
   a
 endmodule
 "#;
-        let doc = Rope::from_str(&text);
+        let doc = Rope::from_str(text);
         let errors = verible_syntax(&doc, "verible-verilog-syntax", &[])
             .expect("verible-verilog-syntax not found, test can not run");
         let expected: Vec<Diagnostic> = vec![Diagnostic {
@@ -409,6 +411,65 @@ endmodule
             code: None,
             source: Some("verible".to_string()),
             message: "syntax error at token".to_string(),
+            related_information: None,
+            tags: None,
+            code_description: None,
+            data: None,
+        }];
+        assert_eq!(errors, expected);
+    }
+
+    #[test]
+    fn test_verilator_syntax() {
+        let text = r#"module test;
+    logic abc;
+    logic abcd;
+
+  a
+endmodule
+"#;
+        let doc = Rope::from_str(text);
+
+        // verilator can't read from stdin so we must create a temp dir to place our
+        // test file
+        let dir = TempDir::new("verilator_test").unwrap();
+        let file_path_1 = dir.path().join("test.sv");
+        let mut f = File::create(&file_path_1).unwrap();
+        f.write_all(text.as_bytes())
+            .unwrap();
+        f.sync_all().unwrap();
+
+        let errors = verilator_syntax(
+            &doc,
+            file_path_1,
+            "verilator",
+            &[
+                "--lint-only".to_string(),
+                "--sv".to_string(),
+                "--timing".to_string(),
+                "-Wall".to_string(),
+            ],
+        )
+        .expect("verilator not found, test can not run");
+
+        drop(f);
+        dir.close().unwrap();
+
+        let expected: Vec<Diagnostic> = vec![Diagnostic {
+            range: Range {
+                start: Position {
+                    line: 5,
+                    character: 0,
+                },
+                end: Position {
+                    line: 5,
+                    character: 0,
+                },
+            },
+            severity: Some(DiagnosticSeverity::ERROR),
+            code: None,
+            source: Some("verilator".to_string()),
+            message: "syntax error, unexpected endmodule, expecting IDENTIFIER or randomize".to_string(),
             related_information: None,
             tags: None,
             code_description: None,
