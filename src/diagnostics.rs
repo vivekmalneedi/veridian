@@ -27,14 +27,18 @@ pub fn get_diagnostics(
         let paths = get_paths(files, conf.auto_search_workdir);
         let mut diagnostics = {
             if conf.verilator.syntax.enabled {
-                match verilator_syntax(
-                    rope,
-                    uri.to_file_path().unwrap(),
-                    &conf.verilator.syntax.path,
-                    &conf.verilator.syntax.args,
-                ) {
-                    Some(diags) => diags,
-                    None => Vec::new(),
+                if let Ok(path) = uri.to_file_path() {
+                    match verilator_syntax(
+                        rope,
+                        path,
+                        &conf.verilator.syntax.path,
+                        &conf.verilator.syntax.args,
+                    ) {
+                        Some(diags) => diags,
+                        None => Vec::new(),
+                    }
+                } else {
+                    Vec::new()
                 }
             } else if conf.verible.syntax.enabled {
                 match verible_syntax(rope, &conf.verible.syntax.path, &conf.verible.syntax.args) {
@@ -73,14 +77,18 @@ pub fn get_diagnostics(
     if !(cfg!(test) && (uri.to_string().starts_with("file:///test"))) {
         let diagnostics = {
             if conf.verilator.syntax.enabled {
-                match verilator_syntax(
-                    rope,
-                    uri.to_file_path().unwrap(),
-                    &conf.verilator.syntax.path,
-                    &conf.verilator.syntax.args,
-                ) {
-                    Some(diags) => diags,
-                    None => Vec::new(),
+                if let Ok(path) = uri.to_file_path() {
+                    match verilator_syntax(
+                        rope,
+                        path,
+                        &conf.verilator.syntax.path,
+                        &conf.verilator.syntax.args,
+                    ) {
+                        Some(diags) => diags,
+                        None => Vec::new(),
+                    }
+                } else {
+                    Vec::new()
                 }
             } else if conf.verible.syntax.enabled {
                 match verible_syntax(rope, &conf.verible.syntax.path, &conf.verible.syntax.args) {

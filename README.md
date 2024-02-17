@@ -35,10 +35,10 @@ cargo install --git https://github.com/vivekmalneedi/veridian.git
 
 ## Usage
 
-### [neovim]
+### [neovim](https://github.com/neovim/nvim-lspconfig)
 ```lua
 local lspconfutil = require 'lspconfig/util'
-local root_pattern = lspconfutil.root_pattern("veridian.yml", "veridian.yaml", ".git")
+local root_pattern = lspconfutil.root_pattern("veridian.yml", ".git")
 require('lspconfig').veridian.setup {
     cmd = { 'veridian' },
     root_dir = function(fname)
@@ -125,7 +125,7 @@ verible:
       - arg1
       - arg2
 verilator:
-  # verible-verilog-syntax configuration
+  # verilator configuration
   syntax:
     # default: true if in path
     enabled: true|false,
