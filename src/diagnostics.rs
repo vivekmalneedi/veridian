@@ -1,18 +1,18 @@
 use crate::server::ProjectConfig;
-use regex::Regex;
-use ropey::Rope;
-use walkdir::DirEntry;
-use std::path::PathBuf;
-use std::process::{Command, Stdio};
-use tower_lsp::lsp_types::*;
 #[cfg(feature = "slang")]
 use path_clean::PathClean;
+use regex::Regex;
+use ropey::Rope;
 #[cfg(feature = "slang")]
 use std::env::current_dir;
 #[cfg(feature = "slang")]
 use std::path::Path;
+use std::path::PathBuf;
+use std::process::{Command, Stdio};
+use tower_lsp::lsp_types::*;
 #[cfg(feature = "slang")]
 use veridian_slang::slang_compile;
+use walkdir::DirEntry;
 #[cfg(feature = "slang")]
 use walkdir::WalkDir;
 
@@ -435,8 +435,7 @@ endmodule
         let dir = TempDir::new("verilator_test").unwrap();
         let file_path_1 = dir.path().join("test.sv");
         let mut f = File::create(&file_path_1).unwrap();
-        f.write_all(text.as_bytes())
-            .unwrap();
+        f.write_all(text.as_bytes()).unwrap();
         f.sync_all().unwrap();
 
         let errors = verilator_syntax(
@@ -469,7 +468,8 @@ endmodule
             severity: Some(DiagnosticSeverity::ERROR),
             code: None,
             source: Some("verilator".to_string()),
-            message: "syntax error, unexpected endmodule, expecting IDENTIFIER or randomize".to_string(),
+            message: "syntax error, unexpected endmodule, expecting IDENTIFIER or randomize"
+                .to_string(),
             related_information: None,
             tags: None,
             code_description: None,
