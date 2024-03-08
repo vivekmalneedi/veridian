@@ -38,12 +38,11 @@ jobs:
 
             - name: Install Deps
               run: |
-                  wget 'https://github.com/chipsalliance/verible/releases/download/v0.0-3389-ga1cd07b1/verible-v0.0-3389-ga1cd07b1-Ubuntu-20.04-focal-x86_64.tar.gz' -O verible.tar.gz
+                  wget 'https://github.com/chipsalliance/verible/releases/download/v0.0-3607-g46de0f64/verible-v0.0-3607-g46de0f64-linux-static-x86_64.tar.gz' -O verible.tar.gz
                   tar -xf verible.tar.gz
-                  sudo cp verible-v0.0-3389-ga1cd07b1/bin/* /usr/bin
+                  sudo cp verible-v0.0-3607-g46de0f64/bin/* /usr/bin
                   sudo apt update
                   sudo apt-get install -y verilator perl
-                  verilator --help
 
             - name: Run cargo test
               uses: actions-rs/cargo@v1
@@ -131,12 +130,12 @@ jobs:
               run: |
                   strip target/release/veridian
                   cp target/release/veridian .
-                  tar -czvf veridian-ubuntu-20.04.tar.gz veridian
+                  tar -czvf veridian-ubuntu-22.04.tar.gz veridian
 
             - uses: actions/upload-artifact@v2
               with:
-                  name: veridian-ubuntu-20.04.tar.gz
-                  path: veridian-ubuntu-20.04.tar.gz
+                  name: veridian-ubuntu-22.04.tar.gz
+                  path: veridian-ubuntu-22.04.tar.gz
                   if-no-files-found: error
 
     build_centos:
@@ -205,7 +204,7 @@ jobs:
         steps:
             - uses: actions/download-artifact@v2
               with:
-                  name: veridian-ubuntu-20.04.tar.gz
+                  name: veridian-ubuntu-22.04.tar.gz
             - uses: actions/download-artifact@v2
               with:
                   name: veridian-centos-7.tar.gz
@@ -219,6 +218,6 @@ jobs:
                   prerelease: true
                   title: nightly
                   files: |
-                      veridian-ubuntu-20.04.tar.gz
+                      veridian-ubuntu-22.04.tar.gz
                       veridian-centos-7.tar.gz
                       veridian.vsix
