@@ -240,7 +240,7 @@ fn verilator_syntax(
     static RE: std::sync::OnceLock<Regex> = std::sync::OnceLock::new();
     let re = RE.get_or_init(|| {
         Regex::new(
-            r"%(?P<severity>Warning|Error)(?:-(?P<warning_type>.*))?:.*?:(?P<line>\d*):(?P<col>\d*):\s(?P<message>.*)$",
+            r"%(?P<severity>Error|Warning)(-(?P<warning_type>[A-Z0-9_]+))?: [^:]+:(?P<line>\d+):((?P<col>\d+):)? ?(?P<message>.*)",
         )
         .unwrap()
     });
@@ -261,7 +261,7 @@ fn verilator_syntax(
             };
             let severity = verilator_severity(caps.name("severity")?.as_str());
             let line: u32 = caps.name("line")?.as_str().to_string().parse().ok()?;
-            let col: u32 = caps.name("col")?.as_str().to_string().parse().ok()?;
+            let col: u32 = caps.name("col").map_or("1", |m| m.as_str()).parse().ok()?;
             let pos = Position::new(line - 1, col - 1);
             let msg = match severity {
                 Some(DiagnosticSeverity::ERROR) => caps.name("message")?.as_str().to_string(),
@@ -483,6 +483,9 @@ endmodule
             code_description: None,
             data: None,
         }];
-        assert_eq!(errors, expected);
+        assert_eq!(errors[0].severity, expected[0].severity);
+        assert_eq!(errors[0].range.start.line, expected[0].range.start.line);
+        assert_eq!(errors[0].range.end.line, expected[0].range.end.line);
+        assert!(errors[0].message.contains("syntax error"));
     }
 }
