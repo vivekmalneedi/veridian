@@ -143,7 +143,6 @@ impl Default for VerilatorSyntax {
             args: vec![
                 "--lint-only".to_string(),
                 "--sv".to_string(),
-                "--timing".to_string(),
                 "-Wall".to_string(),
             ],
         }

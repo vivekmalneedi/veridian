@@ -134,7 +134,6 @@ verilator:
     args:
       - --lint-only
       - --sv
-      - --timing
       - -Wall
 # set log level
 # default: Info
