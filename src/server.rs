@@ -2,7 +2,7 @@ use crate::sources::*;
 
 use crate::completion::keyword::*;
 use flexi_logger::LoggerHandle;
-use log::{debug, info};
+use log::{debug, info, warn};
 use path_clean::PathClean;
 use serde::{Deserialize, Serialize};
 use std::env::current_dir;
@@ -77,6 +77,8 @@ pub struct ProjectConfig {
     pub source_dirs: Vec<String>,
     // config options for verible tools
     pub verible: Verible,
+    // config options for verilator tools
+    pub verilator: Verilator,
     // log level
     pub log_level: LogLevel,
 }
@@ -88,6 +90,7 @@ impl Default for ProjectConfig {
             include_dirs: Vec::new(),
             source_dirs: Vec::new(),
             verible: Verible::default(),
+            verilator: Verilator::default(),
             log_level: LogLevel::Info,
         }
     }
@@ -114,6 +117,34 @@ impl Default for VeribleSyntax {
             enabled: true,
             path: "verible-verilog-syntax".to_string(),
             args: Vec::new(),
+        }
+    }
+}
+
+#[derive(Debug, Default, Serialize, Deserialize)]
+#[serde(default)]
+pub struct Verilator {
+    pub syntax: VerilatorSyntax,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(default)]
+pub struct VerilatorSyntax {
+    pub enabled: bool,
+    pub path: String,
+    pub args: Vec<String>,
+}
+
+impl Default for VerilatorSyntax {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            path: "verilator".to_string(),
+            args: vec![
+                "--lint-only".to_string(),
+                "--sv".to_string(),
+                "-Wall".to_string(),
+            ],
         }
     }
 }
@@ -182,32 +213,37 @@ impl LanguageServer for Backend {
         // grab include dirs and source dirs from config, and convert to abs path
         let mut inc_dirs = self.server.srcs.include_dirs.write().unwrap();
         let mut src_dirs = self.server.srcs.source_dirs.write().unwrap();
-        if let Ok(conf) = read_config(params.root_uri) {
-            inc_dirs.extend(conf.include_dirs.iter().filter_map(|x| absolute_path(x)));
-            debug!("{:#?}", inc_dirs);
-            src_dirs.extend(conf.source_dirs.iter().filter_map(|x| absolute_path(x)));
-            debug!("{:#?}", src_dirs);
-            let mut log_handle = self.server.log_handle.lock().unwrap();
-            let log_handle = log_handle.as_mut();
-            if let Some(handle) = log_handle {
-                handle
-                    .parse_and_push_temp_spec(&conf.log_level.to_string())
-                    .map_err(|e| Error {
-                        code: ErrorCode::InvalidParams,
-                        message: e.to_string(),
-                        data: None,
-                    })?;
+        match read_config(params.root_uri) {
+            Ok(conf) => {
+                inc_dirs.extend(conf.include_dirs.iter().filter_map(|x| absolute_path(x)));
+                debug!("{:#?}", inc_dirs);
+                src_dirs.extend(conf.source_dirs.iter().filter_map(|x| absolute_path(x)));
+                debug!("{:#?}", src_dirs);
+                let mut log_handle = self.server.log_handle.lock().unwrap();
+                let log_handle = log_handle.as_mut();
+                if let Some(handle) = log_handle {
+                    handle
+                        .parse_and_push_temp_spec(&conf.log_level.to_string())
+                        .map_err(|e| Error {
+                            code: ErrorCode::InvalidParams,
+                            message: e.to_string().into(),
+                            data: None,
+                        })?;
+                }
+                *self.server.conf.write().unwrap() = conf;
             }
-            *self.server.conf.write().unwrap() = conf;
-        } else {
-            info!("no config file found");
+            Err(e) => {
+                warn!("found errors in config file: {:#?}", e);
+            }
         }
         let mut conf = self.server.conf.write().unwrap();
         conf.verible.syntax.enabled = which(&conf.verible.syntax.path).is_ok();
         if cfg!(feature = "slang") {
             info!("enabled linting with slang");
         }
-        if conf.verible.syntax.enabled {
+        if conf.verilator.syntax.enabled {
+            info!("enabled linting with verilator")
+        } else if conf.verible.syntax.enabled {
             info!("enabled linting with verible-verilog-syntax")
         }
         conf.verible.format.enabled = which(&conf.verible.format.path).is_ok();
