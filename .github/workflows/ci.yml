@@ -13,7 +13,7 @@ name: CI
 jobs:
     test:
         name: Test Suite
-        runs-on: ubuntu-20.04
+        runs-on: ubuntu-22.04
         steps:
             - name: Checkout sources
               uses: actions/checkout@v2
@@ -24,7 +24,7 @@ jobs:
               uses: actions-rs/toolchain@v1
               with:
                   profile: minimal
-                  toolchain: 1.71.0
+                  toolchain: 1.76.0
                   override: true
 
             - name: cache cargo dirs
@@ -42,7 +42,7 @@ jobs:
                   tar -xf verible.tar.gz
                   sudo cp verible-v0.0-3389-ga1cd07b1/bin/* /usr/bin
                   sudo apt update
-                  sudo apt-get install -y verilator
+                  sudo apt-get install -y verilator perl
                   verilator --help
 
             - name: Run cargo test
@@ -63,7 +63,7 @@ jobs:
 
     lints:
         name: Lints
-        runs-on: ubuntu-20.04
+        runs-on: ubuntu-22.04
         steps:
             - name: Checkout sources
               uses: actions/checkout@v2
@@ -74,7 +74,7 @@ jobs:
               uses: actions-rs/toolchain@v1
               with:
                   profile: minimal
-                  toolchain: 1.71.0
+                  toolchain: 1.76.0
                   override: true
                   components: rustfmt, clippy
 
@@ -99,7 +99,7 @@ jobs:
 
     build_ubuntu:
         name: Build Ubuntu
-        runs-on: ubuntu-20.04
+        runs-on: ubuntu-22.04
         if: ${{ github.ref == 'refs/heads/master' && ( github.event_name == 'workflow_dispatch' || github.event_name == 'schedule' ) }}
         steps:
             - name: Checkout sources
@@ -109,7 +109,7 @@ jobs:
               uses: actions-rs/toolchain@v1
               with:
                   profile: minimal
-                  toolchain: 1.71.0
+                  toolchain: 1.76.0
                   override: true
 
             - name: cache cargo dirs
