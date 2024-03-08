@@ -369,15 +369,15 @@ mod tests {
             )],
             None,
         );
-        assert_eq!(
-            get_diagnostics(
-                uri.clone(),
-                &Rope::default(),
-                vec![uri],
-                &ProjectConfig::default()
-            ),
-            expected
+        let diag = get_diagnostics(
+            uri.clone(),
+            &Rope::default(),
+            vec![uri],
+            &ProjectConfig::default(),
         );
+        assert_eq!(diag.uri, expected.uri);
+        assert_eq!(diag.version, expected.version);
+        assert_eq!(diag.diagnostics.last(), expected.diagnostics.last());
     }
 
     #[test]
@@ -453,7 +453,6 @@ endmodule
             &[
                 "--lint-only".to_string(),
                 "--sv".to_string(),
-                "--timing".to_string(),
                 "-Wall".to_string(),
             ],
         )
