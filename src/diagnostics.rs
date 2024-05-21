@@ -259,7 +259,7 @@ fn verilator_syntax(
         for error in filtered_output {
             let caps = match re.captures(error) {
                 Some(caps) => caps,
-                None => break, // return accumulated diagnostics
+                None => continue, // return accumulated diagnostics
             };
             let severity = verilator_severity(caps.name("severity")?.as_str());
             let line: u32 = caps.name("line")?.as_str().to_string().parse().ok()?;
