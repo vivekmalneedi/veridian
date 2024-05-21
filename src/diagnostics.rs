@@ -239,10 +239,12 @@ fn verilator_syntax(
 
     static RE: std::sync::OnceLock<Regex> = std::sync::OnceLock::new();
     let re = RE.get_or_init(|| {
-        Regex::new(
-            r"%(?P<severity>Error|Warning)(-(?P<warning_type>[A-Z0-9_]+))?: [^:]+:(?P<line>\d+):((?P<col>\d+):)? ?(?P<message>.*)",
-        )
-        .unwrap()
+        let file_path_str = regex::escape(file_path.to_str().unwrap_or(""));
+        let pattern = format!(
+            r"%(?P<severity>Error|Warning)(-(?P<warning_type>[A-Z0-9_]+))?: {}:(?P<line>\d+):((?P<col>\d+):)? ?(?P<message>.*)",
+            file_path_str
+        );
+        Regex::new(&pattern).unwrap()
     });
     // write file to stdin, read output from stdout
     rope.write_to(child.stdin.as_mut()?).ok()?;
