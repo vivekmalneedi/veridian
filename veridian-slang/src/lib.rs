@@ -22,7 +22,7 @@ pub fn slang_compile(paths: Vec<PathBuf>) -> Result<String, Box<dyn error::Error
         paths_c.push(CString::new(path)?);
     }
     // convert cstrings to char* pointers
-    let mut paths_ptr: Vec<*const i8> = paths_c.iter().map(|x| x.as_ptr()).collect();
+    let mut paths_ptr: Vec<*const std::ffi::c_char> = paths_c.iter().map(|x| x.as_ptr()).collect();
 
     // compile with slang, and convert report from char* to string
     let report_raw = unsafe { compile_paths(paths_ptr.as_mut_ptr(), paths_ptr.len() as u32) };
