@@ -40,11 +40,11 @@ fn build_slang(slang_src: &Path, slang_install: &Path) {
         .build();
 }
 
-fn build_slang_wrapper(slang: &Path) {
+fn build_slang_wrapper(slang: &Path, wrapper_install: &Path) {
     cmake::Config::new("slang_wrapper")
         .profile("Release")
         .define("CMAKE_PREFIX_PATH", slang)
-        .out_dir(slang)
+        .out_dir(wrapper_install)
         .build();
 }
 
@@ -52,11 +52,37 @@ fn main() -> Result<()> {
     let out_dir = PathBuf::from(env::var("OUT_DIR")?);
     println!("cargo:rerun-if-changed=slang_wrapper");
 
-    let download_dir = out_dir.join("slang-src");
-    let slang_src = download_slang(&download_dir)?;
-    let slang_install = out_dir.join("slang-install");
-    build_slang(&slang_src, &slang_install);
-    build_slang_wrapper(&slang_install);
+    let (slang_install, wrapper_install, link_type) = match env::var("SLANG_INSTALL_PATH") {
+        Err(_) => {
+            // Build slang from source
+            let download_dir = out_dir.join("slang-src");
+            let slang_src = download_slang(&download_dir)?;
+            let slang_install = out_dir.join("slang-install");
+            let wrapper_install = out_dir.join("slang-wrapper-install");
+
+            build_slang(&slang_src, &slang_install);
+            build_slang_wrapper(&slang_install, &wrapper_install);
+
+            (
+                slang_install.join("lib"),
+                wrapper_install.join("lib"),
+                "static",
+            )
+        }
+        Ok(slang_install) => {
+            // Directly use external slang
+            let slang_install = Path::new(&slang_install);
+            let wrapper_install = out_dir.join("slang-wrapper-install");
+
+            build_slang_wrapper(slang_install, &wrapper_install);
+
+            (
+                slang_install.join("lib"),
+                wrapper_install.join("lib"),
+                "dylib",
+            )
+        }
+    };
 
     let bindings = bindgen::Builder::default()
         .clang_arg("-x")
@@ -66,15 +92,16 @@ fn main() -> Result<()> {
         .generate()
         .expect("Unable to generate bindings");
 
+    println!("cargo:rustc-link-search=native={}", slang_install.display());
     println!(
         "cargo:rustc-link-search=native={}",
-        slang_install.join("lib").display()
+        wrapper_install.display()
     );
     // println!("cargo:rustc-link-search=native=/usr/lib");
 
     println!("cargo:rustc-link-lib=static=slangwrapper");
-    println!("cargo:rustc-link-lib=static=svlang");
-    println!("cargo:rustc-link-lib=static=fmt");
+    println!("cargo:rustc-link-lib={link_type}=svlang");
+    println!("cargo:rustc-link-lib=fmt");
     println!("cargo:rustc-link-lib=dylib=stdc++");
 
     bindings
