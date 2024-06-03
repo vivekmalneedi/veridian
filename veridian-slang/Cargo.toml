@@ -10,10 +10,10 @@ edition = "2018"
 
 [build-dependencies]
 bindgen = "0.58.1"
-cc = { version = "1.0.68", features = ["parallel"] }
 reqwest = { version = "0.12.4", features = ["blocking"] }
 flate2 = "1.0.20"
 tar = "0.4.35"
+cmake = "0.1.50"
 
 [dev-dependencies]
 tempdir = "0.3.7"

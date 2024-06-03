@@ -22,7 +22,8 @@ mod tests {
         let path = CString::new(file_path.to_str().unwrap()).unwrap();
         let report_raw = unsafe { compile_path(path.as_ptr()) };
         let report: &CStr = unsafe { CStr::from_ptr(report_raw) };
-        let expected = ":1:42: error: cannot refer to element 2 of \'logic[1:0]\'\n";
+        let expected =
+            ":1:42: warning: cannot refer to element 2 of \'logic[1:0]\' [-Windex-oob]\n";
         let mut result = report.to_str().unwrap().to_owned();
         let offset = result.find(':').unwrap_or_else(|| result.len());
         result.replace_range(..offset, "");
@@ -63,7 +64,8 @@ mod tests {
         paths.push(file_path_3_c.as_ptr());
         let report_raw = unsafe { compile_paths(paths.as_mut_ptr(), 3) };
         let report: &CStr = unsafe { CStr::from_ptr(report_raw) };
-        let mut expected = ":1:43: error: cannot refer to element 2 of \'logic[1:0]\'\n".repeat(3);
+        let mut expected =
+            ":1:43: warning: cannot refer to element 2 of \'logic[1:0]\' [-Windex-oob]\n".repeat(3);
         expected.pop();
         let result_raw = report.to_str().unwrap().to_owned();
         let result_iter = result_raw.lines();
@@ -104,7 +106,7 @@ mod tests {
 
         let report_raw = unsafe { compile_sources(names.as_mut_ptr(), texts.as_mut_ptr(), 3) };
         let report: &CStr = unsafe { CStr::from_ptr(report_raw) };
-        let expected = "test1.sv:1:43: error: cannot refer to element 2 of \'logic[1:0]\'\ntest2.sv:1:43: error: cannot refer to element 2 of \'logic[1:0]\'\ntest3.sv:1:43: error: cannot refer to element 2 of \'logic[1:0]\'\n";
+        let expected = "test1.sv:1:43: warning: cannot refer to element 2 of \'logic[1:0]\' [-Windex-oob]\ntest2.sv:1:43: warning: cannot refer to element 2 of \'logic[1:0]\' [-Windex-oob]\ntest3.sv:1:43: warning: cannot refer to element 2 of \'logic[1:0]\' [-Windex-oob]\n";
         let result = report.to_str().unwrap();
         assert_eq!(result, expected);
         unsafe {

@@ -18,19 +18,23 @@ public:
 
     void append(const fmt::text_style& style, std::string_view str) { format(style, "{}", str); }
 
-    template<typename String, typename... Args>
-    void format(const String& format, Args&&... args) {
-        fmt::format_to(buf, format, std::forward<Args>(args)...);
+    template <typename... Args>
+    void format(fmt::format_string<Args...> format, Args &&...args)
+    {
+        fmt::format_to(fmt::appender(buf), format, std::forward<Args>(args)...);
     }
 
-    template<typename String, typename... Args>
-    void format(const fmt::text_style& style, const String& format, Args&&... args) {
+    template <typename... Args>
+    void format(const fmt::text_style &style, fmt::format_string<Args...> format, Args &&...args)
+    {
         if (!showColors) {
-            fmt::format_to(buf, format, std::forward<Args>(args)...);
+            fmt::format_to(fmt::appender(buf), format, std::forward<Args>(args)...);
         }
         else {
-            fmt::format_to(fmt::detail::buffer_appender(buf), style, format,
-                           std::forward<Args>(args)...);
+            // TODO: Text style + non-literal string does not compile in fmt 10.2.1, but has been fixed in some commit in the master branch.
+            //       Let's temporarily abandon style to work around it.
+            // fmt::format_to(fmt::appender(buf), style, format, std::forward<Args>(args)...);
+            fmt::format_to(fmt::appender(buf), format, std::forward<Args>(args)...);
         }
     }
 

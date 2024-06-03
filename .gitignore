@@ -10,9 +10,4 @@ tests_rtl
 log_files
 test.txt
 
-veridian-slang/slang_wrapper/slang
-veridian-slang/slang_wrapper/bin
-veridian-slang/slang_wrapper/include
-veridian-slang/slang_wrapper/lib
-slang-linux.tar.gz
 .vscode/
