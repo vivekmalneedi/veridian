@@ -1,5 +1,6 @@
 #include "BasicClient.h"
 #include "slang_wrapper.h"
+#include <array>
 #include <iostream>
 #include <filesystem>
 #include <fmt/format.h>
@@ -29,8 +30,7 @@ char* compile_source(const char* name, const char* text) {
 
     ast::Compilation compilation(options);
 
-    std::vector<SourceBuffer> buffers;
-    buffers.push_back(buffer);
+    std::array<SourceBuffer, 1> buffers{std::move(buffer)};
     compilation.addSyntaxTree(SyntaxTree::fromBuffers(buffers, sm, options));
 
     DiagnosticEngine diagEngine(sm);
@@ -55,8 +55,7 @@ char* compile_path(const char* path) {
 
     ast::Compilation compilation(options);
 
-    std::vector<SourceBuffer> buffers;
-    buffers.push_back(*buffer);
+    std::array<SourceBuffer, 1> buffers{std::move(*buffer)};
     compilation.addSyntaxTree(SyntaxTree::fromBuffers(buffers, sm, options));
 
     DiagnosticEngine diagEngine(sm);
@@ -78,8 +77,9 @@ char* compile_sources(const char** names, const char** texts,
     ast::Compilation compilation(options);
 
     std::vector<SourceBuffer> buffers;
+    buffers.reserve(num_files);
     for (unsigned int i = 0; i < num_files; i++) {
-        buffers.push_back(sm.assignText(names[i], texts[i]));
+        buffers.emplace_back(sm.assignText(names[i], texts[i]));
     }
 
     compilation.addSyntaxTree(SyntaxTree::fromBuffers(buffers, sm, options));
@@ -102,12 +102,13 @@ char* compile_paths(const char** paths, unsigned int num_paths) {
     ast::Compilation compilation(options);
 
     std::vector<SourceBuffer> buffers;
+    buffers.reserve(num_paths);
     for (unsigned int i = 0; i < num_paths; i++) {
         auto buffer = sm.readSource(fs::path{paths[i]}, /* library */ nullptr);
         if (!buffer) {
             return report(fmt::format("'{}': {}", paths[i], buffer.error().message()));
         }
-        buffers.push_back(*buffer);
+        buffers.emplace_back(std::move(*buffer));
     }
 
     compilation.addSyntaxTree(SyntaxTree::fromBuffers(buffers, sm, options));
