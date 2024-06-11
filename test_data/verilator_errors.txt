@@ -1,0 +1,5 @@
+%Error: test.sv:6: syntax error, unexpected endmodule, expecting IDENTIFIER endmodule
+%Error: test.sv:6:1: syntax error, unexpected endmodule, expecting IDENTIFIER or randomize
+%Error: test.sv:6:1: syntax error, unexpected endmodule, expecting IDENTIFIER or '(' or randomize
+%Warning-ALWCOMBORDER: test.sv:5:4: Always_comb variable driven after use: 'b'
+%Error: test2.sv:6:1: syntax error, unexpected endmodule, expecting IDENTIFIER or randomize
