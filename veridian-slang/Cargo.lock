@@ -131,11 +131,6 @@ name = "cc"
 version = "1.0.98"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "41c270e7540d725e65ac7f1b212ac8ce349719624d7bcff99f8e2e488e8cf03f"
-dependencies = [
- "jobserver",
- "libc",
- "once_cell",
-]
 
 [[package]]
 name = "cexpr"
@@ -176,6 +171,15 @@ dependencies = [
  "textwrap",
  "unicode-width",
  "vec_map",
+]
+
+[[package]]
+name = "cmake"
+version = "0.1.50"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a31c789563b815f77f4250caee12365734369f942439b7defd71e18a48197130"
+dependencies = [
+ "cc",
 ]
 
 [[package]]
@@ -549,15 +553,6 @@ name = "itoa"
 version = "1.0.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "49f1f14873335454500d59611f1cf4a4b0f786f9ac11f4312a78e4cf2566695b"
-
-[[package]]
-name = "jobserver"
-version = "0.1.31"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d2b099aaa34a9751c5bf0878add70444e1ed2dd73f347be99003d4577277de6e"
-dependencies = [
- "libc",
-]
 
 [[package]]
 name = "js-sys"
@@ -1424,7 +1419,7 @@ name = "veridian_slang"
 version = "0.1.0"
 dependencies = [
  "bindgen",
- "cc",
+ "cmake",
  "flate2",
  "reqwest",
  "serial_test",

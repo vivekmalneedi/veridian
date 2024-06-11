@@ -360,10 +360,10 @@ mod tests {
             uri.clone(),
             vec![Diagnostic::new(
                 Range::new(Position::new(3, 13), Position::new(3, 13)),
-                Some(DiagnosticSeverity::ERROR),
+                Some(DiagnosticSeverity::WARNING),
                 None,
                 Some("slang".to_owned()),
-                " cannot refer to element 2 of \'logic[1:0]\'".to_owned(),
+                " cannot refer to element 2 of \'logic[1:0]\' [-Windex-oob]".to_owned(),
                 None,
                 None,
             )],

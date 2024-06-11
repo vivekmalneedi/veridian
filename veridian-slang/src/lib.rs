@@ -70,7 +70,8 @@ mod tests {
         paths.push(file_path_3);
 
         let report: String = slang_compile(paths).unwrap();
-        let mut expected = ":1:43: error: cannot refer to element 2 of \'logic[1:0]\'\n".repeat(3);
+        let mut expected =
+            ":1:43: warning: cannot refer to element 2 of \'logic[1:0]\' [-Windex-oob]\n".repeat(3);
         expected.pop();
         let result_iter = report.lines();
         let mut result: String = String::new();

@@ -44,7 +44,7 @@ void BasicClient::setColorsEnabled(bool enabled) {
 
 void BasicClient::report(const ReportedDiagnostic& diag) {
     if (diag.shouldShowIncludeStack) {
-        SmallVectorSized<SourceLocation, 8> includeStack;
+        SmallVector<SourceLocation, 8> includeStack;
         getIncludeStack(diag.location.buffer(), includeStack);
 
         // Show the stack in reverse.
@@ -70,7 +70,7 @@ void BasicClient::report(const ReportedDiagnostic& diag) {
 
     // Get all highlight ranges mapped into the reported location of the
     // diagnostic.
-    SmallVectorSized<SourceRange, 8> mappedRanges;
+    SmallVector<SourceRange, 8> mappedRanges;
     engine->mapSourceRanges(diag.location, diag.ranges, mappedRanges);
 
     // Write the diagnostic.
@@ -87,7 +87,7 @@ void BasicClient::report(const ReportedDiagnostic& diag) {
         else
             name = fmt::format("expanded from macro '{}'", name);
 
-        SmallVectorSized<SourceRange, 8> macroRanges;
+        SmallVector<SourceRange, 8> macroRanges;
         engine->mapSourceRanges(loc, diag.ranges, macroRanges);
         formatDiag(sourceManager->getFullyOriginalLoc(loc),
                    DiagnosticSeverity::Note, name, "");
@@ -103,7 +103,7 @@ std::string BasicClient::getString() const {
 }
 
 void BasicClient::formatDiag(SourceLocation loc, DiagnosticSeverity severity,
-                             string_view message, string_view optionName) {
+                             std::string_view message, std::string_view optionName) {
     size_t col = 0;
     if (loc != SourceLocation::NoLocation) {
         col = sourceManager->getColumnNumber(loc);

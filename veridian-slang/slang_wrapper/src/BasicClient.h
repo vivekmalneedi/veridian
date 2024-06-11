@@ -14,7 +14,9 @@
 namespace slang {
 
 class FormatBuffer;
-class Symbol;
+namespace ast {
+    class Symbol;
+}
 
 class BasicClient : public DiagnosticClient {
 public:
@@ -39,12 +41,12 @@ public:
 private:
     std::unique_ptr<FormatBuffer> buffer;
 
-    using SymbolPathCB = std::function<std::string(const Symbol&)>;
+    using SymbolPathCB = std::function<std::string(const ast::Symbol&)>;
     SymbolPathCB symbolPathCB;
     static SymbolPathCB defaultSymbolPathCB;
 
     void formatDiag(SourceLocation loc, DiagnosticSeverity severity,
-                    string_view message, string_view optionName);
+                    std::string_view message, std::string_view optionName);
 };
 
 } // namespace slang
