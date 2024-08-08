@@ -240,7 +240,7 @@ fn verilator_syntax(
     static RE: std::sync::OnceLock<Regex> = std::sync::OnceLock::new();
     let re = RE.get_or_init(|| {
         Regex::new(
-            r"%(?P<severity>Error|Warning)(-(?P<warning_type>[A-Z0-9_]+))?: [^:]+:(?P<line>\d+):((?P<col>\d+):)? ?(?P<message>.*)",
+            r"%(?P<severity>Error|Warning)(-(?P<warning_type>[A-Z0-9_]+))?: (?P<filepath>[^:]+):(?P<line>\d+):((?P<col>\d+):)? ?(?P<message>.*)",
         )
         .unwrap()
     });
@@ -257,8 +257,14 @@ fn verilator_syntax(
         for error in filtered_output {
             let caps = match re.captures(error) {
                 Some(caps) => caps,
-                None => break, // return accumulated diagnostics
+                None => continue,
             };
+
+            // check if diagnostic is for this file, since verilator can provide diagnostics for
+            // included files
+            if caps.name("filepath")?.as_str() != file_path.to_str().unwrap_or("") {
+                continue;
+            }
             let severity = verilator_severity(caps.name("severity")?.as_str());
             let line: u32 = caps.name("line")?.as_str().to_string().parse().ok()?;
             let col: u32 = caps.name("col").map_or("1", |m| m.as_str()).parse().ok()?;
