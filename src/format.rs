@@ -112,7 +112,7 @@ module test;
   logic b;
 endmodule
 "#;
-        let doc = Rope::from_str(&text);
+        let doc = Rope::from_str(text);
         if which("verible-verilog-format").is_ok() {
             assert_eq!(
                 format_document(
@@ -156,7 +156,7 @@ module t2;
          logic c;
 endmodule
 "#;
-        let doc = Rope::from_str(&text);
+        let doc = Rope::from_str(text);
         if which("verible-verilog-format").is_ok() {
             assert_eq!(
                 format_document(

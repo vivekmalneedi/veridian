@@ -11,3 +11,4 @@ log_files
 test.txt
 
 .vscode/
+veridian-slang/slang_wrapper/slang/

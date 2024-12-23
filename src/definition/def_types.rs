@@ -874,7 +874,6 @@ pub struct ClassDec {
     pub extends: (Vec<String>, Option<String>),
     // class, package
     pub implements: Vec<(String, Option<String>)>,
-    pub interface: bool,
 }
 
 impl ClassDec {
@@ -893,7 +892,6 @@ impl ClassDec {
             scopes: Vec::new(),
             extends: (Vec::new(), None),
             implements: Vec::new(),
-            interface: false,
         }
     }
 }

@@ -15,7 +15,6 @@ use std::sync::{Arc, Condvar, Mutex, RwLock};
 use std::thread;
 use std::time::Instant;
 use sv_parser::*;
-use thread::JoinHandle;
 use tower_lsp::lsp_types::*;
 use walkdir::WalkDir;
 
@@ -100,7 +99,6 @@ pub struct Source {
 pub struct SourceMeta {
     pub id: usize,
     pub valid_parse: Arc<(Mutex<bool>, Condvar)>,
-    pub parse_handle: JoinHandle<()>,
 }
 
 /// find SystemVerilog/Verilog sources recursively from opened files
@@ -207,7 +205,7 @@ impl Sources {
         let inc_dirs = self.include_dirs.clone();
 
         // spawn parse thread
-        let parse_handle = thread::spawn(move || {
+        let _ = thread::spawn(move || {
             let (lock, cvar) = &*valid_parse2;
             loop {
                 let now = Instant::now();
@@ -234,15 +232,14 @@ impl Sources {
                 debug!("try write global scope");
                 let mut global_scope = scope_handle.write().unwrap();
                 match &mut *global_scope {
-                    Some(scope) => match &mut scope_tree {
-                        Some(tree) => {
+                    Some(scope) => {
+                        if let Some(tree) = &mut scope_tree {
                             scope.defs.retain(|x| &x.url() != uri);
                             scope.scopes.retain(|x| &x.url() != uri);
                             scope.defs.append(&mut tree.defs);
                             scope.scopes.append(&mut tree.scopes);
                         }
-                        None => (),
-                    },
+                    }
                     None => *global_scope = scope_tree,
                 }
                 // eprintln!("{:#?}", *global_scope);
@@ -269,7 +266,6 @@ impl Sources {
             .push(Arc::new(RwLock::new(SourceMeta {
                 id: fid,
                 valid_parse,
-                parse_handle,
             })));
         debug!("added {}", &doc.uri);
         self.names.write().unwrap().insert(doc.uri, fid);
@@ -492,7 +488,7 @@ impl LSPSupport for Rope {
     }
 }
 
-impl<'a> LSPSupport for RopeSlice<'a> {
+impl LSPSupport for RopeSlice<'_> {
     fn pos_to_byte(&self, pos: &Position) -> usize {
         self.char_to_byte(self.pos_to_char(pos))
     }

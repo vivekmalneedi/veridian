@@ -139,22 +139,16 @@ pub fn port_dec_ansi(
                     InterfacePortHeader::Identifier(node) => {
                         port.interface =
                             Some(get_ident(tree, RefNode::InterfaceIdentifier(&node.nodes.0)).0);
-                        match &node.nodes.1 {
-                            Some((_, mod_ident)) => {
-                                port.modport =
-                                    Some(get_ident(tree, RefNode::ModportIdentifier(mod_ident)).0);
-                            }
-                            None => (),
+                        if let Some((_, mod_ident)) = &node.nodes.1 {
+                            port.modport =
+                                Some(get_ident(tree, RefNode::ModportIdentifier(mod_ident)).0);
                         }
                     }
                     InterfacePortHeader::Interface(node) => {
                         port.interface = Some("interface".to_string());
-                        match &node.nodes.1 {
-                            Some((_, mod_ident)) => {
-                                port.modport =
-                                    Some(get_ident(tree, RefNode::ModportIdentifier(mod_ident)).0);
-                            }
-                            None => (),
+                        if let Some((_, mod_ident)) = &node.nodes.1 {
+                            port.modport =
+                                Some(get_ident(tree, RefNode::ModportIdentifier(mod_ident)).0);
                         }
                     }
                 }
@@ -933,19 +927,16 @@ pub fn tfport_list(
 ) -> Option<Vec<PortDec>> {
     let mut tfports: Vec<PortDec> = Vec::new();
     for tfports_def in node.nodes.0.contents() {
-        match &tfports_def.nodes.4 {
-            Some(def) => {
-                let mut tfport = PortDec::new(url);
-                let ident = get_ident(tree, RefNode::PortIdentifier(&def.0));
-                tfport.ident = ident.0;
-                tfport.byte_idx = ident.1;
-                for _ in &def.1 {
-                    let tokens = &mut tfport.type_str;
-                    advance_until_leave!(tokens, tree, event_iter, RefNode::UnpackedDimension);
-                }
-                tfports.push(tfport);
+        if let Some(def) = &tfports_def.nodes.4 {
+            let mut tfport = PortDec::new(url);
+            let ident = get_ident(tree, RefNode::PortIdentifier(&def.0));
+            tfport.ident = ident.0;
+            tfport.byte_idx = ident.1;
+            for _ in &def.1 {
+                let tokens = &mut tfport.type_str;
+                advance_until_leave!(tokens, tree, event_iter, RefNode::UnpackedDimension);
             }
-            None => (),
+            tfports.push(tfport);
         }
     }
     Some(tfports)
@@ -989,15 +980,12 @@ pub fn function_dec(
                 &FunctionIdentifier
             );
             func.type_str = tokens;
-            match &x.nodes.3.nodes.1 {
-                Some(tfports) => {
-                    skip_until_enter!(tree, event_iter, RefNode::TfPortList, &TfPortList);
-                    let ports = tfport_list(tree, tfports, event_iter, url)?;
-                    for port in ports {
-                        func.defs.push(Box::new(port));
-                    }
+            if let Some(tfports) = &x.nodes.3.nodes.1 {
+                skip_until_enter!(tree, event_iter, RefNode::TfPortList, &TfPortList);
+                let ports = tfport_list(tree, tfports, event_iter, url)?;
+                for port in ports {
+                    func.defs.push(Box::new(port));
                 }
-                None => (),
             }
         }
     }
@@ -1047,15 +1035,12 @@ pub fn task_dec(
                 &TaskIdentifier
             );
             task.type_str = tokens;
-            match &x.nodes.2.nodes.1 {
-                Some(tfports) => {
-                    skip_until_enter!(tree, event_iter, RefNode::TfPortList, &TfPortList);
-                    let ports = tfport_list(tree, tfports, event_iter, url)?;
-                    for port in ports {
-                        task.defs.push(Box::new(port));
-                    }
+            if let Some(tfports) = &x.nodes.2.nodes.1 {
+                skip_until_enter!(tree, event_iter, RefNode::TfPortList, &TfPortList);
+                let ports = tfport_list(tree, tfports, event_iter, url)?;
+                for port in ports {
+                    task.defs.push(Box::new(port));
                 }
-                None => (),
             }
         }
     }

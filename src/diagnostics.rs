@@ -28,23 +28,19 @@ pub fn get_diagnostics(
         let mut diagnostics = {
             if conf.verilator.syntax.enabled {
                 if let Ok(path) = uri.to_file_path() {
-                    match verilator_syntax(
+                    verilator_syntax(
                         rope,
                         path,
                         &conf.verilator.syntax.path,
                         &conf.verilator.syntax.args,
-                    ) {
-                        Some(diags) => diags,
-                        None => Vec::new(),
-                    }
+                    )
+                    .unwrap_or_default()
                 } else {
                     Vec::new()
                 }
             } else if conf.verible.syntax.enabled {
-                match verible_syntax(rope, &conf.verible.syntax.path, &conf.verible.syntax.args) {
-                    Some(diags) => diags,
-                    None => Vec::new(),
-                }
+                verible_syntax(rope, &conf.verible.syntax.path, &conf.verible.syntax.args)
+                    .unwrap_or_default()
             } else {
                 Vec::new()
             }
@@ -78,23 +74,19 @@ pub fn get_diagnostics(
         let diagnostics = {
             if conf.verilator.syntax.enabled {
                 if let Ok(path) = uri.to_file_path() {
-                    match verilator_syntax(
+                    verilator_syntax(
                         rope,
                         path,
                         &conf.verilator.syntax.path,
                         &conf.verilator.syntax.args,
-                    ) {
-                        Some(diags) => diags,
-                        None => Vec::new(),
-                    }
+                    )
+                    .unwrap_or_default()
                 } else {
                     Vec::new()
                 }
             } else if conf.verible.syntax.enabled {
-                match verible_syntax(rope, &conf.verible.syntax.path, &conf.verible.syntax.args) {
-                    Some(diags) => diags,
-                    None => Vec::new(),
-                }
+                verible_syntax(rope, &conf.verible.syntax.path, &conf.verible.syntax.args)
+                    .unwrap_or_default()
             } else {
                 Vec::new()
             }
