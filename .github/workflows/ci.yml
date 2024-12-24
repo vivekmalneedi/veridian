@@ -21,11 +21,11 @@ jobs:
               uses: actions-rs/toolchain@v1
               with:
                   profile: minimal
-                  toolchain: 1.76.0
+                  toolchain: 1.83.0
                   override: true
 
             - name: cache cargo dirs
-              uses: actions/cache@v2
+              uses: actions/cache@v4
               with:
                   path: |
                       ~/.cargo/registry
@@ -47,9 +47,9 @@ jobs:
                   command: test
                   args: --all-features
             #todo: vscode extensions tests
-            - uses: actions/setup-node@v2.1.3
+            - uses: actions/setup-node@v4
               with:
-                  node-version: "12"
+                  node-version: "18"
             - name: build extension
               working-directory: extensions/vscode
               run: |
@@ -70,12 +70,12 @@ jobs:
               uses: actions-rs/toolchain@v1
               with:
                   profile: minimal
-                  toolchain: 1.76.0
+                  toolchain: 1.83.0
                   override: true
                   components: rustfmt, clippy
 
             - name: cache cargo dirs
-              uses: actions/cache@v2
+              uses: actions/cache@v4
               with:
                   path: |
                       ~/.cargo/registry
@@ -105,11 +105,11 @@ jobs:
               uses: actions-rs/toolchain@v1
               with:
                   profile: minimal
-                  toolchain: 1.76.0
+                  toolchain: 1.83.0
                   override: true
 
             - name: cache cargo dirs
-              uses: actions/cache@v2
+              uses: actions/cache@v4
               with:
                   path: |
                       ~/.cargo/registry
@@ -141,17 +141,17 @@ jobs:
         if: ${{ ( github.event_name == 'workflow_dispatch' || github.event_name == 'schedule' ) }}
         steps:
             - uses: actions/checkout@v2
-            - uses: actions/setup-node@v2.1.3
+            - uses: actions/setup-node@v4
               with:
-                  node-version: "12"
+                  node-version: "18"
             - name: build extension
               working-directory: extensions/vscode
               run: |
                   npm install
-                  npm install -g vsce@1.103.1
+                  npm install -g vsce@3.2.1
                   vsce package -o veridian.vsix
 
-            - uses: actions/upload-artifact@v2
+            - uses: actions/upload-artifact@v4
               with:
                   name: veridian.vsix
                   path: extensions/vscode/veridian.vsix
@@ -162,7 +162,7 @@ jobs:
         needs: [build_ubuntu, build_vscode]
         runs-on: ubuntu-latest
         steps:
-            - uses: actions/download-artifact@v2
+            - uses: actions/download-artifact@v4
               with:
                   name: veridian-ubuntu-22.04.tar.gz
             - uses: actions/download-artifact@v2
