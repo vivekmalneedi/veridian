@@ -54,7 +54,7 @@ jobs:
               working-directory: extensions/vscode
               run: |
                   npm install
-                  npm install -g vsce@3.2.1
+                  npm install -g @vscode/vsce@3.2.1
                   vsce package -o veridian.vsix
 
     lints:
@@ -148,7 +148,7 @@ jobs:
               working-directory: extensions/vscode
               run: |
                   npm install
-                  npm install -g vsce@3.2.1
+                  npm install -g @vscode/vsce@3.2.1
                   vsce package -o veridian.vsix
 
             - uses: actions/upload-artifact@v4
