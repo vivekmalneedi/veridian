@@ -656,7 +656,7 @@ interface test_inter2;
 endinterface
 "#;
 
-        let doc = Rope::from_str(&text);
+        let doc = Rope::from_str(text);
         let url = Url::parse("file:///test.sv").unwrap();
         let syntax_tree = parse(&doc, &url, &None, &Vec::new()).unwrap();
         let scope_tree = get_scopes(&syntax_tree, &url).unwrap();

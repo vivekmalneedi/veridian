@@ -223,7 +223,7 @@ impl LanguageServer for Backend {
                 let log_handle = log_handle.as_mut();
                 if let Some(handle) = log_handle {
                     handle
-                        .parse_and_push_temp_spec(&conf.log_level.to_string())
+                        .parse_and_push_temp_spec(conf.log_level.to_string())
                         .map_err(|e| Error {
                             code: ErrorCode::InvalidParams,
                             message: e.to_string().into(),

@@ -6,7 +6,7 @@ project(
 )
 
 # Keep the version the same as the one in `build.rs`
-find_package(slang 6.0 REQUIRED)
+find_package(slang 7.0 REQUIRED)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)

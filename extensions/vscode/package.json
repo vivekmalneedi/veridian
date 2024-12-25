@@ -78,19 +78,22 @@
         }
     },
     "engines": {
-        "vscode": "^1.56.0"
+        "vscode": "^1.75.0"
     },
     "dependencies": {
-        "vscode-languageclient": "^7.0.0"
-    },
+		"glob": "^11.0.0",
+		"vscode-languageclient": "^9.0.1"
+	},
     "devDependencies": {
-        "@types/vscode": "^1.56.0",
-        "vscode-test": "^1.5.2",
-        "@types/mocha": "^8.2.2",
-        "mocha": "^8.4.0",
-        "@types/node": "^15.12.1",
-        "eslint": "^7.28.0",
-        "@typescript-eslint/parser": "^4.26.0",
-        "typescript": "^4.3.2"
-    }
+        "@types/vscode": "^1.75.1",
+		"@vscode/test-electron": "^2.3.9",
+		"@eslint/js": "^9.13.0",
+		"@stylistic/eslint-plugin": "^2.9.0",
+		"@types/mocha": "^10.0.6",
+		"@types/node": "^20",
+		"eslint": "^9.13.0",
+		"mocha": "^10.3.0",
+		"typescript": "^5.7.2",
+		"typescript-eslint": "^8.18.2"
+	}
 }

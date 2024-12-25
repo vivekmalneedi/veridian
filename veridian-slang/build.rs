@@ -8,7 +8,7 @@ type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
 fn download_slang(download_to: &Path) -> Result<PathBuf> {
     // Keep the version the same as the one in `CMakeLists.txt`
-    let target = "https://github.com/MikePopoloski/slang/archive/refs/tags/v6.0.tar.gz";
+    let target = "https://github.com/MikePopoloski/slang/archive/refs/tags/v7.0.tar.gz";
 
     fs::create_dir_all(download_to)?;
 
@@ -88,7 +88,7 @@ fn main() -> Result<()> {
         .clang_arg("-x")
         .clang_arg("c++")
         .header("slang_wrapper/src/slang_wrapper.h")
-        .parse_callbacks(Box::new(bindgen::CargoCallbacks))
+        .parse_callbacks(Box::new(bindgen::CargoCallbacks::new()))
         .generate()
         .expect("Unable to generate bindings");
 
