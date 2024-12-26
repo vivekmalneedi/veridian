@@ -2,6 +2,7 @@ use ropey::{iter::Bytes, Rope};
 use std::time::{Duration, Instant};
 use tower_lsp::lsp_types::*;
 use tree_sitter::{Node, Point, Query, QueryCursor, QueryError, TextProvider, Tree};
+use streaming_iterator::StreamingIterator;
 
 #[derive(Debug, Copy, Clone)]
 pub struct Symbol {
@@ -176,7 +177,9 @@ impl<'a> Iterator for RopeChunks<'a> {
 
 pub fn parse(text: &Rope) -> Option<Tree> {
     let mut parser = tree_sitter::Parser::new();
-    parser.set_language(tree_sitter_verilog::language()).ok()?;
+    parser
+    .set_language(&tree_sitter_verilog::LANGUAGE.into())
+    .expect("Error loading Verilog parser");
     parser.parse_with(
         &mut |offset: usize, pos: Point| {
             let (chunk, chunk_byte_idx, _, _) = text.chunk_at_byte(offset);
@@ -190,41 +193,41 @@ pub fn index(text: &Rope, tree: &Tree, query: &Query) -> Vec<Symbol> {
     let mut symbols: Vec<Symbol> = Vec::new();
     let mut struct_members: Vec<SymbolBuilder> = Vec::new();
     let mut cursor = QueryCursor::new();
-    let mats = cursor.matches(query, tree.root_node(), |node: Node| {
+    let mut mats = cursor.matches(query, tree.root_node(), |node: Node| {
         RopeChunks::new(text.slice(node.byte_range()).chunks())
     });
     let mut parent: Option<(ByteRange, ByteRange)> = None;
-    for m in mats {
+    while let Some(m) = mats.next() {
         // scopes
         if m.pattern_index == 0 {
             println!("new scope {}", symbols.len());
             let mut builder = SymbolBuilder::new(0);
             for cap in m.captures {
-                match query.capture_names()[cap.index as usize].as_str() {
+                match query.capture_names()[cap.index as usize] {
                     "ident" => builder.ident_node(cap.node.byte_range().into()),
                     "keyword" => {
                         builder.type_node(cap.node.byte_range().into());
                         builder.kind(
                             match text.slice(cap.node.byte_range()).to_string().as_str() {
                                 "module" | "macromodule" | "primitive" | "program" | "checker" => {
-                                    Some((CompletionItemKind::Module, SymbolKind::Module))
+                                    Some((CompletionItemKind::MODULE, SymbolKind::MODULE))
                                 }
                                 "interface" => {
-                                    Some((CompletionItemKind::Interface, SymbolKind::Interface))
+                                    Some((CompletionItemKind::INTERFACE, SymbolKind::INTERFACE))
                                 }
                                 "task" => {
-                                    Some((CompletionItemKind::Function, SymbolKind::Function))
+                                    Some((CompletionItemKind::FUNCTION, SymbolKind::FUNCTION))
                                 }
                                 "function" => {
-                                    Some((CompletionItemKind::Function, SymbolKind::Function))
+                                    Some((CompletionItemKind::FUNCTION, SymbolKind::FUNCTION))
                                 }
                                 "package" => {
-                                    Some((CompletionItemKind::Module, SymbolKind::Package))
+                                    Some((CompletionItemKind::MODULE, SymbolKind::PACKAGE))
                                 }
-                                "class" => Some((CompletionItemKind::Class, SymbolKind::Class)),
-                                "struct" => Some((CompletionItemKind::Struct, SymbolKind::Struct)),
-                                "union" => Some((CompletionItemKind::Enum, SymbolKind::Enum)),
-                                "enum" => Some((CompletionItemKind::Enum, SymbolKind::Enum)),
+                                "class" => Some((CompletionItemKind::CLASS, SymbolKind::CLASS)),
+                                "struct" => Some((CompletionItemKind::STRUCT, SymbolKind::STRUCT)),
+                                "union" => Some((CompletionItemKind::ENUM, SymbolKind::ENUM)),
+                                "enum" => Some((CompletionItemKind::ENUM, SymbolKind::ENUM)),
                                 _ => None,
                             },
                         );
@@ -261,7 +264,7 @@ pub fn index(text: &Rope, tree: &Tree, query: &Query) -> Vec<Symbol> {
             let mut builder = SymbolBuilder::new(0);
             builder.direction("inout");
             for cap in m.captures {
-                match query.capture_names()[cap.index as usize].as_str() {
+                match query.capture_names()[cap.index as usize] {
                     "ident" => {
                         builder.ident_node(cap.node.byte_range().into());
                         if let Some((pi, pr)) = parent {
@@ -281,7 +284,7 @@ pub fn index(text: &Rope, tree: &Tree, query: &Query) -> Vec<Symbol> {
                     _ => (),
                 }
             }
-            builder.kind(Some((CompletionItemKind::Property, SymbolKind::Property)));
+            builder.kind(Some((CompletionItemKind::PROPERTY, SymbolKind::PROPERTY)));
             symbols.extend(builder.build());
         }
         // params
@@ -289,7 +292,7 @@ pub fn index(text: &Rope, tree: &Tree, query: &Query) -> Vec<Symbol> {
             println!("new param");
             let mut builder = SymbolBuilder::new(0);
             for cap in m.captures {
-                match query.capture_names()[cap.index as usize].as_str() {
+                match query.capture_names()[cap.index as usize]{
                     "ident" => {
                         builder.ident_node(cap.node.byte_range().into());
                         if let Some((pi, pr)) = parent {
@@ -303,7 +306,7 @@ pub fn index(text: &Rope, tree: &Tree, query: &Query) -> Vec<Symbol> {
                     _ => (),
                 }
             }
-            builder.kind(Some((CompletionItemKind::Property, SymbolKind::Property)));
+            builder.kind(Some((CompletionItemKind::PROPERTY, SymbolKind::PROPERTY)));
             symbols.extend(builder.build());
         }
         // package import
@@ -311,7 +314,7 @@ pub fn index(text: &Rope, tree: &Tree, query: &Query) -> Vec<Symbol> {
             println!("new member {}", symbols.len());
             let mut builder = SymbolBuilder::new(0);
             for cap in m.captures {
-                match query.capture_names()[cap.index as usize].as_str() {
+                match query.capture_names()[cap.index as usize]{
                     "ident" => {
                         builder.ident_node(cap.node.byte_range().into());
                         if let Some((pi, pr)) = parent {
@@ -324,7 +327,7 @@ pub fn index(text: &Rope, tree: &Tree, query: &Query) -> Vec<Symbol> {
                     _ => (),
                 }
             }
-            builder.kind(Some((CompletionItemKind::Property, SymbolKind::Property)));
+            builder.kind(Some((CompletionItemKind::PROPERTY, SymbolKind::PROPERTY)));
             symbols.extend(builder.build());
         }
         // struct_union member
@@ -332,7 +335,7 @@ pub fn index(text: &Rope, tree: &Tree, query: &Query) -> Vec<Symbol> {
             println!("new member {}", symbols.len());
             let mut builder = SymbolBuilder::new(0);
             for cap in m.captures {
-                match query.capture_names()[cap.index as usize].as_str() {
+                match query.capture_names()[cap.index as usize]{
                     "ident" => {
                         builder.ident_node(cap.node.byte_range().into());
                         if let Some((pi, pr)) = parent {
@@ -346,7 +349,7 @@ pub fn index(text: &Rope, tree: &Tree, query: &Query) -> Vec<Symbol> {
                     _ => (),
                 }
             }
-            builder.kind(Some((CompletionItemKind::Field, SymbolKind::Field)));
+            builder.kind(Some((CompletionItemKind::FIELD, SymbolKind::FIELD)));
             struct_members.push(builder);
         }
         // instantiation
@@ -354,7 +357,7 @@ pub fn index(text: &Rope, tree: &Tree, query: &Query) -> Vec<Symbol> {
             println!("new member {}", symbols.len());
             let mut builder = SymbolBuilder::new(0);
             for cap in m.captures {
-                match query.capture_names()[cap.index as usize].as_str() {
+                match query.capture_names()[cap.index as usize]{
                     "ident" => {
                         builder.ident_node(cap.node.byte_range().into());
                         if let Some((pi, pr)) = parent {
@@ -367,7 +370,7 @@ pub fn index(text: &Rope, tree: &Tree, query: &Query) -> Vec<Symbol> {
                     _ => (),
                 }
             }
-            builder.kind(Some((CompletionItemKind::Module, SymbolKind::Module)));
+            builder.kind(Some((CompletionItemKind::MODULE, SymbolKind::MODULE)));
             symbols.extend(builder.build());
         }
         // variable
@@ -375,7 +378,7 @@ pub fn index(text: &Rope, tree: &Tree, query: &Query) -> Vec<Symbol> {
             println!("new member {}", symbols.len());
             let mut builder = SymbolBuilder::new(0);
             for cap in m.captures {
-                match query.capture_names()[cap.index as usize].as_str() {
+                match query.capture_names()[cap.index as usize]{
                     "ident" => {
                         builder.ident_node(cap.node.byte_range().into());
                         if let Some((pi, pr)) = parent {
@@ -388,7 +391,7 @@ pub fn index(text: &Rope, tree: &Tree, query: &Query) -> Vec<Symbol> {
                     _ => (),
                 }
             }
-            builder.kind(Some((CompletionItemKind::Variable, SymbolKind::Variable)));
+            builder.kind(Some((CompletionItemKind::VARIABLE, SymbolKind::VARIABLE)));
             symbols.extend(builder.build());
         }
     }
@@ -404,14 +407,15 @@ mod tests {
     fn test_index(text: &str) -> Vec<Symbol> {
         let rope = Rope::from(text);
         let tree = parse(&rope).unwrap();
-        let query = &Query::new(tree_sitter_verilog::language(), SYMBOL_QUERY).unwrap();
-        let symbols = index(&rope, &tree, &query);
+        let query = &Query::new(&tree_sitter_verilog::LANGUAGE.into(), SYMBOL_QUERY).unwrap();
+        let symbols = index(&rope, &tree, query);
         for symbol in &symbols {
             println!("{}", range_text(symbol.ident_node, text));
         }
         symbols
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn port(
         ansi: bool,
         query: &Query,
@@ -448,7 +452,7 @@ endmodule
         };
         let mut ind = test_index(&text);
         ind.retain(|s| s.is_port());
-        let port = ind.get(0).unwrap();
+        let port = ind.first().unwrap();
         assert_eq!(port.direction, direction.into());
         assert_eq!(port.signed, signed);
         assert_eq!(range_text(port.ident_node, &text), ident_str);
@@ -476,12 +480,12 @@ endmodule
         for symbol in symbols {
             if (range_text(symbol.ident_node, text) == ident) {
                 if let Some(type_node) = symbol.type_node {
-                    assert_eq!(range_text(type_node, &text), type_str);
+                    assert_eq!(range_text(type_node, text), type_str);
                 } else {
                     assert_eq!("", type_str);
                 }
                 if let Some(parent_node) = symbol.parent {
-                    assert_eq!(range_text(parent_node, &text), parent);
+                    assert_eq!(range_text(parent_node, text), parent);
                 } else {
                     assert_eq!("", parent);
                 }
@@ -507,12 +511,12 @@ endmodule
             if (range_text(symbol.ident_node, text) == ident) {
                 assert_eq!(symbol.direction, direction);
                 if let Some(type_node) = symbol.type_node {
-                    assert_eq!(range_text(type_node, &text), type_str);
+                    assert_eq!(range_text(type_node, text), type_str);
                 } else {
                     assert_eq!("", type_str);
                 }
                 if let Some(parent_node) = symbol.parent {
-                    assert_eq!(range_text(parent_node, &text), parent);
+                    assert_eq!(range_text(parent_node, text), parent);
                 } else {
                     assert_eq!("", parent);
                 }
@@ -525,7 +529,7 @@ endmodule
 
     #[test]
     fn ansi_ports() {
-        let query = &Query::new(tree_sitter_verilog::language(), SYMBOL_QUERY).unwrap();
+        let query = &Query::new(&tree_sitter_verilog::LANGUAGE.into(), SYMBOL_QUERY).unwrap();
         port(true, query, "wire x", "inout", false, "wire", "x", "test");
         port(
             true,
@@ -596,7 +600,7 @@ endmodule
 
     #[test]
     fn non_ansi_ports() {
-        let query = &Query::new(tree_sitter_verilog::language(), SYMBOL_QUERY).unwrap();
+        let query = &Query::new(&tree_sitter_verilog::LANGUAGE.into(), SYMBOL_QUERY).unwrap();
         port(
             false,
             query,
@@ -647,7 +651,7 @@ endprimitive
             "multiplexera",
             "primitive",
             "",
-            CompletionItemKind::Module,
+            CompletionItemKind::MODULE,
         );
         check_port(
             text,
@@ -656,7 +660,7 @@ endprimitive
             PortDirection::Output,
             "",
             "multiplexera",
-            CompletionItemKind::Module,
+            CompletionItemKind::MODULE,
         );
         check_port(
             text,
@@ -665,7 +669,7 @@ endprimitive
             PortDirection::Input,
             "",
             "multiplexera",
-            CompletionItemKind::Module,
+            CompletionItemKind::MODULE,
         );
         let text = r#"
 primitive multiplexerb(output mux, input control, input dataA, input dataB);
@@ -681,7 +685,7 @@ endprimitive
             "multiplexerb",
             "primitive",
             "",
-            CompletionItemKind::Module,
+            CompletionItemKind::MODULE,
         );
         check_port(
             text,
@@ -690,7 +694,7 @@ endprimitive
             PortDirection::Output,
             "",
             "multiplexerb",
-            CompletionItemKind::Module,
+            CompletionItemKind::MODULE,
         );
         check_port(
             text,
@@ -699,7 +703,7 @@ endprimitive
             PortDirection::Input,
             "",
             "multiplexerb",
-            CompletionItemKind::Module,
+            CompletionItemKind::MODULE,
         );
     }
 
@@ -727,7 +731,7 @@ typedef union { int i; shortreal f; } num;
             "IR1",
             "struct",
             "",
-            CompletionItemKind::Struct,
+            CompletionItemKind::STRUCT,
         );
         check_symbol(
             text,
@@ -735,7 +739,7 @@ typedef union { int i; shortreal f; } num;
             "opcode",
             "bit [7:0]",
             "IR1",
-            CompletionItemKind::Field,
+            CompletionItemKind::FIELD,
         );
         check_symbol(
             text,
@@ -743,7 +747,7 @@ typedef union { int i; shortreal f; } num;
             "instruction",
             "struct",
             "",
-            CompletionItemKind::Struct,
+            CompletionItemKind::STRUCT,
         );
         check_symbol(
             text,
@@ -751,9 +755,9 @@ typedef union { int i; shortreal f; } num;
             "light2",
             "enum",
             "",
-            CompletionItemKind::Enum,
+            CompletionItemKind::ENUM,
         );
-        check_symbol(text, &symbols, "num", "union", "", CompletionItemKind::Enum);
+        check_symbol(text, &symbols, "num", "union", "", CompletionItemKind::ENUM);
     }
 
     #[test]
@@ -782,7 +786,7 @@ extern module a #(parameter size= 8, parameter type TP = logic [7:0])
             "My_DataIn",
             "parameter",
             "",
-            CompletionItemKind::Property,
+            CompletionItemKind::PROPERTY,
         );
         check_symbol(
             text,
@@ -790,7 +794,7 @@ extern module a #(parameter size= 8, parameter type TP = logic [7:0])
             "MSB",
             "parameter",
             "generic_fifo1",
-            CompletionItemKind::Property,
+            CompletionItemKind::PROPERTY,
         );
         check_symbol(
             text,
@@ -798,7 +802,7 @@ extern module a #(parameter size= 8, parameter type TP = logic [7:0])
             "LSB",
             "",
             "generic_fifo",
-            CompletionItemKind::Property,
+            CompletionItemKind::PROPERTY,
         );
         check_symbol(
             text,
@@ -806,7 +810,7 @@ extern module a #(parameter size= 8, parameter type TP = logic [7:0])
             "num_out_bits",
             "localparam",
             "generic_decoder",
-            CompletionItemKind::Property,
+            CompletionItemKind::PROPERTY,
         );
     }
 
@@ -844,7 +848,7 @@ endfunction
             "mytask1",
             "task",
             "",
-            CompletionItemKind::Function,
+            CompletionItemKind::FUNCTION,
         );
         check_symbol(
             text,
@@ -852,7 +856,7 @@ endfunction
             "x",
             "int",
             "mytask1",
-            CompletionItemKind::Property,
+            CompletionItemKind::PROPERTY,
         );
         check_symbol(
             text,
@@ -860,7 +864,7 @@ endfunction
             "y",
             "logic",
             "mytask1",
-            CompletionItemKind::Property,
+            CompletionItemKind::PROPERTY,
         );
         check_symbol(
             text,
@@ -868,7 +872,7 @@ endfunction
             "mytask3",
             "task",
             "",
-            CompletionItemKind::Function,
+            CompletionItemKind::FUNCTION,
         );
         check_symbol(
             text,
@@ -876,7 +880,7 @@ endfunction
             "a",
             "",
             "mytask3",
-            CompletionItemKind::Property,
+            CompletionItemKind::PROPERTY,
         );
         check_symbol(
             text,
@@ -884,7 +888,7 @@ endfunction
             "u",
             "logic [15:0]",
             "mytask3",
-            CompletionItemKind::Property,
+            CompletionItemKind::PROPERTY,
         );
         check_symbol(
             text,
@@ -892,7 +896,7 @@ endfunction
             "mytask2",
             "task",
             "",
-            CompletionItemKind::Function,
+            CompletionItemKind::FUNCTION,
         );
         check_symbol(
             text,
@@ -900,7 +904,7 @@ endfunction
             "f",
             "",
             "mytask2",
-            CompletionItemKind::Property,
+            CompletionItemKind::PROPERTY,
         );
         check_symbol(
             text,
@@ -908,7 +912,7 @@ endfunction
             "myfunc4",
             "function",
             "",
-            CompletionItemKind::Function,
+            CompletionItemKind::FUNCTION,
         );
         check_symbol(
             text,
@@ -916,7 +920,7 @@ endfunction
             "p",
             "",
             "myfunc4",
-            CompletionItemKind::Property,
+            CompletionItemKind::PROPERTY,
         );
         check_symbol(
             text,
@@ -924,7 +928,7 @@ endfunction
             "q",
             "q[3:0]",
             "myfunc4",
-            CompletionItemKind::Property,
+            CompletionItemKind::PROPERTY,
         );
         check_symbol(
             text,
@@ -932,7 +936,7 @@ endfunction
             "myfunc2",
             "function",
             "",
-            CompletionItemKind::Function,
+            CompletionItemKind::FUNCTION,
         );
         check_symbol(
             text,
@@ -940,7 +944,7 @@ endfunction
             "j",
             "",
             "myfunc2",
-            CompletionItemKind::Property,
+            CompletionItemKind::PROPERTY,
         );
         check_symbol(
             text,
@@ -948,7 +952,7 @@ endfunction
             "k",
             "",
             "myfunc2",
-            CompletionItemKind::Property,
+            CompletionItemKind::PROPERTY,
         );
     }
 
@@ -981,7 +985,7 @@ endmodule
             "*",
             "p",
             "top1",
-            CompletionItemKind::Property,
+            CompletionItemKind::PROPERTY,
         );
         check_symbol(
             text,
@@ -989,7 +993,7 @@ endmodule
             "ORIGINAL",
             "q",
             "top2",
-            CompletionItemKind::Property,
+            CompletionItemKind::PROPERTY,
         );
     }
 
@@ -1023,7 +1027,7 @@ endmodule
             "alu1",
             "alu",
             "alu_accum1",
-            CompletionItemKind::Module,
+            CompletionItemKind::MODULE,
         );
         check_symbol(
             text,
@@ -1031,7 +1035,7 @@ endmodule
             "accum",
             "accum",
             "alu_accum1",
-            CompletionItemKind::Module,
+            CompletionItemKind::MODULE,
         );
         check_symbol(
             text,
@@ -1039,7 +1043,7 @@ endmodule
             "xtend3",
             "xtend",
             "alu_accum1",
-            CompletionItemKind::Module,
+            CompletionItemKind::MODULE,
         );
     }
 
@@ -1076,7 +1080,7 @@ endclass
             "test1",
             "module",
             "",
-            CompletionItemKind::Module,
+            CompletionItemKind::MODULE,
         );
         check_symbol(
             text,
@@ -1084,7 +1088,7 @@ endclass
             "test2",
             "program",
             "",
-            CompletionItemKind::Module,
+            CompletionItemKind::MODULE,
         );
         check_symbol(
             text,
@@ -1092,7 +1096,7 @@ endclass
             "test3",
             "interface",
             "",
-            CompletionItemKind::Interface,
+            CompletionItemKind::INTERFACE,
         );
         check_symbol(
             text,
@@ -1100,7 +1104,7 @@ endclass
             "test4",
             "interface",
             "",
-            CompletionItemKind::Interface,
+            CompletionItemKind::INTERFACE,
         );
         check_symbol(
             text,
@@ -1108,7 +1112,7 @@ endclass
             "test5",
             "checker",
             "",
-            CompletionItemKind::Module,
+            CompletionItemKind::MODULE,
         );
         check_symbol(
             text,
@@ -1116,7 +1120,7 @@ endclass
             "test6",
             "package",
             "",
-            CompletionItemKind::Module,
+            CompletionItemKind::MODULE,
         );
         check_symbol(
             text,
@@ -1124,7 +1128,7 @@ endclass
             "test7",
             "class",
             "",
-            CompletionItemKind::Class,
+            CompletionItemKind::CLASS,
         );
     }
 
@@ -1158,34 +1162,34 @@ module test;
 endmodule
     "#;
         let s = test_index(t);
-        check_symbol(t, &s, "a", "wire", "test", CompletionItemKind::Variable);
-        check_symbol(t, &s, "b", "wand", "test", CompletionItemKind::Variable);
-        check_symbol(t, &s, "c", "wor", "test", CompletionItemKind::Variable);
-        check_symbol(t, &s, "d", "tri", "test", CompletionItemKind::Variable);
-        check_symbol(t, &s, "e", "triand", "test", CompletionItemKind::Variable);
-        check_symbol(t, &s, "f", "trior", "test", CompletionItemKind::Variable);
-        check_symbol(t, &s, "g", "tri0", "test", CompletionItemKind::Variable);
-        check_symbol(t, &s, "h", "tri1", "test", CompletionItemKind::Variable);
+        check_symbol(t, &s, "a", "wire", "test", CompletionItemKind::VARIABLE);
+        check_symbol(t, &s, "b", "wand", "test", CompletionItemKind::VARIABLE);
+        check_symbol(t, &s, "c", "wor", "test", CompletionItemKind::VARIABLE);
+        check_symbol(t, &s, "d", "tri", "test", CompletionItemKind::VARIABLE);
+        check_symbol(t, &s, "e", "triand", "test", CompletionItemKind::VARIABLE);
+        check_symbol(t, &s, "f", "trior", "test", CompletionItemKind::VARIABLE);
+        check_symbol(t, &s, "g", "tri0", "test", CompletionItemKind::VARIABLE);
+        check_symbol(t, &s, "h", "tri1", "test", CompletionItemKind::VARIABLE);
         check_symbol(
             t,
             &s,
             "cap2",
             "trireg",
             "test",
-            CompletionItemKind::Variable,
+            CompletionItemKind::VARIABLE,
         );
-        check_symbol(t, &s, "j", "supply0", "test", CompletionItemKind::Variable);
-        check_symbol(t, &s, "k", "supply1", "test", CompletionItemKind::Variable);
-        check_symbol(t, &s, "l", "uwire", "test", CompletionItemKind::Variable);
-        check_symbol(t, &s, "wTsum", "T", "test", CompletionItemKind::Variable);
-        check_symbol(t, &s, "TR", "real", "test", CompletionItemKind::Variable);
+        check_symbol(t, &s, "j", "supply0", "test", CompletionItemKind::VARIABLE);
+        check_symbol(t, &s, "k", "supply1", "test", CompletionItemKind::VARIABLE);
+        check_symbol(t, &s, "l", "uwire", "test", CompletionItemKind::VARIABLE);
+        check_symbol(t, &s, "wTsum", "T", "test", CompletionItemKind::VARIABLE);
+        check_symbol(t, &s, "TR", "real", "test", CompletionItemKind::VARIABLE);
         check_symbol(
             t,
             &s,
             "cap1",
             "trireg",
             "test",
-            CompletionItemKind::Variable,
+            CompletionItemKind::VARIABLE,
         );
         check_symbol(
             t,
@@ -1193,16 +1197,16 @@ endmodule
             "addressT",
             "logic",
             "test",
-            CompletionItemKind::Variable,
+            CompletionItemKind::VARIABLE,
         );
-        check_symbol(t, &s, "w1", "wire", "test", CompletionItemKind::Variable);
+        check_symbol(t, &s, "w1", "wire", "test", CompletionItemKind::VARIABLE);
         check_symbol(
             t,
             &s,
             "memsig",
             "wire",
             "test",
-            CompletionItemKind::Variable,
+            CompletionItemKind::VARIABLE,
         );
     }
 
@@ -1230,28 +1234,28 @@ module test;
 endmodule
     "#;
         let s = test_index(t);
-        check_symbol(t, &s, "a", "byte", "test", CompletionItemKind::Variable);
-        check_symbol(t, &s, "b", "int", "test", CompletionItemKind::Variable);
-        check_symbol(t, &s, "c", "shortint", "test", CompletionItemKind::Variable);
-        check_symbol(t, &s, "d", "longint", "test", CompletionItemKind::Variable);
-        check_symbol(t, &s, "e", "bit", "test", CompletionItemKind::Variable);
-        check_symbol(t, &s, "f", "reg", "test", CompletionItemKind::Variable);
-        check_symbol(t, &s, "g", "integer", "test", CompletionItemKind::Variable);
-        check_symbol(t, &s, "h", "time", "test", CompletionItemKind::Variable);
-        check_symbol(t, &s, "i", "logic", "test", CompletionItemKind::Variable);
-        check_symbol(t, &s, "k", "logic", "test", CompletionItemKind::Variable);
-        check_symbol(t, &s, "l", "real", "test", CompletionItemKind::Variable);
+        check_symbol(t, &s, "a", "byte", "test", CompletionItemKind::VARIABLE);
+        check_symbol(t, &s, "b", "int", "test", CompletionItemKind::VARIABLE);
+        check_symbol(t, &s, "c", "shortint", "test", CompletionItemKind::VARIABLE);
+        check_symbol(t, &s, "d", "longint", "test", CompletionItemKind::VARIABLE);
+        check_symbol(t, &s, "e", "bit", "test", CompletionItemKind::VARIABLE);
+        check_symbol(t, &s, "f", "reg", "test", CompletionItemKind::VARIABLE);
+        check_symbol(t, &s, "g", "integer", "test", CompletionItemKind::VARIABLE);
+        check_symbol(t, &s, "h", "time", "test", CompletionItemKind::VARIABLE);
+        check_symbol(t, &s, "i", "logic", "test", CompletionItemKind::VARIABLE);
+        check_symbol(t, &s, "k", "logic", "test", CompletionItemKind::VARIABLE);
+        check_symbol(t, &s, "l", "real", "test", CompletionItemKind::VARIABLE);
         check_symbol(
             t,
             &s,
             "m",
             "shortreal",
             "test",
-            CompletionItemKind::Variable,
+            CompletionItemKind::VARIABLE,
         );
-        check_symbol(t, &s, "n", "string", "test", CompletionItemKind::Variable);
-        check_symbol(t, &s, "o", "chandle", "test", CompletionItemKind::Variable);
-        check_symbol(t, &s, "r_t", "logic", "test", CompletionItemKind::Variable);
-        check_symbol(t, &s, "p", "var", "test", CompletionItemKind::Variable);
+        check_symbol(t, &s, "n", "string", "test", CompletionItemKind::VARIABLE);
+        check_symbol(t, &s, "o", "chandle", "test", CompletionItemKind::VARIABLE);
+        check_symbol(t, &s, "r_t", "logic", "test", CompletionItemKind::VARIABLE);
+        check_symbol(t, &s, "p", "var", "test", CompletionItemKind::VARIABLE);
     }
 }
