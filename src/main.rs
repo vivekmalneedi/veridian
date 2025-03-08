@@ -2,6 +2,7 @@
 mod symbol;
 
 use symbol::*;
+mod completion;
 mod server;
 mod sources;
 

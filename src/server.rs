@@ -312,7 +312,7 @@ impl LanguageServer for Backend {
         self.server.did_save(params);
     }
     async fn completion(&self, params: CompletionParams) -> Result<Option<CompletionResponse>> {
-        Ok(None)
+        Ok(self.server.completion(params))
     }
     async fn goto_definition(
         &self,

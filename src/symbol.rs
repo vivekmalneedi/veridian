@@ -37,6 +37,29 @@ impl Symbol {
     fn is_port(&self) -> bool {
         self.direction != PortDirection::None
     }
+
+    pub fn to_completion(self, text: &Rope) -> CompletionItem {
+        CompletionItem {
+            label: text.byte_slice(self.ident_node).to_string(),
+            label_details: None,
+            kind: Some(self.ckind),
+            detail: self.type_node.map(|t| text.byte_slice(t).to_string()),
+            documentation: todo!(),
+            deprecated: None,
+            preselect: None,
+            sort_text: None,
+            filter_text: None,
+            insert_text: None,
+            insert_text_format: None,
+            insert_text_mode: None,
+            text_edit: None,
+            additional_text_edits: None,
+            command: None,
+            commit_characters: None,
+            data: None,
+            tags: None,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
