@@ -1,6 +1,6 @@
 use crate::sources::*;
 
-use crate::completion::keyword::*;
+// use crate::completion::keyword::*;
 use flexi_logger::LoggerHandle;
 use log::{debug, info, warn};
 use path_clean::PathClean;
@@ -18,9 +18,9 @@ use which::which;
 
 pub struct LSPServer {
     pub srcs: Sources,
-    pub key_comps: Vec<CompletionItem>,
-    pub sys_tasks: Vec<CompletionItem>,
-    pub directives: Vec<CompletionItem>,
+    //pub key_comps: Vec<CompletionItem>,
+    //pub sys_tasks: Vec<CompletionItem>,
+    //pub directives: Vec<CompletionItem>,
     pub conf: RwLock<ProjectConfig>,
     pub log_handle: Mutex<Option<LoggerHandle>>,
 }
@@ -29,9 +29,9 @@ impl LSPServer {
     pub fn new(log_handle: Option<LoggerHandle>) -> LSPServer {
         LSPServer {
             srcs: Sources::new(),
-            key_comps: keyword_completions(KEYWORDS),
-            sys_tasks: other_completions(SYS_TASKS),
-            directives: other_completions(DIRECTIVES),
+            //key_comps: keyword_completions(KEYWORDS),
+            //sys_tasks: other_completions(SYS_TASKS),
+            //directives: other_completions(DIRECTIVES),
             conf: RwLock::new(ProjectConfig::default()),
             log_handle: Mutex::new(log_handle),
         }
@@ -303,60 +303,46 @@ impl LanguageServer for Backend {
         Ok(())
     }
     async fn did_open(&self, params: DidOpenTextDocumentParams) {
-        let diagnostics = self.server.did_open(params);
-        self.client
-            .publish_diagnostics(
-                diagnostics.uri,
-                diagnostics.diagnostics,
-                diagnostics.version,
-            )
-            .await;
+        self.server.did_open(params);
     }
     async fn did_change(&self, params: DidChangeTextDocumentParams) {
         self.server.did_change(params);
     }
     async fn did_save(&self, params: DidSaveTextDocumentParams) {
-        let diagnostics = self.server.did_save(params);
-        self.client
-            .publish_diagnostics(
-                diagnostics.uri,
-                diagnostics.diagnostics,
-                diagnostics.version,
-            )
-            .await;
+        self.server.did_save(params);
     }
     async fn completion(&self, params: CompletionParams) -> Result<Option<CompletionResponse>> {
-        Ok(self.server.completion(params))
+        Ok(None)
     }
     async fn goto_definition(
         &self,
         params: GotoDefinitionParams,
     ) -> Result<Option<GotoDefinitionResponse>> {
-        Ok(self.server.goto_definition(params))
+        Ok(None)
     }
     async fn hover(&self, params: HoverParams) -> Result<Option<Hover>> {
-        Ok(self.server.hover(params))
+        Ok(None)
     }
     async fn document_symbol(
         &self,
         params: DocumentSymbolParams,
     ) -> Result<Option<DocumentSymbolResponse>> {
-        Ok(self.server.document_symbol(params))
+        Ok(None)
     }
     async fn formatting(&self, params: DocumentFormattingParams) -> Result<Option<Vec<TextEdit>>> {
-        Ok(self.server.formatting(params))
+        Ok(None)
     }
     async fn range_formatting(
         &self,
         params: DocumentRangeFormattingParams,
     ) -> Result<Option<Vec<TextEdit>>> {
-        Ok(self.server.range_formatting(params))
+        Ok(None)
     }
     async fn document_highlight(
         &self,
         params: DocumentHighlightParams,
     ) -> Result<Option<Vec<DocumentHighlight>>> {
-        Ok(self.server.document_highlight(params))
+        Ok(None)
     }
 }
 

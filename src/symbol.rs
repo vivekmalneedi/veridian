@@ -1,15 +1,31 @@
 use ropey::{iter::Bytes, Rope};
+use std::ops::Bound;
+use std::ops::RangeBounds;
 use std::time::{Duration, Instant};
+use streaming_iterator::StreamingIterator;
 use tower_lsp::lsp_types::*;
 use tree_sitter::{Node, Point, Query, QueryCursor, QueryError, TextProvider, Tree};
-use streaming_iterator::StreamingIterator;
+
+/// The Sources struct manages all source files
+pub struct Sources {
+    // all files
+    pub files: Vec<Source>,
+    pub symbols: Vec<Vec<Symbol>>,
+}
+
+pub struct Source {
+    pub uri: Url,
+    pub text: Rope,
+    pub version: i32,
+    pub syntax_tree: Option<Tree>,
+}
 
 #[derive(Debug, Copy, Clone)]
 pub struct Symbol {
-    ident_node: ByteRange,
+    pub ident_node: ByteRange,
     type_node: Option<ByteRange>,
-    scope_node: Option<ByteRange>,
-    parent: Option<ByteRange>,
+    pub scope_node: Option<ByteRange>,
+    pub parent: Option<ByteRange>,
     file: usize,
     ckind: CompletionItemKind,
     skind: SymbolKind,
@@ -25,15 +41,25 @@ impl Symbol {
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct ByteRange {
-    start: usize,
-    end: usize,
+    pub start: usize,
+    pub end: usize,
+}
+
+impl RangeBounds<usize> for ByteRange {
+    fn start_bound(&self) -> Bound<&usize> {
+        Bound::Included(&self.start)
+    }
+
+    fn end_bound(&self) -> Bound<&usize> {
+        Bound::Excluded(&self.end)
+    }
 }
 
 impl ByteRange {
-    fn contains(&self, idx: usize) -> bool {
+    pub fn contains(&self, idx: usize) -> bool {
         idx >= self.start && idx < self.end
     }
-    fn contains_range(&self, range: Self) -> bool {
+    pub fn contains_range(&self, range: Self) -> bool {
         range.start >= self.start && range.start < self.end
     }
 }
@@ -178,8 +204,8 @@ impl<'a> Iterator for RopeChunks<'a> {
 pub fn parse(text: &Rope) -> Option<Tree> {
     let mut parser = tree_sitter::Parser::new();
     parser
-    .set_language(&tree_sitter_verilog::LANGUAGE.into())
-    .expect("Error loading Verilog parser");
+        .set_language(&tree_sitter_verilog::LANGUAGE.into())
+        .expect("Error loading Verilog parser");
     parser.parse_with(
         &mut |offset: usize, pos: Point| {
             let (chunk, chunk_byte_idx, _, _) = text.chunk_at_byte(offset);
@@ -189,7 +215,7 @@ pub fn parse(text: &Rope) -> Option<Tree> {
     )
 }
 
-pub fn index(text: &Rope, tree: &Tree, query: &Query) -> Vec<Symbol> {
+pub fn index_text(text: &Rope, tree: &Tree, query: &Query) -> Vec<Symbol> {
     let mut symbols: Vec<Symbol> = Vec::new();
     let mut struct_members: Vec<SymbolBuilder> = Vec::new();
     let mut cursor = QueryCursor::new();
@@ -292,7 +318,7 @@ pub fn index(text: &Rope, tree: &Tree, query: &Query) -> Vec<Symbol> {
             println!("new param");
             let mut builder = SymbolBuilder::new(0);
             for cap in m.captures {
-                match query.capture_names()[cap.index as usize]{
+                match query.capture_names()[cap.index as usize] {
                     "ident" => {
                         builder.ident_node(cap.node.byte_range().into());
                         if let Some((pi, pr)) = parent {
@@ -314,7 +340,7 @@ pub fn index(text: &Rope, tree: &Tree, query: &Query) -> Vec<Symbol> {
             println!("new member {}", symbols.len());
             let mut builder = SymbolBuilder::new(0);
             for cap in m.captures {
-                match query.capture_names()[cap.index as usize]{
+                match query.capture_names()[cap.index as usize] {
                     "ident" => {
                         builder.ident_node(cap.node.byte_range().into());
                         if let Some((pi, pr)) = parent {
@@ -335,7 +361,7 @@ pub fn index(text: &Rope, tree: &Tree, query: &Query) -> Vec<Symbol> {
             println!("new member {}", symbols.len());
             let mut builder = SymbolBuilder::new(0);
             for cap in m.captures {
-                match query.capture_names()[cap.index as usize]{
+                match query.capture_names()[cap.index as usize] {
                     "ident" => {
                         builder.ident_node(cap.node.byte_range().into());
                         if let Some((pi, pr)) = parent {
@@ -357,7 +383,7 @@ pub fn index(text: &Rope, tree: &Tree, query: &Query) -> Vec<Symbol> {
             println!("new member {}", symbols.len());
             let mut builder = SymbolBuilder::new(0);
             for cap in m.captures {
-                match query.capture_names()[cap.index as usize]{
+                match query.capture_names()[cap.index as usize] {
                     "ident" => {
                         builder.ident_node(cap.node.byte_range().into());
                         if let Some((pi, pr)) = parent {
@@ -378,7 +404,7 @@ pub fn index(text: &Rope, tree: &Tree, query: &Query) -> Vec<Symbol> {
             println!("new member {}", symbols.len());
             let mut builder = SymbolBuilder::new(0);
             for cap in m.captures {
-                match query.capture_names()[cap.index as usize]{
+                match query.capture_names()[cap.index as usize] {
                     "ident" => {
                         builder.ident_node(cap.node.byte_range().into());
                         if let Some((pi, pr)) = parent {
@@ -398,22 +424,39 @@ pub fn index(text: &Rope, tree: &Tree, query: &Query) -> Vec<Symbol> {
     symbols
 }
 
-const SYMBOL_QUERY: &str = include_str!("query.scm");
+pub const SYMBOL_QUERY: &str = include_str!("query.scm");
+
+pub fn range_text(range: ByteRange, text: &str) -> &str {
+    text[range.start..range.end].trim()
+}
+
+pub fn test_index(text: &str) -> Vec<Symbol> {
+    let rope = Rope::from(text);
+    let tree = parse(&rope).unwrap();
+    let query = &Query::new(&tree_sitter_verilog::LANGUAGE.into(), SYMBOL_QUERY).unwrap();
+    let symbols = index_text(&rope, &tree, query);
+    for symbol in &symbols {
+        let parent = match symbol.parent {
+            Some(p) => range_text(p, text),
+            None => "",
+        };
+        let scope = match symbol.scope_node {
+            Some(p) => format!("{}-{}", p.start, p.end),
+            None => "".to_string(),
+        };
+        println!(
+            "sym: {}, parent: {}, scope: {}",
+            range_text(symbol.ident_node, text),
+            parent,
+            scope
+        );
+    }
+    symbols
+}
 
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    fn test_index(text: &str) -> Vec<Symbol> {
-        let rope = Rope::from(text);
-        let tree = parse(&rope).unwrap();
-        let query = &Query::new(&tree_sitter_verilog::LANGUAGE.into(), SYMBOL_QUERY).unwrap();
-        let symbols = index(&rope, &tree, query);
-        for symbol in &symbols {
-            println!("{}", range_text(symbol.ident_node, text));
-        }
-        symbols
-    }
 
     #[allow(clippy::too_many_arguments)]
     fn port(
@@ -462,10 +505,6 @@ endmodule
             assert_eq!("", type_str);
         }
         assert_eq!(range_text(port.parent.unwrap(), &text), parent_str);
-    }
-
-    fn range_text(range: ByteRange, text: &str) -> &str {
-        &text[range.start..range.end]
     }
 
     fn check_symbol(

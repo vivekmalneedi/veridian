@@ -1,6 +1,10 @@
 #[allow(unused)]
 mod symbol;
 
+use symbol::*;
+mod server;
+mod sources;
+
 // use log::info;
 // use std::sync::Arc;
 // use structopt::StructOpt;
@@ -36,5 +40,79 @@ mod symbol;
 // }
 
 fn main() {
+    let text = "
+interface a;
+    modport b (input c);
+endinterface
+module test;
+endmodule
+module test1; 
+    logic itest;
+endmodule
+struct {
+  bit [7:0]  opcode;
+  bit [23:0] addr;
+} IR1;
 
+typedef struct {
+  bit [7:0]  opcode;
+  bit [23:0] addr;
+} instruction;
+
+enum {red, yellow, green} light1, light2;
+
+typedef union { int i; shortreal f; } num;
+";
+    let syms = test_index(text);
+    let tok = "i";
+    let pos = 80;
+    let mut cand: Vec<Symbol> = Vec::new();
+    let mut stack: Vec<Symbol> = Vec::new();
+    for sym in syms {
+        // pop scope from stack if it doesn't contain sym
+        if let Some(scope) = stack.last().and_then(|s| s.scope_node) {
+            if !scope.contains(sym.ident_node.start) {
+                stack.pop();
+            }
+        }
+        // push scope to stack
+        if let Some(scope) = sym.scope_node {
+            // multiple definitions can create equivalent scopes
+            if let Some(last) = stack.last().and_then(|s| s.scope_node) {
+                if scope != last {
+                    stack.push(sym);
+                }
+            } else {
+                stack.push(sym);
+            }
+        }
+        // check if parent of sym contains pos
+        if sym.parent.is_some() {
+            if let Some(scope) = stack.last().and_then(|s| s.scope_node) {
+                if !scope.contains(pos) {
+                    continue;
+                }
+            }
+        }
+        print!("stack: ");
+        for sym in &stack {
+            print!("{} ", range_text(sym.ident_node, text));
+        }
+        println!();
+        if range_text(sym.ident_node, text).starts_with(tok) {
+            cand.push(sym);
+        }
+    }
+    println!("candidates:");
+    for sym in cand {
+        let parent = match sym.parent {
+            Some(p) => range_text(p, text),
+            None => "",
+        };
+        println!(
+            "sym: {}, parent: {}",
+            range_text(sym.ident_node, text),
+            parent
+        );
+    }
 }
