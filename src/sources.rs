@@ -16,13 +16,14 @@ use tree_sitter::{InputEdit, Point, Query, Tree};
 impl LSPServer {
     pub fn did_open(&self, params: DidOpenTextDocumentParams) {
         let document: TextDocumentItem = params.text_document;
+        let uri = document.uri.clone();
         debug!("did_open: {}", &document.uri);
         // check if doc is already added
         let mut files = self.srcs.files.lock().unwrap();
         if files.contains_key(&document.uri) {
             // convert to a did_change that replace the entire text
             self.did_change(DidChangeTextDocumentParams {
-                text_document: VersionedTextDocumentIdentifier::new(document.uri, document.version),
+                text_document: VersionedTextDocumentIdentifier::new(uri.clone(), document.version),
                 content_changes: vec![TextDocumentContentChangeEvent {
                     range: None,
                     range_length: None,
@@ -38,6 +39,11 @@ impl LSPServer {
                 },
             );
         }
+        let srcs = self.srcs.files.clone();
+        let index = self.srcs.index.clone();
+        // tokio::task::spawn_blocking(|| parse(uri, srcs, index, Vec::new()));
+        drop(files);
+        parse(uri, srcs, index, Vec::new());
         // TODO: trigger diagnostics
     }
 
@@ -74,10 +80,13 @@ impl LSPServer {
                 edits.push(edit);
             }
         }
+
         file.version = params.text_document.version;
+        drop(files);
         let srcs = self.srcs.files.clone();
         let index = self.srcs.index.clone();
-        tokio::task::spawn_blocking(|| parse(params.text_document.uri, srcs, index, edits));
+        // tokio::task::spawn_blocking(|| parse(params.text_document.uri, srcs, index, edits));
+        parse(params.text_document.uri, srcs, index, edits);
     }
 
     pub fn did_save(&self, params: DidSaveTextDocumentParams) {
@@ -301,6 +310,10 @@ impl Sources {
         let index = index.get(uri).unwrap();
         let mut cand: Vec<Symbol> = Vec::new();
         let mut stack: Vec<Symbol> = Vec::new();
+
+        let mut type_token = "".to_string();
+        dbg!(&token);
+        // find symbol that matches token
         for sym in &index.syms {
             // pop scope from stack if it doesn't contain sym
             if let Some(scope) = stack.last().and_then(|s| s.scope_node) {
@@ -308,6 +321,7 @@ impl Sources {
                     stack.pop();
                 }
             }
+            // println!("2");
             // push scope to stack
             if let Some(scope) = sym.scope_node {
                 // multiple definitions can create equivalent scopes
@@ -319,21 +333,109 @@ impl Sources {
                     stack.push(*sym);
                 }
             }
+
+            // println!("3");
+            // dbg!(stack.last());
+            // dbg!(byte_idx);
+            // dbg!(sym.parent);
+            // let stk = stack.last().unwrap();
+            // if let Some(scp) = stk.scope_node {
+            //     dbg!(index.text.byte_to_pos(scp.start));
+            //     dbg!(index.text.byte_to_pos(scp.end));
+            // }
+            // let parent = match stk.parent {
+            //     Some(p) => index.text.byte_slice(p).to_string(),
+            //     None => "".to_string(),
+            // };
+            // let type_str = match stk.type_node {
+            //     Some(p) => index.text.byte_slice(p).to_string(),
+            //     None => "".to_string(),
+            // };
+            // println!(
+            //     "stack: {}, parent: {}, type: {}",
+            //     index.text.byte_slice(stk.ident_node),
+            //     parent, type_str
+            // );
             // check if parent scope of sym contains pos
-            if let Some(parent) = sym.parent {
+            if sym.parent.is_some() {
                 if let Some(scope) = stack.last().and_then(|s| s.scope_node) {
                     if !scope.contains(byte_idx) {
                         continue;
                     }
                 }
+            }
 
-                // check if symbol parent identifier equals token
-                let text = index.text.byte_slice(parent).chars();
-                if text.eq(token.chars()) {
-                    cand.push(*sym);
+            // println!("4");
+            // check if symbol identifier equals token
+            if let Some(type_node) = sym.type_node {
+                if index.text.byte_slice(sym.ident_node) == token {
+                    type_token = index.text.byte_slice(type_node).to_string();
                 }
             }
         }
+        dbg!(&type_token);
+
+        for sym in &index.syms {
+            let parent = match sym.parent {
+                Some(p) => index.text.byte_slice(p).to_string(),
+                None => "".to_string(),
+            };
+            println!(
+                "sym: {}, parent: {}",
+                index.text.byte_slice(sym.ident_node),
+                parent
+            );
+
+            println!("1");
+            // pop scope from stack if it doesn't contain sym
+            if let Some(scope) = stack.last().and_then(|s| s.scope_node) {
+                if !scope.contains(sym.ident_node.start) {
+                    stack.pop();
+                }
+            }
+            println!("2");
+            // push scope to stack
+            if let Some(scope) = sym.scope_node {
+                // multiple definitions can create equivalent scopes
+                if let Some(last) = stack.last().and_then(|s| s.scope_node) {
+                    if scope != last {
+                        stack.push(*sym);
+                    }
+                } else {
+                    stack.push(*sym);
+                }
+            }
+            // check if scope in scope stack contains bidx
+            if let Some(parent) = sym.parent {
+                println!("3");
+                // add children of token
+                if index.text.byte_slice(parent) == token {
+                    println!("4");
+                    cand.push(*sym);
+                    continue;
+                }
+                // add sym if parent == type token and in global scope
+                if stack.len() == 1 && index.text.byte_slice(parent) == type_token {
+                    cand.push(*sym);
+                    continue;
+                }
+                // add sym if parent == type token and grand parent contains byte_idx
+                if stack.len() > 1 {
+                    if let Some(stk) = stack.get(stack.len() - 2) {
+                        if let Some(scope_node) = stk.scope_node {
+                            if scope_node.contains(byte_idx) {
+                                // check if symbol parent identifier equals token
+                                if index.text.byte_slice(parent) == type_token {
+                                    cand.push(*sym);
+                                    continue;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        dbg!(&cand);
         cand
     }
 }
@@ -421,5 +523,102 @@ impl LSPSupport for RopeSlice<'_> {
     }
     fn apply_change(&mut self, _: &TextDocumentContentChangeEvent) {
         panic!("can't edit a rope slice");
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::support::test_init;
+
+    impl Index {
+        fn contains(&self, ident: &str) -> bool {
+            for sym in &self.syms {
+                if self.text.byte_slice(sym.ident_node) == ident {
+                    return true;
+                }
+            }
+            false
+        }
+    }
+
+    #[test]
+    fn test_open_and_change() {
+        test_init();
+        let server = LSPServer::new(None);
+        let uri = Url::parse("file:///test.sv").unwrap();
+        let text = r#"module test;
+  logic abc;
+endmodule"#;
+
+        let open_params = DidOpenTextDocumentParams {
+            text_document: TextDocumentItem {
+                uri: uri.clone(),
+                language_id: "systemverilog".to_owned(),
+                version: 0,
+                text: text.to_owned(),
+            },
+        };
+        println!("running did open...");
+        server.did_open(open_params);
+        println!("did open complete");
+        let files = server.srcs.files.lock().unwrap();
+        let file = files.get(&uri).expect("file not in files map");
+        assert_eq!(file.text.to_string(), text.to_owned());
+        drop(files);
+
+        let change_params = DidChangeTextDocumentParams {
+            text_document: VersionedTextDocumentIdentifier {
+                uri: uri.clone(),
+                version: 1,
+            },
+            content_changes: vec![TextDocumentContentChangeEvent {
+                range: Some(Range {
+                    start: Position {
+                        line: 1,
+                        character: 8,
+                    },
+                    end: Position {
+                        line: 1,
+                        character: 11,
+                    },
+                }),
+                range_length: None,
+                text: "var1".to_owned(),
+            }],
+        };
+        server.did_change(change_params);
+        let files = server.srcs.files.lock().unwrap();
+        let file = files.get(&uri).expect("file not in files map");
+        assert_eq!(
+            file.text.to_string(),
+            r#"module test;
+  logic var1;
+endmodule"#
+                .to_owned()
+        );
+        assert_eq!(file.version, 1);
+    }
+
+    #[test]
+    fn test_fault_tolerance() {
+        test_init();
+        let server = LSPServer::new(None);
+        let uri = Url::parse("file:///test.sv").unwrap();
+        let text = r#"module test;
+  logic abc
+endmodule"#;
+        let open_params = DidOpenTextDocumentParams {
+            text_document: TextDocumentItem {
+                uri: uri.clone(),
+                language_id: "systemverilog".to_owned(),
+                version: 0,
+                text: text.to_owned(),
+            },
+        };
+        server.did_open(open_params);
+        let index = server.srcs.index.lock().unwrap();
+        let file = index.get(&uri).expect("file not in files map");
+        assert!(file.contains("test"));
     }
 }

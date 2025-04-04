@@ -23,7 +23,7 @@ pub struct Source {
 #[derive(Debug, Copy, Clone)]
 pub struct Symbol {
     pub ident_node: ByteRange,
-    type_node: Option<ByteRange>,
+    pub type_node: Option<ByteRange>,
     pub scope_node: Option<ByteRange>,
     pub parent: Option<ByteRange>,
     file: usize,
@@ -44,7 +44,7 @@ impl Symbol {
             label_details: None,
             kind: Some(self.ckind),
             detail: self.type_node.map(|t| text.byte_slice(t).to_string()),
-            documentation: todo!(),
+            documentation: None,
             deprecated: None,
             preselect: None,
             sort_text: None,
@@ -322,7 +322,6 @@ pub fn index_text(text: &Rope, tree: &Tree, query: &Query) -> Vec<Symbol> {
                             }
                         }
                     }
-                    "port" => builder.scope_node(cap.node.byte_range().into()),
                     "type" => builder.type_node(cap.node.byte_range().into()),
                     "direction" => {
                         builder.direction(text.slice(cap.node.byte_range()).to_string().as_str())

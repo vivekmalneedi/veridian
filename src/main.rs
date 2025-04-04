@@ -5,6 +5,7 @@ use symbol::*;
 mod completion;
 mod server;
 mod sources;
+mod support;
 
 // use log::info;
 // use std::sync::Arc;
