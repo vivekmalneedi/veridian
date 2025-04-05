@@ -12,9 +12,8 @@ use std::process::{Command, Stdio};
 use tower_lsp::lsp_types::*;
 #[cfg(feature = "slang")]
 use veridian_slang::slang_compile;
-use walkdir::DirEntry;
 #[cfg(feature = "slang")]
-use walkdir::WalkDir;
+use walkdir::{DirEntry, WalkDir};
 
 #[cfg(feature = "slang")]
 pub fn get_diagnostics(
@@ -153,6 +152,7 @@ fn get_paths(files: Vec<Url>, search_workdir: bool) -> Vec<PathBuf> {
     paths
 }
 
+#[cfg(feature = "slang")]
 pub fn is_hidden(entry: &DirEntry) -> bool {
     entry
         .file_name()

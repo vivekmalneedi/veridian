@@ -1,26 +1,11 @@
-use ropey::{iter::Bytes, Rope};
+use ropey::Rope;
 use std::ops::Bound;
 use std::ops::RangeBounds;
-use std::time::{Duration, Instant};
 use streaming_iterator::StreamingIterator;
 use tower_lsp::lsp_types::*;
-use tree_sitter::{Node, Point, Query, QueryCursor, QueryError, TextProvider, Tree};
+use tree_sitter::{Node, Query, QueryCursor, Tree};
 
 use crate::sources::LSPSupport;
-
-/// The Sources struct manages all source files
-pub struct Sources {
-    // all files
-    pub files: Vec<Source>,
-    pub symbols: Vec<Vec<Symbol>>,
-}
-
-pub struct Source {
-    pub uri: Url,
-    pub text: Rope,
-    pub version: i32,
-    pub syntax_tree: Option<Tree>,
-}
 
 #[derive(Debug, Copy, Clone)]
 pub struct Symbol {
@@ -28,18 +13,16 @@ pub struct Symbol {
     pub type_node: Option<ByteRange>,
     pub scope_node: Option<ByteRange>,
     pub parent: Option<ByteRange>,
-    file: usize,
     ckind: CompletionItemKind,
     skind: SymbolKind,
+    // TODO: Find a use for these
+    #[allow(unused)]
     signed: bool,
+    #[allow(unused)]
     direction: PortDirection,
 }
 
 impl Symbol {
-    fn is_port(&self) -> bool {
-        self.direction != PortDirection::None
-    }
-
     pub fn to_completion(self, text: &Rope) -> CompletionItem {
         CompletionItem {
             label: text.byte_slice(self.ident_node).to_string(),
@@ -68,12 +51,12 @@ impl Symbol {
         let range = text.byte_range_to_range(self.scope_node.unwrap_or(self.ident_node));
         let selection_range = text.byte_range_to_range(self.ident_node);
 
+        #[allow(deprecated)] // Suppress warning for deprecated field
         DocumentSymbol {
             name,
             detail: None,
             kind: self.skind,
             tags: None,
-            #[allow(deprecated)]
             deprecated: None,
             range,
             selection_range,
@@ -144,7 +127,6 @@ struct SymbolBuilder {
     type_node: Option<ByteRange>,
     scope_node: Option<ByteRange>,
     parent: Option<ByteRange>,
-    file: usize,
     ckind: Option<CompletionItemKind>,
     skind: Option<SymbolKind>,
     signed: bool,
@@ -152,13 +134,12 @@ struct SymbolBuilder {
 }
 
 impl SymbolBuilder {
-    fn new(file: usize) -> Self {
+    fn new() -> Self {
         Self {
             ident_node: None,
             type_node: None,
             scope_node: None,
             parent: None,
-            file,
             ckind: None,
             skind: None,
             signed: false,
@@ -198,7 +179,6 @@ impl SymbolBuilder {
             type_node: self.type_node,
             scope_node: self.scope_node,
             parent: self.parent,
-            file: self.file,
             ckind: self.ckind?,
             skind: self.skind?,
             signed: self.signed,
@@ -244,21 +224,6 @@ impl<'a> Iterator for RopeChunks<'a> {
     }
 }
 
-pub fn parse(text: &Rope) -> Option<Tree> {
-    let mut parser = tree_sitter::Parser::new();
-    parser
-        .set_language(&tree_sitter_systemverilog::LANGUAGE.into())
-        .expect("Error loading Verilog parser");
-    parser.parse_with_options(
-        &mut |offset: usize, pos: Point| {
-            let (chunk, chunk_byte_idx, _, _) = text.chunk_at_byte(offset);
-            &chunk.as_bytes()[(offset - chunk_byte_idx)..]
-        },
-        None,
-        None,
-    )
-}
-
 pub fn index_text(text: &Rope, tree: &Tree, query: &Query) -> Vec<Symbol> {
     let mut symbols: Vec<Symbol> = Vec::new();
     let mut struct_members: Vec<SymbolBuilder> = Vec::new();
@@ -271,7 +236,7 @@ pub fn index_text(text: &Rope, tree: &Tree, query: &Query) -> Vec<Symbol> {
         // scopes
         if m.pattern_index == 0 {
             println!("new scope {}", symbols.len());
-            let mut builder = SymbolBuilder::new(0);
+            let mut builder = SymbolBuilder::new();
             for cap in m.captures {
                 match query.capture_names()[cap.index as usize] {
                     "ident" => builder.ident_node(cap.node.byte_range().into()),
@@ -331,7 +296,7 @@ pub fn index_text(text: &Rope, tree: &Tree, query: &Query) -> Vec<Symbol> {
         // ports
         else if m.pattern_index == 1 {
             println!("new port");
-            let mut builder = SymbolBuilder::new(0);
+            let mut builder = SymbolBuilder::new();
             builder.direction("inout");
             for cap in m.captures {
                 match query.capture_names()[cap.index as usize] {
@@ -359,7 +324,7 @@ pub fn index_text(text: &Rope, tree: &Tree, query: &Query) -> Vec<Symbol> {
         // params
         else if m.pattern_index == 2 {
             println!("new param");
-            let mut builder = SymbolBuilder::new(0);
+            let mut builder = SymbolBuilder::new();
             for cap in m.captures {
                 match query.capture_names()[cap.index as usize] {
                     "ident" => {
@@ -381,7 +346,7 @@ pub fn index_text(text: &Rope, tree: &Tree, query: &Query) -> Vec<Symbol> {
         // package import
         else if m.pattern_index == 3 {
             println!("new member {}", symbols.len());
-            let mut builder = SymbolBuilder::new(0);
+            let mut builder = SymbolBuilder::new();
             for cap in m.captures {
                 match query.capture_names()[cap.index as usize] {
                     "ident" => {
@@ -402,7 +367,7 @@ pub fn index_text(text: &Rope, tree: &Tree, query: &Query) -> Vec<Symbol> {
         // struct_union member
         else if m.pattern_index == 4 {
             println!("new member {}", symbols.len());
-            let mut builder = SymbolBuilder::new(0);
+            let mut builder = SymbolBuilder::new();
             for cap in m.captures {
                 match query.capture_names()[cap.index as usize] {
                     "ident" => {
@@ -424,7 +389,7 @@ pub fn index_text(text: &Rope, tree: &Tree, query: &Query) -> Vec<Symbol> {
         // instantiation
         else if m.pattern_index == 5 {
             println!("new member {}", symbols.len());
-            let mut builder = SymbolBuilder::new(0);
+            let mut builder = SymbolBuilder::new();
             for cap in m.captures {
                 match query.capture_names()[cap.index as usize] {
                     "ident" => {
@@ -445,7 +410,7 @@ pub fn index_text(text: &Rope, tree: &Tree, query: &Query) -> Vec<Symbol> {
         // variable
         else if m.pattern_index == 6 {
             println!("new member {}", symbols.len());
-            let mut builder = SymbolBuilder::new(0);
+            let mut builder = SymbolBuilder::new();
             for cap in m.captures {
                 match query.capture_names()[cap.index as usize] {
                     "ident" => {
@@ -469,47 +434,68 @@ pub fn index_text(text: &Rope, tree: &Tree, query: &Query) -> Vec<Symbol> {
 
 pub const SYMBOL_QUERY: &str = include_str!("query.scm");
 
-pub fn range_text(range: ByteRange, text: &str) -> &str {
-    text[range.start..range.end].trim()
-}
-
-pub fn test_index(text: &str) -> Vec<Symbol> {
-    let rope = Rope::from(text);
-    let tree = parse(&rope).unwrap();
-    let query = &Query::new(&tree_sitter_systemverilog::LANGUAGE.into(), SYMBOL_QUERY).unwrap();
-    let symbols = index_text(&rope, &tree, query);
-    for symbol in &symbols {
-        let parent = match symbol.parent {
-            Some(p) => range_text(p, text),
-            None => "",
-        };
-        let scope = match symbol.scope_node {
-            Some(p) => format!("{}-{}", p.start, p.end),
-            None => "".to_string(),
-        };
-        let ty = match symbol.type_node {
-            Some(p) => range_text(p, text),
-            None => "",
-        };
-        println!(
-            "sym: {}, parent: {}, scope: {}, type: {}",
-            range_text(symbol.ident_node, text),
-            parent,
-            scope,
-            ty
-        );
-    }
-    symbols
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+    use tree_sitter::Point;
+
+    impl Symbol {
+        fn is_port(&self) -> bool {
+            self.direction != PortDirection::None
+        }
+    }
+
+    pub fn parse(text: &Rope) -> Option<Tree> {
+        let mut parser = tree_sitter::Parser::new();
+        parser
+            .set_language(&tree_sitter_systemverilog::LANGUAGE.into())
+            .expect("Error loading Verilog parser");
+        parser.parse_with_options(
+            &mut |offset: usize, _: Point| {
+                let (chunk, chunk_byte_idx, _, _) = text.chunk_at_byte(offset);
+                &chunk.as_bytes()[(offset - chunk_byte_idx)..]
+            },
+            None,
+            None,
+        )
+    }
+
+    pub fn range_text(range: ByteRange, text: &str) -> &str {
+        text[range.start..range.end].trim()
+    }
+
+    pub fn test_index(text: &str) -> Vec<Symbol> {
+        let rope = Rope::from(text);
+        let tree = parse(&rope).unwrap();
+        let query = &Query::new(&tree_sitter_systemverilog::LANGUAGE.into(), SYMBOL_QUERY).unwrap();
+        let symbols = index_text(&rope, &tree, query);
+        for symbol in &symbols {
+            let parent = match symbol.parent {
+                Some(p) => range_text(p, text),
+                None => "",
+            };
+            let scope = match symbol.scope_node {
+                Some(p) => format!("{}-{}", p.start, p.end),
+                None => "".to_string(),
+            };
+            let ty = match symbol.type_node {
+                Some(p) => range_text(p, text),
+                None => "",
+            };
+            println!(
+                "sym: {}, parent: {}, scope: {}, type: {}",
+                range_text(symbol.ident_node, text),
+                parent,
+                scope,
+                ty
+            );
+        }
+        symbols
+    }
 
     #[allow(clippy::too_many_arguments)]
     fn port(
         ansi: bool,
-        query: &Query,
         port_str: &str,
         direction: &str,
         signed: bool,
@@ -565,7 +551,7 @@ endmodule
     ) {
         let mut found = false;
         for symbol in symbols {
-            if (range_text(symbol.ident_node, text) == ident) {
+            if range_text(symbol.ident_node, text) == ident {
                 if let Some(type_node) = symbol.type_node {
                     assert_eq!(range_text(type_node, text), type_str);
                 } else {
@@ -591,11 +577,10 @@ endmodule
         direction: PortDirection,
         type_str: &str,
         parent: &str,
-        ckind: CompletionItemKind,
     ) {
         let mut found = false;
         for symbol in symbols {
-            if (range_text(symbol.ident_node, text) == ident) {
+            if range_text(symbol.ident_node, text) == ident {
                 assert_eq!(symbol.direction, direction);
                 if let Some(type_node) = symbol.type_node {
                     assert_eq!(range_text(type_node, text), type_str);
@@ -616,21 +601,10 @@ endmodule
 
     #[test]
     fn ansi_ports() {
-        let query = &Query::new(&tree_sitter_systemverilog::LANGUAGE.into(), SYMBOL_QUERY).unwrap();
-        port(true, query, "wire x", "inout", false, "wire", "x", "test");
+        port(true, "wire x", "inout", false, "wire", "x", "test");
+        port(true, "integer x", "inout", false, "integer", "x", "test");
         port(
             true,
-            query,
-            "integer x",
-            "inout",
-            false,
-            "integer",
-            "x",
-            "test",
-        );
-        port(
-            true,
-            query,
             "inout integer x",
             "inout",
             false,
@@ -638,21 +612,11 @@ endmodule
             "x",
             "test",
         );
-        port(true, query, "[5:0] x", "inout", false, "", "x", "test");
-        port(true, query, "input x", "input", false, "", "x", "test");
+        port(true, "[5:0] x", "inout", false, "", "x", "test");
+        port(true, "input x", "input", false, "", "x", "test");
+        port(true, "input var x", "input", false, "var", "x", "test");
         port(
             true,
-            query,
-            "input var x",
-            "input",
-            false,
-            "var",
-            "x",
-            "test",
-        );
-        port(
-            true,
-            query,
             "input var integer x",
             "input",
             false,
@@ -660,20 +624,10 @@ endmodule
             "x",
             "test",
         );
-        port(true, query, "output x", "output", false, "", "x", "test");
+        port(true, "output x", "output", false, "", "x", "test");
+        port(true, "output var x", "output", false, "var", "x", "test");
         port(
             true,
-            query,
-            "output var x",
-            "output",
-            false,
-            "var",
-            "x",
-            "test",
-        );
-        port(
-            true,
-            query,
             "output integer x",
             "output",
             false,
@@ -681,26 +635,15 @@ endmodule
             "x",
             "test",
         );
-        port(true, query, "ref [5:0] x", "ref", false, "", "x", "test");
-        port(true, query, "ref x [5:0]", "ref", false, "", "x", "test");
+        port(true, "ref [5:0] x", "ref", false, "", "x", "test");
+        port(true, "ref x [5:0]", "ref", false, "", "x", "test");
     }
 
     #[test]
     fn non_ansi_ports() {
-        let query = &Query::new(&tree_sitter_systemverilog::LANGUAGE.into(), SYMBOL_QUERY).unwrap();
+        port(false, "input [7:0] a;", "input", false, "", "a", "test");
         port(
             false,
-            query,
-            "input [7:0] a;",
-            "input",
-            false,
-            "",
-            "a",
-            "test",
-        );
-        port(
-            false,
-            query,
             "input signed [7:0] b,c,d;",
             "input",
             true,
@@ -708,16 +651,7 @@ endmodule
             "b",
             "test",
         );
-        port(
-            false,
-            query,
-            "output signed f,g;",
-            "output",
-            true,
-            "",
-            "f",
-            "test",
-        );
+        port(false, "output signed f,g;", "output", true, "", "f", "test");
     }
 
     #[test]
@@ -747,7 +681,6 @@ endprimitive
             PortDirection::Output,
             "",
             "multiplexera",
-            CompletionItemKind::MODULE,
         );
         check_port(
             text,
@@ -756,7 +689,6 @@ endprimitive
             PortDirection::Input,
             "",
             "multiplexera",
-            CompletionItemKind::MODULE,
         );
         let text = r#"
 primitive multiplexerb(output mux, input control, input dataA, input dataB);
@@ -781,7 +713,6 @@ endprimitive
             PortDirection::Output,
             "",
             "multiplexerb",
-            CompletionItemKind::MODULE,
         );
         check_port(
             text,
@@ -790,7 +721,6 @@ endprimitive
             PortDirection::Input,
             "",
             "multiplexerb",
-            CompletionItemKind::MODULE,
         );
     }
 

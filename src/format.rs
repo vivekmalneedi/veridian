@@ -9,10 +9,8 @@ impl LSPServer {
     pub fn formatting(&self, params: DocumentFormattingParams) -> Option<Vec<TextEdit>> {
         let uri = params.text_document.uri;
         info!("formatting {}", &uri);
-        let file_id = self.srcs.get_id(&uri).to_owned();
-        self.srcs.wait_parse_ready(file_id, false);
-        let file = self.srcs.get_file(file_id)?;
-        let file = file.read().ok()?;
+        let files = self.srcs.files.lock().unwrap();
+        let file = files.get(&uri)?;
 
         let conf = self.conf.read().unwrap();
         if conf.verible.format.enabled {
@@ -36,10 +34,8 @@ impl LSPServer {
     pub fn range_formatting(&self, params: DocumentRangeFormattingParams) -> Option<Vec<TextEdit>> {
         let uri = params.text_document.uri;
         info!("range formatting {}", &uri);
-        let file_id = self.srcs.get_id(&uri).to_owned();
-        self.srcs.wait_parse_ready(file_id, false);
-        let file = self.srcs.get_file(file_id)?;
-        let file = file.read().ok()?;
+        let files = self.srcs.files.lock().unwrap();
+        let file = files.get(&uri)?;
 
         let conf = self.conf.read().unwrap();
         if conf.verible.format.enabled {

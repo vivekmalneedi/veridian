@@ -347,13 +347,13 @@ impl LanguageServer for Backend {
         Ok(self.server.document_symbol(params))
     }
     async fn formatting(&self, params: DocumentFormattingParams) -> Result<Option<Vec<TextEdit>>> {
-        Ok(None)
+        Ok(self.server.formatting(params))
     }
     async fn range_formatting(
         &self,
         params: DocumentRangeFormattingParams,
     ) -> Result<Option<Vec<TextEdit>>> {
-        Ok(None)
+        Ok(self.server.range_formatting(params))
     }
     async fn document_highlight(
         &self,

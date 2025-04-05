@@ -270,26 +270,6 @@ impl Sources {
         for file in index.iter() {
             let byte_idx = if file.0 == uri { file.1.text.pos_to_byte(&pos)} else {0};
             for sym in &file.1.syms {
-                // let stk = stack.last().unwrap();
-                let stk = sym;
-                if let Some(scp) = stk.scope_node {
-                    dbg!(file.1.text.byte_to_pos(scp.start));
-                    dbg!(file.1.text.byte_to_pos(scp.end));
-                }
-                // let parent = match stk.parent {
-                //     Some(p) => file.text.byte_slice(p).to_string(),
-                //     None => "".to_string(),
-                // };
-                // let type_str = match stk.type_node {
-                //     Some(p) => file.text.byte_slice(p).to_string(),
-                //     None => "".to_string(),
-                // };
-                // println!(
-                //     "sym: {}, parent: {}, type: {}",
-                //     file.text.byte_slice(stk.ident_node),
-                //     parent,
-                //     type_str
-                // );
                 // pop scope from stack if it doesn't contain sym
                 if let Some(scope) = stack.last().and_then(|s| s.scope_node) {
                     if !scope.contains(sym.ident_node.start) {
@@ -315,11 +295,6 @@ impl Sources {
                         }
                     }
                 }
-                // print!("stack: ");
-                // for sym in &stack {
-                //     print!("{} ", range_text(sym.ident_node, text));
-                // }
-                // println!();
 
                 // check if symbol identifier starts with token
                 let mut text = file.1.text.byte_slice(sym.ident_node).chars();
@@ -338,7 +313,6 @@ impl Sources {
                 }
             }
         }
-        dbg!(&cand);
         cand
     }
 
@@ -356,7 +330,6 @@ impl Sources {
         let mut stack: Vec<Symbol> = Vec::new();
 
         let mut type_token = "".to_string();
-        dbg!(&token);
         for file in index.iter() {
             let byte_idx = if file.0 == uri { file.1.text.pos_to_byte(&pos)} else {0};
             // find symbol that matches token
@@ -367,7 +340,6 @@ impl Sources {
                         stack.pop();
                     }
                 }
-                // println!("2");
                 // push scope to stack
                 if let Some(scope) = sym.scope_node {
                     // multiple definitions can create equivalent scopes
@@ -380,28 +352,6 @@ impl Sources {
                     }
                 }
 
-                // println!("3");
-                // dbg!(stack.last());
-                // dbg!(byte_idx);
-                // dbg!(sym.parent);
-                // let stk = stack.last().unwrap();
-                // if let Some(scp) = stk.scope_node {
-                //     dbg!(file.text.byte_to_pos(scp.start));
-                //     dbg!(file.text.byte_to_pos(scp.end));
-                // }
-                // let parent = match stk.parent {
-                //     Some(p) => file.text.byte_slice(p).to_string(),
-                //     None => "".to_string(),
-                // };
-                // let type_str = match stk.type_node {
-                //     Some(p) => file.text.byte_slice(p).to_string(),
-                //     None => "".to_string(),
-                // };
-                // println!(
-                //     "stack: {}, parent: {}, type: {}",
-                //     file.text.byte_slice(stk.ident_node),
-                //     parent, type_str
-                // );
                 // check if parent scope of sym contains pos
                 if sym.parent.is_some() {
                     if let Some(scope) = stack.last().and_then(|s| s.scope_node) {
@@ -411,7 +361,6 @@ impl Sources {
                     }
                 }
 
-                // println!("4");
                 // check if symbol identifier equals token
                 if let Some(type_node) = sym.type_node {
                     if file.1.text.byte_slice(sym.ident_node) == token {
@@ -419,7 +368,6 @@ impl Sources {
                     }
                 }
             }
-            dbg!(&type_token);
 
             for sym in &file.1.syms {
                 let parent = match sym.parent {
@@ -482,7 +430,6 @@ impl Sources {
                 }
             }
         }
-        dbg!(&cand);
         cand
     }
 
@@ -543,6 +490,7 @@ pub trait LSPSupport {
     fn byte_to_pos(&self, byte_idx: usize) -> Position;
     fn char_to_pos(&self, char_idx: usize) -> Position;
     fn range_to_char_range(&self, range: &Range) -> StdRange<usize>;
+    fn char_range_to_range(&self, range: StdRange<usize>) -> Range;
     fn byte_range_to_range(&self, range: ByteRange) -> Range;
     #[allow(dead_code)] // This is used?
     fn range_to_byte_range(&self, range: Range) -> ByteRange;
@@ -571,6 +519,12 @@ impl LSPSupport for Rope {
     }
     fn range_to_char_range(&self, range: &Range) -> StdRange<usize> {
         self.pos_to_char(&range.start)..self.pos_to_char(&range.end)
+    }
+    fn char_range_to_range(&self, range: StdRange<usize>) -> Range {
+        Range {
+            start: self.char_to_pos(range.start),
+            end: self.char_to_pos(range.end),
+        }
     }
     fn byte_range_to_range(&self, range: ByteRange) -> Range {
         Range {
@@ -616,6 +570,12 @@ impl LSPSupport for RopeSlice<'_> {
     }
     fn range_to_char_range(&self, range: &Range) -> StdRange<usize> {
         self.pos_to_char(&range.start)..self.pos_to_char(&range.end)
+    }
+    fn char_range_to_range(&self, range: StdRange<usize>) -> Range {
+        Range {
+            start: self.char_to_pos(range.start),
+            end: self.char_to_pos(range.end),
+        }
     }
     fn byte_range_to_range(&self, range: ByteRange) -> Range {
         Range {
