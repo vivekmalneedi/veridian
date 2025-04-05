@@ -244,190 +244,218 @@ impl Sources {
     }
 
     /// compute identifier completions
-    pub fn get_completions(&self, token: &str, byte_idx: usize, uri: &Url) -> Vec<Symbol> {
+    pub fn get_completions(&self, token: &str, byte_idx: usize, uri: &Url) -> Vec<CompletionItem> {
         // TODO: get completions
         debug!("retrieving identifier completion for token: {}", &token);
         let index = self.index.lock().unwrap();
-        let index = index.get(uri).unwrap();
-        let mut cand: Vec<Symbol> = Vec::new();
+        let mut cand: Vec<CompletionItem> = Vec::new();
         let mut stack: Vec<Symbol> = Vec::new();
-        for sym in &index.syms {
-            // pop scope from stack if it doesn't contain sym
-            if let Some(scope) = stack.last().and_then(|s| s.scope_node) {
-                if !scope.contains(sym.ident_node.start) {
-                    stack.pop();
+        for file in index.values() {
+            for sym in &file.syms {
+                // let stk = stack.last().unwrap();
+                let stk = sym;
+                if let Some(scp) = stk.scope_node {
+                    dbg!(file.text.byte_to_pos(scp.start));
+                    dbg!(file.text.byte_to_pos(scp.end));
                 }
-            }
-            // push scope to stack
-            if let Some(scope) = sym.scope_node {
-                // multiple definitions can create equivalent scopes
-                if let Some(last) = stack.last().and_then(|s| s.scope_node) {
-                    if scope != last {
+                // let parent = match stk.parent {
+                //     Some(p) => file.text.byte_slice(p).to_string(),
+                //     None => "".to_string(),
+                // };
+                // let type_str = match stk.type_node {
+                //     Some(p) => file.text.byte_slice(p).to_string(),
+                //     None => "".to_string(),
+                // };
+                // println!(
+                //     "sym: {}, parent: {}, type: {}",
+                //     file.text.byte_slice(stk.ident_node),
+                //     parent,
+                //     type_str
+                // );
+                // pop scope from stack if it doesn't contain sym
+                if let Some(scope) = stack.last().and_then(|s| s.scope_node) {
+                    if !scope.contains(sym.ident_node.start) {
+                        stack.pop();
+                    }
+                }
+                // push scope to stack
+                if let Some(scope) = sym.scope_node {
+                    // multiple definitions can create equivalent scopes
+                    if let Some(last) = stack.last().and_then(|s| s.scope_node) {
+                        if scope != last {
+                            stack.push(*sym);
+                        }
+                    } else {
                         stack.push(*sym);
                     }
-                } else {
-                    stack.push(*sym);
                 }
-            }
-            // check if parent of sym contains pos
-            if sym.parent.is_some() {
-                if let Some(scope) = stack.last().and_then(|s| s.scope_node) {
-                    if !scope.contains(byte_idx) {
-                        continue;
+                // check if parent of sym contains pos
+                if sym.parent.is_some() {
+                    if let Some(scope) = stack.last().and_then(|s| s.scope_node) {
+                        if !scope.contains(byte_idx) {
+                            continue;
+                        }
                     }
                 }
-            }
-            // print!("stack: ");
-            // for sym in &stack {
-            //     print!("{} ", range_text(sym.ident_node, text));
-            // }
-            // println!();
+                // print!("stack: ");
+                // for sym in &stack {
+                //     print!("{} ", range_text(sym.ident_node, text));
+                // }
+                // println!();
 
-            // check if symbol identifier starts with token
-            let mut text = index.text.byte_slice(sym.ident_node).chars();
-            let mut starts_with = true;
-            for ch in token.chars() {
-                if let Some(ch2) = text.next() {
-                    if ch2 != ch {
+                // check if symbol identifier starts with token
+                let mut text = file.text.byte_slice(sym.ident_node).chars();
+                let mut starts_with = true;
+                for ch in token.chars() {
+                    if let Some(ch2) = text.next() {
+                        if ch2 != ch {
+                            starts_with = false;
+                        }
+                    } else {
                         starts_with = false;
                     }
-                } else {
-                    starts_with = false;
+                }
+                if starts_with {
+                    cand.push(sym.to_completion(&file.text));
                 }
             }
-            if starts_with {
-                cand.push(*sym);
-            }
         }
+        dbg!(&cand);
         cand
     }
 
     /// compute dot completions
-    pub fn get_dot_completions(&self, token: &str, byte_idx: usize, uri: &Url) -> Vec<Symbol> {
+    pub fn get_dot_completions(
+        &self,
+        token: &str,
+        byte_idx: usize,
+        uri: &Url,
+    ) -> Vec<CompletionItem> {
         debug!("retrieving dot completion for token: {}", &token);
         // TODO: get dot completions
         let index = self.index.lock().unwrap();
-        let index = index.get(uri).unwrap();
-        let mut cand: Vec<Symbol> = Vec::new();
+        let mut cand: Vec<CompletionItem> = Vec::new();
         let mut stack: Vec<Symbol> = Vec::new();
 
         let mut type_token = "".to_string();
         dbg!(&token);
-        // find symbol that matches token
-        for sym in &index.syms {
-            // pop scope from stack if it doesn't contain sym
-            if let Some(scope) = stack.last().and_then(|s| s.scope_node) {
-                if !scope.contains(sym.ident_node.start) {
-                    stack.pop();
+        for file in index.values() {
+            // find symbol that matches token
+            for sym in &file.syms {
+                // pop scope from stack if it doesn't contain sym
+                if let Some(scope) = stack.last().and_then(|s| s.scope_node) {
+                    if !scope.contains(sym.ident_node.start) {
+                        stack.pop();
+                    }
                 }
-            }
-            // println!("2");
-            // push scope to stack
-            if let Some(scope) = sym.scope_node {
-                // multiple definitions can create equivalent scopes
-                if let Some(last) = stack.last().and_then(|s| s.scope_node) {
-                    if scope != last {
+                // println!("2");
+                // push scope to stack
+                if let Some(scope) = sym.scope_node {
+                    // multiple definitions can create equivalent scopes
+                    if let Some(last) = stack.last().and_then(|s| s.scope_node) {
+                        if scope != last {
+                            stack.push(*sym);
+                        }
+                    } else {
                         stack.push(*sym);
                     }
-                } else {
-                    stack.push(*sym);
+                }
+
+                // println!("3");
+                // dbg!(stack.last());
+                // dbg!(byte_idx);
+                // dbg!(sym.parent);
+                // let stk = stack.last().unwrap();
+                // if let Some(scp) = stk.scope_node {
+                //     dbg!(file.text.byte_to_pos(scp.start));
+                //     dbg!(file.text.byte_to_pos(scp.end));
+                // }
+                // let parent = match stk.parent {
+                //     Some(p) => file.text.byte_slice(p).to_string(),
+                //     None => "".to_string(),
+                // };
+                // let type_str = match stk.type_node {
+                //     Some(p) => file.text.byte_slice(p).to_string(),
+                //     None => "".to_string(),
+                // };
+                // println!(
+                //     "stack: {}, parent: {}, type: {}",
+                //     file.text.byte_slice(stk.ident_node),
+                //     parent, type_str
+                // );
+                // check if parent scope of sym contains pos
+                if sym.parent.is_some() {
+                    if let Some(scope) = stack.last().and_then(|s| s.scope_node) {
+                        if !scope.contains(byte_idx) {
+                            continue;
+                        }
+                    }
+                }
+
+                // println!("4");
+                // check if symbol identifier equals token
+                if let Some(type_node) = sym.type_node {
+                    if file.text.byte_slice(sym.ident_node) == token {
+                        type_token = file.text.byte_slice(type_node).to_string();
+                    }
                 }
             }
+            dbg!(&type_token);
 
-            // println!("3");
-            // dbg!(stack.last());
-            // dbg!(byte_idx);
-            // dbg!(sym.parent);
-            // let stk = stack.last().unwrap();
-            // if let Some(scp) = stk.scope_node {
-            //     dbg!(index.text.byte_to_pos(scp.start));
-            //     dbg!(index.text.byte_to_pos(scp.end));
-            // }
-            // let parent = match stk.parent {
-            //     Some(p) => index.text.byte_slice(p).to_string(),
-            //     None => "".to_string(),
-            // };
-            // let type_str = match stk.type_node {
-            //     Some(p) => index.text.byte_slice(p).to_string(),
-            //     None => "".to_string(),
-            // };
-            // println!(
-            //     "stack: {}, parent: {}, type: {}",
-            //     index.text.byte_slice(stk.ident_node),
-            //     parent, type_str
-            // );
-            // check if parent scope of sym contains pos
-            if sym.parent.is_some() {
+            for sym in &file.syms {
+                let parent = match sym.parent {
+                    Some(p) => file.text.byte_slice(p).to_string(),
+                    None => "".to_string(),
+                };
+                println!(
+                    "sym: {}, parent: {}",
+                    file.text.byte_slice(sym.ident_node),
+                    parent
+                );
+
+                println!("1");
+                // pop scope from stack if it doesn't contain sym
                 if let Some(scope) = stack.last().and_then(|s| s.scope_node) {
-                    if !scope.contains(byte_idx) {
+                    if !scope.contains(sym.ident_node.start) {
+                        stack.pop();
+                    }
+                }
+                println!("2");
+                // push scope to stack
+                if let Some(scope) = sym.scope_node {
+                    // multiple definitions can create equivalent scopes
+                    if let Some(last) = stack.last().and_then(|s| s.scope_node) {
+                        if scope != last {
+                            stack.push(*sym);
+                        }
+                    } else {
+                        stack.push(*sym);
+                    }
+                }
+                // check if scope in scope stack contains bidx
+                if let Some(parent) = sym.parent {
+                    println!("3");
+                    // add children of token
+                    if file.text.byte_slice(parent) == token {
+                        println!("4");
+                        cand.push(sym.to_completion(&file.text));
                         continue;
                     }
-                }
-            }
-
-            // println!("4");
-            // check if symbol identifier equals token
-            if let Some(type_node) = sym.type_node {
-                if index.text.byte_slice(sym.ident_node) == token {
-                    type_token = index.text.byte_slice(type_node).to_string();
-                }
-            }
-        }
-        dbg!(&type_token);
-
-        for sym in &index.syms {
-            let parent = match sym.parent {
-                Some(p) => index.text.byte_slice(p).to_string(),
-                None => "".to_string(),
-            };
-            println!(
-                "sym: {}, parent: {}",
-                index.text.byte_slice(sym.ident_node),
-                parent
-            );
-
-            println!("1");
-            // pop scope from stack if it doesn't contain sym
-            if let Some(scope) = stack.last().and_then(|s| s.scope_node) {
-                if !scope.contains(sym.ident_node.start) {
-                    stack.pop();
-                }
-            }
-            println!("2");
-            // push scope to stack
-            if let Some(scope) = sym.scope_node {
-                // multiple definitions can create equivalent scopes
-                if let Some(last) = stack.last().and_then(|s| s.scope_node) {
-                    if scope != last {
-                        stack.push(*sym);
+                    // add sym if parent == type token and in global scope
+                    if stack.len() == 1 && file.text.byte_slice(parent) == type_token {
+                        cand.push(sym.to_completion(&file.text));
+                        continue;
                     }
-                } else {
-                    stack.push(*sym);
-                }
-            }
-            // check if scope in scope stack contains bidx
-            if let Some(parent) = sym.parent {
-                println!("3");
-                // add children of token
-                if index.text.byte_slice(parent) == token {
-                    println!("4");
-                    cand.push(*sym);
-                    continue;
-                }
-                // add sym if parent == type token and in global scope
-                if stack.len() == 1 && index.text.byte_slice(parent) == type_token {
-                    cand.push(*sym);
-                    continue;
-                }
-                // add sym if parent == type token and grand parent contains byte_idx
-                if stack.len() > 1 {
-                    if let Some(stk) = stack.get(stack.len() - 2) {
-                        if let Some(scope_node) = stk.scope_node {
-                            if scope_node.contains(byte_idx) {
-                                // check if symbol parent identifier equals token
-                                if index.text.byte_slice(parent) == type_token {
-                                    cand.push(*sym);
-                                    continue;
+                    // add sym if parent == type token and grand parent contains byte_idx
+                    if stack.len() > 1 {
+                        if let Some(stk) = stack.get(stack.len() - 2) {
+                            if let Some(scope_node) = stk.scope_node {
+                                if scope_node.contains(byte_idx) {
+                                    // check if symbol parent identifier equals token
+                                    if file.text.byte_slice(parent) == type_token {
+                                        cand.push(sym.to_completion(&file.text));
+                                        continue;
+                                    }
                                 }
                             }
                         }

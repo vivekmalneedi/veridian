@@ -29,16 +29,11 @@ impl LSPServer {
                     match context.trigger_character?.as_str() {
                         "." => Some(CompletionList {
                             is_incomplete: false,
-                            items: self
-                                .srcs
-                                .get_dot_completions(
-                                    token.trim_end_matches('.'),
-                                    file.text.pos_to_byte(&doc.position),
-                                    &doc.text_document.uri,
-                                )
-                                .iter()
-                                .map(|s| s.to_completion(&file.text))
-                                .collect(),
+                            items: self.srcs.get_dot_completions(
+                                token.trim_end_matches('.'),
+                                file.text.pos_to_byte(&doc.position),
+                                &doc.text_document.uri,
+                            ),
                         }),
                         "$" => Some(CompletionList {
                             is_incomplete: false,
@@ -54,16 +49,11 @@ impl LSPServer {
                 CompletionTriggerKind::TRIGGER_FOR_INCOMPLETE_COMPLETIONS => None,
                 CompletionTriggerKind::INVOKED => {
                     debug!("Invoked Completion");
-                    let mut comps: Vec<CompletionItem> = self
-                        .srcs
-                        .get_completions(
-                            &token,
-                            file.text.pos_to_byte(&doc.position),
-                            &doc.text_document.uri,
-                        )
-                        .iter()
-                        .map(|s| s.to_completion(&file.text))
-                        .collect();
+                    let mut comps: Vec<CompletionItem> = self.srcs.get_completions(
+                        &token,
+                        file.text.pos_to_byte(&doc.position),
+                        &doc.text_document.uri,
+                    );
                     // complete keywords
                     comps.extend::<Vec<CompletionItem>>(
                         keyword_completions(KEYWORDS)
@@ -86,16 +76,11 @@ impl LSPServer {
                 match trigger {
                     '.' => Some(CompletionList {
                         is_incomplete: false,
-                        items: self
-                            .srcs
-                            .get_dot_completions(
-                                token.trim_end_matches('.'),
-                                file.text.pos_to_byte(&doc.position),
-                                &doc.text_document.uri,
-                            )
-                            .iter()
-                            .map(|s| s.to_completion(&file.text))
-                            .collect(),
+                        items: self.srcs.get_dot_completions(
+                            token.trim_end_matches('.'),
+                            file.text.pos_to_byte(&doc.position),
+                            &doc.text_document.uri,
+                        ),
                     }),
                     '$' => Some(CompletionList {
                         is_incomplete: false,
@@ -106,16 +91,11 @@ impl LSPServer {
                         items: other_completions(DIRECTIVES),
                     }),
                     _ => {
-                        let mut comps: Vec<CompletionItem> = self
-                            .srcs
-                            .get_completions(
-                                &token,
-                                file.text.pos_to_byte(&doc.position),
-                                &doc.text_document.uri,
-                            )
-                            .iter()
-                            .map(|s| s.to_completion(&file.text))
-                            .collect();
+                        let mut comps: Vec<CompletionItem> = self.srcs.get_completions(
+                            &token,
+                            file.text.pos_to_byte(&doc.position),
+                            &doc.text_document.uri,
+                        );
                         comps.extend::<Vec<CompletionItem>>(
                             keyword_completions(KEYWORDS)
                                 .iter()
@@ -751,6 +731,7 @@ endinterface"#;
             }),
         };
         let response: CompletionResponse = server.completion(completion_params).unwrap();
+        dbg!(&response);
         if let CompletionResponse::List(item) = response {
             // eprintln!("{:#?}", item);
             let names: Vec<&String> = item.items.iter().map(|x| &x.label).collect();
