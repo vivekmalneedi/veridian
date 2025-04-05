@@ -227,7 +227,7 @@ impl<'a> Iterator for RopeChunks<'a> {
 pub fn parse(text: &Rope) -> Option<Tree> {
     let mut parser = tree_sitter::Parser::new();
     parser
-        .set_language(&tree_sitter_verilog::LANGUAGE.into())
+        .set_language(&tree_sitter_systemverilog::LANGUAGE.into())
         .expect("Error loading Verilog parser");
     parser.parse_with(
         &mut |offset: usize, pos: Point| {
@@ -455,7 +455,7 @@ pub fn range_text(range: ByteRange, text: &str) -> &str {
 pub fn test_index(text: &str) -> Vec<Symbol> {
     let rope = Rope::from(text);
     let tree = parse(&rope).unwrap();
-    let query = &Query::new(&tree_sitter_verilog::LANGUAGE.into(), SYMBOL_QUERY).unwrap();
+    let query = &Query::new(&tree_sitter_systemverilog::LANGUAGE.into(), SYMBOL_QUERY).unwrap();
     let symbols = index_text(&rope, &tree, query);
     for symbol in &symbols {
         let parent = match symbol.parent {
@@ -466,11 +466,16 @@ pub fn test_index(text: &str) -> Vec<Symbol> {
             Some(p) => format!("{}-{}", p.start, p.end),
             None => "".to_string(),
         };
+        let ty = match symbol.type_node {
+            Some(p) => range_text(p, text),
+            None => "",
+        };
         println!(
-            "sym: {}, parent: {}, scope: {}",
+            "sym: {}, parent: {}, scope: {}, type: {}",
             range_text(symbol.ident_node, text),
             parent,
-            scope
+            scope,
+            ty
         );
     }
     symbols
@@ -590,7 +595,7 @@ endmodule
 
     #[test]
     fn ansi_ports() {
-        let query = &Query::new(&tree_sitter_verilog::LANGUAGE.into(), SYMBOL_QUERY).unwrap();
+        let query = &Query::new(&tree_sitter_systemverilog::LANGUAGE.into(), SYMBOL_QUERY).unwrap();
         port(true, query, "wire x", "inout", false, "wire", "x", "test");
         port(
             true,
@@ -630,7 +635,7 @@ endmodule
             "input var integer x",
             "input",
             false,
-            "var",
+            "var integer",
             "x",
             "test",
         );
@@ -661,7 +666,7 @@ endmodule
 
     #[test]
     fn non_ansi_ports() {
-        let query = &Query::new(&tree_sitter_verilog::LANGUAGE.into(), SYMBOL_QUERY).unwrap();
+        let query = &Query::new(&tree_sitter_systemverilog::LANGUAGE.into(), SYMBOL_QUERY).unwrap();
         port(
             false,
             query,
@@ -861,7 +866,7 @@ extern module a #(parameter size= 8, parameter type TP = logic [7:0])
             text,
             &symbols,
             "LSB",
-            "",
+            "parameter",
             "generic_fifo",
             CompletionItemKind::PROPERTY,
         );
@@ -987,7 +992,7 @@ endfunction
             text,
             &symbols,
             "q",
-            "q[3:0]",
+            "",
             "myfunc4",
             CompletionItemKind::PROPERTY,
         );

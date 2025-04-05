@@ -119,9 +119,9 @@ fn parse(
     drop(files);
     let mut parser = tree_sitter::Parser::new();
     parser
-        .set_language(&tree_sitter_verilog::LANGUAGE.into())
+        .set_language(&tree_sitter_systemverilog::LANGUAGE.into())
         .expect("Error loading Verilog parser");
-    let query = &Query::new(&tree_sitter_verilog::LANGUAGE.into(), SYMBOL_QUERY).unwrap();
+    let query = &Query::new(&tree_sitter_systemverilog::LANGUAGE.into(), SYMBOL_QUERY).unwrap();
 
     #[allow(clippy::map_entry)]
     if index.contains_key(&uri) {

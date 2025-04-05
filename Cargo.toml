@@ -10,7 +10,7 @@ slang = ["veridian_slang"]
 [dependencies]
 log = "0.4.19"
 tower-lsp = "0.20.0"
-flexi_logger = "0.29.8"
+flexi_logger = "0.30.1"
 ropey = "1.6.0"
 tokio = { version = "1.29.1", features = ["macros", "io-std", "rt-multi-thread"] }
 path-clean = "1.0.1"
@@ -22,10 +22,10 @@ serde = "1.0.179"
 which = "7.0.1"
 regex = "1.9.1"
 structopt = "0.3.26"
-strum = "0.26.1"
-strum_macros = "0.26.1"
-tree-sitter = "0.24.5"
-tree-sitter-verilog = { git = "https://github.com/tree-sitter/tree-sitter-verilog" }
+strum = "0.27.1"
+strum_macros = "0.27.1"
+tree-sitter = "0.25.3"
+tree-sitter-systemverilog = { path = "../tree-sitter-systemverilog" }
 streaming-iterator = "0.1.9"
 
 [dev-dependencies]

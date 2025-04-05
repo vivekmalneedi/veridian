@@ -208,7 +208,7 @@ fn get_completion_token(text: &Rope, line: RopeSlice, pos: Position) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::sources::{LSPSupport};
+    use crate::sources::LSPSupport;
     use crate::support::test_init;
     use ropey::Rope;
 
@@ -654,6 +654,8 @@ module test;
         .
     )
 endmodule
+module test1;
+endmodule
 interface test_inter2;
     wire abcd;
     logic clk;
@@ -689,7 +691,13 @@ endinterface
         dbg!(&response);
 
         if let CompletionResponse::List(list) = response {
-            assert_eq!(list.items.iter().map(|i| i.label.clone()).collect::<Vec<String>>(), vec!["abcd", "clk"]);
+            assert_eq!(
+                list.items
+                    .iter()
+                    .map(|i| i.label.clone())
+                    .collect::<Vec<String>>(),
+                vec!["abcd", "clk"]
+            );
         } else {
             panic!();
         }
