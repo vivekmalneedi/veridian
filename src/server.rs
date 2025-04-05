@@ -303,13 +303,30 @@ impl LanguageServer for Backend {
         Ok(())
     }
     async fn did_open(&self, params: DidOpenTextDocumentParams) {
-        self.server.did_open(params);
+        let diagnostics = self.server.did_open(params);
+        self.client
+            .publish_diagnostics(
+                diagnostics.uri,
+                diagnostics.diagnostics,
+                diagnostics.version,
+            )
+            .await;
     }
     async fn did_change(&self, params: DidChangeTextDocumentParams) {
         self.server.did_change(params);
     }
+    async fn did_close(&self, _params: DidCloseTextDocumentParams) {
+        // TODO; implement
+    }
     async fn did_save(&self, params: DidSaveTextDocumentParams) {
-        self.server.did_save(params);
+        let diagnostics = self.server.did_save(params);
+        self.client
+            .publish_diagnostics(
+                diagnostics.uri,
+                diagnostics.diagnostics,
+                diagnostics.version,
+            )
+            .await;
     }
     async fn completion(&self, params: CompletionParams) -> Result<Option<CompletionResponse>> {
         Ok(self.server.completion(params))

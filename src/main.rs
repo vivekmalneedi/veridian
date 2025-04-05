@@ -6,6 +6,8 @@ mod completion;
 mod server;
 mod sources;
 mod support;
+mod diagnostics;
+mod definition;
 
 // use log::info;
 // use std::sync::Arc;

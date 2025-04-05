@@ -31,8 +31,7 @@ impl LSPServer {
                             is_incomplete: false,
                             items: self.srcs.get_dot_completions(
                                 token.trim_end_matches('.'),
-                                file.text.pos_to_byte(&doc.position),
-                                &doc.text_document.uri,
+                                file.text.pos_to_byte(&doc.position)
                             ),
                         }),
                         "$" => Some(CompletionList {
@@ -51,8 +50,7 @@ impl LSPServer {
                     debug!("Invoked Completion");
                     let mut comps: Vec<CompletionItem> = self.srcs.get_completions(
                         &token,
-                        file.text.pos_to_byte(&doc.position),
-                        &doc.text_document.uri,
+                        file.text.pos_to_byte(&doc.position)
                     );
                     // complete keywords
                     comps.extend::<Vec<CompletionItem>>(
@@ -78,8 +76,7 @@ impl LSPServer {
                         is_incomplete: false,
                         items: self.srcs.get_dot_completions(
                             token.trim_end_matches('.'),
-                            file.text.pos_to_byte(&doc.position),
-                            &doc.text_document.uri,
+                            file.text.pos_to_byte(&doc.position)
                         ),
                     }),
                     '$' => Some(CompletionList {
@@ -93,8 +90,7 @@ impl LSPServer {
                     _ => {
                         let mut comps: Vec<CompletionItem> = self.srcs.get_completions(
                             &token,
-                            file.text.pos_to_byte(&doc.position),
-                            &doc.text_document.uri,
+                            file.text.pos_to_byte(&doc.position)
                         );
                         comps.extend::<Vec<CompletionItem>>(
                             keyword_completions(KEYWORDS)
@@ -188,7 +184,6 @@ fn get_completion_token(text: &Rope, line: RopeSlice, pos: Position) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::sources::LSPSupport;
     use crate::support::test_init;
     use ropey::Rope;
 

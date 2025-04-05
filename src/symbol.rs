@@ -229,11 +229,12 @@ pub fn parse(text: &Rope) -> Option<Tree> {
     parser
         .set_language(&tree_sitter_systemverilog::LANGUAGE.into())
         .expect("Error loading Verilog parser");
-    parser.parse_with(
+    parser.parse_with_options(
         &mut |offset: usize, pos: Point| {
             let (chunk, chunk_byte_idx, _, _) = text.chunk_at_byte(offset);
             &chunk.as_bytes()[(offset - chunk_byte_idx)..]
         },
+        None,
         None,
     )
 }

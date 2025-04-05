@@ -10,13 +10,15 @@ use std::path::PathBuf;
 use std::sync::{Arc, Mutex, RwLock};
 use tower_lsp::lsp_types::*;
 use walkdir::{DirEntry, WalkDir};
+use crate::diagnostics::get_diagnostics;
 
 use tree_sitter::{InputEdit, Point, Query, Tree};
 
 impl LSPServer {
-    pub fn did_open(&self, params: DidOpenTextDocumentParams) {
+    pub fn did_open(&self, params: DidOpenTextDocumentParams) -> PublishDiagnosticsParams {
         let document: TextDocumentItem = params.text_document;
         let uri = document.uri.clone();
+        let text = Rope::from_str(&document.text);
         debug!("did_open: {}", &document.uri);
         // check if doc is already added
         let mut files = self.srcs.files.lock().unwrap();
@@ -34,17 +36,18 @@ impl LSPServer {
             files.insert(
                 document.uri.clone(),
                 Source {
-                    text: Rope::from_str(&document.text),
+                    text: text.clone(),
                     version: document.version,
                 },
             );
         }
         let srcs = self.srcs.files.clone();
         let index = self.srcs.index.clone();
-        // tokio::task::spawn_blocking(|| parse(uri, srcs, index, Vec::new()));
+        let urls: Vec<Url> = files.keys().cloned().collect();
+
         drop(files);
-        parse(uri, srcs, index, Vec::new());
-        // TODO: trigger diagnostics
+        parse(uri.clone(), srcs, index, Vec::new());
+        get_diagnostics(uri, &text, urls, &self.conf.read().unwrap())
     }
 
     pub fn did_change(&self, params: DidChangeTextDocumentParams) {
@@ -85,12 +88,22 @@ impl LSPServer {
         drop(files);
         let srcs = self.srcs.files.clone();
         let index = self.srcs.index.clone();
-        // tokio::task::spawn_blocking(|| parse(params.text_document.uri, srcs, index, edits));
+
         parse(params.text_document.uri, srcs, index, edits);
     }
 
-    pub fn did_save(&self, params: DidSaveTextDocumentParams) {
-        // TODO; trigger diagnostics
+    pub fn did_save(&self, params: DidSaveTextDocumentParams) -> PublishDiagnosticsParams {
+        let document: TextDocumentIdentifier = params.text_document;
+        let uri = document.uri.clone();
+        debug!("did_save: {}", &document.uri);
+        // check if doc is already added
+        let files = self.srcs.files.lock().unwrap();
+        let file = files.get(&uri).unwrap();
+        let urls: Vec<Url> = files.keys().cloned().collect();
+        let text = file.text.clone();
+
+        drop(files);
+        get_diagnostics(uri, &text, urls, &self.conf.read().unwrap())
     }
 }
 
@@ -131,12 +144,13 @@ fn parse(
             for edit in edits {
                 index.tree.edit(&edit);
             }
-            parser.parse_with(
+            parser.parse_with_options(
                 &mut |offset: usize, _pos: Point| {
                     let (chunk, chunk_byte_idx, _, _) = text.chunk_at_byte(offset);
                     &chunk.as_bytes()[(offset - chunk_byte_idx)..]
                 },
                 Some(&index.tree),
+                None,
             )
         };
         if let Some(tree) = tree {
@@ -145,11 +159,12 @@ fn parse(
             index.syms = index_text(&index.text, &index.tree, query);
         }
     } else {
-        let tree = parser.parse_with(
+        let tree = parser.parse_with_options(
             &mut |offset: usize, _pos: Point| {
                 let (chunk, chunk_byte_idx, _, _) = text.chunk_at_byte(offset);
                 &chunk.as_bytes()[(offset - chunk_byte_idx)..]
             },
+            None,
             None,
         );
         if let Some(tree) = tree {
@@ -241,10 +256,11 @@ impl Sources {
                 }
             }
         }
+        //TODO; parse these files
     }
 
     /// compute identifier completions
-    pub fn get_completions(&self, token: &str, byte_idx: usize, uri: &Url) -> Vec<CompletionItem> {
+    pub fn get_completions(&self, token: &str, byte_idx: usize) -> Vec<CompletionItem> {
         // TODO: get completions
         debug!("retrieving identifier completion for token: {}", &token);
         let index = self.index.lock().unwrap();
@@ -328,8 +344,7 @@ impl Sources {
     pub fn get_dot_completions(
         &self,
         token: &str,
-        byte_idx: usize,
-        uri: &Url,
+        byte_idx: usize
     ) -> Vec<CompletionItem> {
         debug!("retrieving dot completion for token: {}", &token);
         // TODO: get dot completions
@@ -477,7 +492,6 @@ pub trait LSPSupport {
     fn byte_to_pos(&self, byte_idx: usize) -> Position;
     fn char_to_pos(&self, char_idx: usize) -> Position;
     fn range_to_char_range(&self, range: &Range) -> StdRange<usize>;
-    fn char_range_to_range(&self, range: StdRange<usize>) -> Range;
     fn apply_change(&mut self, change: &TextDocumentContentChangeEvent);
 }
 
@@ -503,12 +517,6 @@ impl LSPSupport for Rope {
     }
     fn range_to_char_range(&self, range: &Range) -> StdRange<usize> {
         self.pos_to_char(&range.start)..self.pos_to_char(&range.end)
-    }
-    fn char_range_to_range(&self, range: StdRange<usize>) -> Range {
-        Range {
-            start: self.char_to_pos(range.start),
-            end: self.char_to_pos(range.end),
-        }
     }
     fn apply_change(&mut self, change: &TextDocumentContentChangeEvent) {
         if let Some(range) = change.range {
@@ -542,12 +550,6 @@ impl LSPSupport for RopeSlice<'_> {
     }
     fn range_to_char_range(&self, range: &Range) -> StdRange<usize> {
         self.pos_to_char(&range.start)..self.pos_to_char(&range.end)
-    }
-    fn char_range_to_range(&self, range: StdRange<usize>) -> Range {
-        Range {
-            start: self.char_to_pos(range.start),
-            end: self.char_to_pos(range.end),
-        }
     }
     fn apply_change(&mut self, _: &TextDocumentContentChangeEvent) {
         panic!("can't edit a rope slice");
