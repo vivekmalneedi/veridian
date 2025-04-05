@@ -1,3 +1,4 @@
+use crate::diagnostics::get_diagnostics;
 use crate::server::LSPServer;
 use crate::symbol::*;
 use log::debug;
@@ -10,7 +11,6 @@ use std::path::PathBuf;
 use std::sync::{Arc, Mutex, RwLock};
 use tower_lsp::lsp_types::*;
 use walkdir::{DirEntry, WalkDir};
-use crate::diagnostics::get_diagnostics;
 
 use tree_sitter::{InputEdit, Point, Query, Tree};
 
@@ -116,16 +116,17 @@ pub struct Source {
 pub struct Index {
     pub text: Rope,
     pub syms: Vec<Symbol>,
-    tree: Tree,
+    pub tree: Tree,
 }
 
-fn parse(
+pub fn parse(
     uri: Url,
     files: Arc<Mutex<HashMap<Url, Source>>>,
     index: Arc<Mutex<HashMap<Url, Index>>>,
     edits: Vec<InputEdit>,
 ) {
     let files = files.lock().unwrap();
+    // TODO: optimize holding of index lock
     let mut index = index.lock().unwrap();
     let file = files.get(&uri).expect("file not in files map");
     let text = file.text.clone();
@@ -260,19 +261,20 @@ impl Sources {
     }
 
     /// compute identifier completions
-    pub fn get_completions(&self, token: &str, byte_idx: usize) -> Vec<CompletionItem> {
+    pub fn get_completions(&self, token: &str, pos: Position, uri: &Url) -> Vec<CompletionItem> {
         // TODO: get completions
         debug!("retrieving identifier completion for token: {}", &token);
         let index = self.index.lock().unwrap();
         let mut cand: Vec<CompletionItem> = Vec::new();
         let mut stack: Vec<Symbol> = Vec::new();
-        for file in index.values() {
-            for sym in &file.syms {
+        for file in index.iter() {
+            let byte_idx = if file.0 == uri { file.1.text.pos_to_byte(&pos)} else {0};
+            for sym in &file.1.syms {
                 // let stk = stack.last().unwrap();
                 let stk = sym;
                 if let Some(scp) = stk.scope_node {
-                    dbg!(file.text.byte_to_pos(scp.start));
-                    dbg!(file.text.byte_to_pos(scp.end));
+                    dbg!(file.1.text.byte_to_pos(scp.start));
+                    dbg!(file.1.text.byte_to_pos(scp.end));
                 }
                 // let parent = match stk.parent {
                 //     Some(p) => file.text.byte_slice(p).to_string(),
@@ -308,7 +310,7 @@ impl Sources {
                 // check if parent of sym contains pos
                 if sym.parent.is_some() {
                     if let Some(scope) = stack.last().and_then(|s| s.scope_node) {
-                        if !scope.contains(byte_idx) {
+                        if (file.0 != uri) || !scope.contains(byte_idx) {
                             continue;
                         }
                     }
@@ -320,7 +322,7 @@ impl Sources {
                 // println!();
 
                 // check if symbol identifier starts with token
-                let mut text = file.text.byte_slice(sym.ident_node).chars();
+                let mut text = file.1.text.byte_slice(sym.ident_node).chars();
                 let mut starts_with = true;
                 for ch in token.chars() {
                     if let Some(ch2) = text.next() {
@@ -332,7 +334,7 @@ impl Sources {
                     }
                 }
                 if starts_with {
-                    cand.push(sym.to_completion(&file.text));
+                    cand.push(sym.to_completion(&file.1.text));
                 }
             }
         }
@@ -344,7 +346,8 @@ impl Sources {
     pub fn get_dot_completions(
         &self,
         token: &str,
-        byte_idx: usize
+        pos: Position,
+        uri: &Url,
     ) -> Vec<CompletionItem> {
         debug!("retrieving dot completion for token: {}", &token);
         // TODO: get dot completions
@@ -354,9 +357,10 @@ impl Sources {
 
         let mut type_token = "".to_string();
         dbg!(&token);
-        for file in index.values() {
+        for file in index.iter() {
+            let byte_idx = if file.0 == uri { file.1.text.pos_to_byte(&pos)} else {0};
             // find symbol that matches token
-            for sym in &file.syms {
+            for sym in &file.1.syms {
                 // pop scope from stack if it doesn't contain sym
                 if let Some(scope) = stack.last().and_then(|s| s.scope_node) {
                     if !scope.contains(sym.ident_node.start) {
@@ -410,21 +414,21 @@ impl Sources {
                 // println!("4");
                 // check if symbol identifier equals token
                 if let Some(type_node) = sym.type_node {
-                    if file.text.byte_slice(sym.ident_node) == token {
-                        type_token = file.text.byte_slice(type_node).to_string();
+                    if file.1.text.byte_slice(sym.ident_node) == token {
+                        type_token = file.1.text.byte_slice(type_node).to_string();
                     }
                 }
             }
             dbg!(&type_token);
 
-            for sym in &file.syms {
+            for sym in &file.1.syms {
                 let parent = match sym.parent {
-                    Some(p) => file.text.byte_slice(p).to_string(),
+                    Some(p) => file.1.text.byte_slice(p).to_string(),
                     None => "".to_string(),
                 };
                 println!(
                     "sym: {}, parent: {}",
-                    file.text.byte_slice(sym.ident_node),
+                    file.1.text.byte_slice(sym.ident_node),
                     parent
                 );
 
@@ -451,24 +455,24 @@ impl Sources {
                 if let Some(parent) = sym.parent {
                     println!("3");
                     // add children of token
-                    if file.text.byte_slice(parent) == token {
+                    if file.1.text.byte_slice(parent) == token {
                         println!("4");
-                        cand.push(sym.to_completion(&file.text));
+                        cand.push(sym.to_completion(&file.1.text));
                         continue;
                     }
                     // add sym if parent == type token and in global scope
-                    if stack.len() == 1 && file.text.byte_slice(parent) == type_token {
-                        cand.push(sym.to_completion(&file.text));
+                    if stack.len() == 1 && file.1.text.byte_slice(parent) == type_token {
+                        cand.push(sym.to_completion(&file.1.text));
                         continue;
                     }
                     // add sym if parent == type token and grand parent contains byte_idx
                     if stack.len() > 1 {
                         if let Some(stk) = stack.get(stack.len() - 2) {
                             if let Some(scope_node) = stk.scope_node {
-                                if scope_node.contains(byte_idx) {
+                                if (file.0 == uri) && scope_node.contains(byte_idx) {
                                     // check if symbol parent identifier equals token
-                                    if file.text.byte_slice(parent) == type_token {
-                                        cand.push(sym.to_completion(&file.text));
+                                    if file.1.text.byte_slice(parent) == type_token {
+                                        cand.push(sym.to_completion(&file.1.text));
                                         continue;
                                     }
                                 }
@@ -479,6 +483,53 @@ impl Sources {
             }
         }
         dbg!(&cand);
+        cand
+    }
+
+    pub fn get_definition(&self, token: &str, pos: Position, uri: &Url) -> Vec<Location> {
+        // TODO: get completions
+        debug!("retrieving definition for token: {}", &token);
+        let index = self.index.lock().unwrap();
+        let mut cand: Vec<Location> = Vec::new();
+        let mut stack: Vec<Symbol> = Vec::new();
+        for file in index.iter() {
+            let byte_idx = if file.0 == uri { file.1.text.pos_to_byte(&pos)} else {0};
+            for sym in &file.1.syms {
+                if let Some(scope) = stack.last().and_then(|s| s.scope_node) {
+                    if !scope.contains(sym.ident_node.start) {
+                        stack.pop();
+                    }
+                }
+                // push scope to stack
+                if let Some(scope) = sym.scope_node {
+                    // multiple definitions can create equivalent scopes
+                    if let Some(last) = stack.last().and_then(|s| s.scope_node) {
+                        if scope != last {
+                            stack.push(*sym);
+                        }
+                    } else {
+                        stack.push(*sym);
+                    }
+                }
+                // check if parent of sym contains pos
+                if sym.parent.is_some() {
+                    if let Some(scope) = stack.last().and_then(|s| s.scope_node) {
+                        if (file.0 != uri) || !scope.contains(byte_idx) {
+                            continue;
+                        }
+                    }
+                }
+
+                // TODO: test nested definitions?
+                // check if symbol identifier equals token
+                if file.1.text.byte_slice(sym.ident_node) == token {
+                    cand.push(Location::new(
+                        file.0.clone(),
+                        file.1.text.byte_range_to_range(sym.ident_node),
+                    ));
+                }
+            }
+        }
         cand
     }
 }
@@ -492,6 +543,9 @@ pub trait LSPSupport {
     fn byte_to_pos(&self, byte_idx: usize) -> Position;
     fn char_to_pos(&self, char_idx: usize) -> Position;
     fn range_to_char_range(&self, range: &Range) -> StdRange<usize>;
+    fn byte_range_to_range(&self, range: ByteRange) -> Range;
+    #[allow(dead_code)] // This is used?
+    fn range_to_byte_range(&self, range: Range) -> ByteRange;
     fn apply_change(&mut self, change: &TextDocumentContentChangeEvent);
 }
 
@@ -517,6 +571,18 @@ impl LSPSupport for Rope {
     }
     fn range_to_char_range(&self, range: &Range) -> StdRange<usize> {
         self.pos_to_char(&range.start)..self.pos_to_char(&range.end)
+    }
+    fn byte_range_to_range(&self, range: ByteRange) -> Range {
+        Range {
+            start: self.byte_to_pos(range.start),
+            end: self.byte_to_pos(range.end),
+        }
+    }
+    fn range_to_byte_range(&self, range: Range) -> ByteRange {
+        ByteRange {
+            start: self.pos_to_byte(&range.start),
+            end: self.pos_to_byte(&range.end),
+        }
     }
     fn apply_change(&mut self, change: &TextDocumentContentChangeEvent) {
         if let Some(range) = change.range {
@@ -550,6 +616,18 @@ impl LSPSupport for RopeSlice<'_> {
     }
     fn range_to_char_range(&self, range: &Range) -> StdRange<usize> {
         self.pos_to_char(&range.start)..self.pos_to_char(&range.end)
+    }
+    fn byte_range_to_range(&self, range: ByteRange) -> Range {
+        Range {
+            start: self.byte_to_pos(range.start),
+            end: self.byte_to_pos(range.end),
+        }
+    }
+    fn range_to_byte_range(&self, range: Range) -> ByteRange {
+        ByteRange {
+            start: self.pos_to_byte(&range.start),
+            end: self.pos_to_byte(&range.end),
+        }
     }
     fn apply_change(&mut self, _: &TextDocumentContentChangeEvent) {
         panic!("can't edit a rope slice");

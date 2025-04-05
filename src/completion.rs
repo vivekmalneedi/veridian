@@ -19,6 +19,9 @@ impl LSPServer {
             file.text.line(doc.position.line as usize),
             doc.position,
         );
+        let trigger = prev_char(&file.text, &doc.position);
+        drop(files);
+
         let response = match params.context {
             Some(context) => match context.trigger_kind {
                 CompletionTriggerKind::TRIGGER_CHARACTER => {
@@ -31,7 +34,8 @@ impl LSPServer {
                             is_incomplete: false,
                             items: self.srcs.get_dot_completions(
                                 token.trim_end_matches('.'),
-                                file.text.pos_to_byte(&doc.position)
+                                doc.position,
+                                &doc.text_document.uri,
                             ),
                         }),
                         "$" => Some(CompletionList {
@@ -50,7 +54,8 @@ impl LSPServer {
                     debug!("Invoked Completion");
                     let mut comps: Vec<CompletionItem> = self.srcs.get_completions(
                         &token,
-                        file.text.pos_to_byte(&doc.position)
+                        doc.position,
+                        &doc.text_document.uri,
                     );
                     // complete keywords
                     comps.extend::<Vec<CompletionItem>>(
@@ -68,15 +73,13 @@ impl LSPServer {
                 _ => None,
             },
             None => {
-                let trigger = prev_char(&file.text, &doc.position);
-                dbg!(&trigger);
-                dbg!();
                 match trigger {
                     '.' => Some(CompletionList {
                         is_incomplete: false,
                         items: self.srcs.get_dot_completions(
                             token.trim_end_matches('.'),
-                            file.text.pos_to_byte(&doc.position)
+                            doc.position,
+                            &doc.text_document.uri,
                         ),
                     }),
                     '$' => Some(CompletionList {
@@ -90,7 +93,8 @@ impl LSPServer {
                     _ => {
                         let mut comps: Vec<CompletionItem> = self.srcs.get_completions(
                             &token,
-                            file.text.pos_to_byte(&doc.position)
+                            doc.position,
+                            &doc.text_document.uri,
                         );
                         comps.extend::<Vec<CompletionItem>>(
                             keyword_completions(KEYWORDS)

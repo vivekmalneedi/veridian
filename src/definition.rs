@@ -1,58 +1,40 @@
-use crate::definition::extract_defs::get_ident;
 use crate::server::LSPServer;
 use crate::sources::LSPSupport;
-use log::{debug, trace};
 use ropey::{Rope, RopeSlice};
-use sv_parser::*;
 use tower_lsp::lsp_types::*;
 
-pub mod def_types;
-pub use def_types::*;
-
-mod extract_defs;
-use extract_defs::*;
+use crate::symbol::*;
 
 impl LSPServer {
     pub fn goto_definition(&self, params: GotoDefinitionParams) -> Option<GotoDefinitionResponse> {
         let doc = params.text_document_position_params.text_document.uri;
         let pos = params.text_document_position_params.position;
-        let file_id = self.srcs.get_id(&doc).to_owned();
-        self.srcs.wait_parse_ready(file_id, false);
-        let file = self.srcs.get_file(file_id)?;
-        let file = file.read().ok()?;
+        let files = self.srcs.files.lock().unwrap();
+        let file = files.get(&doc)?;
         let token = get_definition_token(file.text.line(pos.line as usize), pos);
-        debug!("goto definition, token: {}", &token);
-        let scope_tree = self.srcs.scope_tree.read().ok()?;
-        trace!("{:#?}", scope_tree.as_ref()?);
-        let def = scope_tree
-            .as_ref()?
-            .get_definition(&token, file.text.pos_to_byte(&pos), &doc)?;
-        let def_pos = file.text.byte_to_pos(def.byte_idx());
-        debug!("def: {:?}", def_pos);
-        Some(GotoDefinitionResponse::Scalar(Location::new(
-            def.url(),
-            Range::new(def_pos, def_pos),
-        )))
+        drop(files);
+
+        Some(GotoDefinitionResponse::Array(
+            self.srcs.get_definition(&token, pos, &doc),
+        ))
     }
 
     pub fn hover(&self, params: HoverParams) -> Option<Hover> {
         let doc = params.text_document_position_params.text_document.uri;
         let pos = params.text_document_position_params.position;
-        let file_id = self.srcs.get_id(&doc).to_owned();
-        self.srcs.wait_parse_ready(file_id, false);
-        let file = self.srcs.get_file(file_id)?;
-        let file = file.read().ok()?;
+        let files = self.srcs.files.lock().unwrap();
+        let file = files.get(&doc)?;
+        let text = file.text.clone();
         let token = get_definition_token(file.text.line(pos.line as usize), pos);
-        debug!("hover, token: {}", &token);
-        let scope_tree = self.srcs.scope_tree.read().ok()?;
-        let def = scope_tree
-            .as_ref()?
-            .get_definition(&token, file.text.pos_to_byte(&pos), &doc)?;
-        let def_line = file.text.byte_to_line(def.byte_idx());
+        drop(files);
+
+        let defs = self.srcs.get_definition(&token, pos, &doc);
+        let def = defs.first()?;
+        let def_line = def.range.start.line;
         Some(Hover {
             contents: HoverContents::Scalar(MarkedString::LanguageString(LanguageString {
                 language: "systemverilog".to_owned(),
-                value: get_hover(&file.text, def_line),
+                value: get_hover(&text, def_line as usize),
             })),
             range: None,
         })
@@ -60,14 +42,62 @@ impl LSPServer {
 
     pub fn document_symbol(&self, params: DocumentSymbolParams) -> Option<DocumentSymbolResponse> {
         let uri = params.text_document.uri;
-        let file_id = self.srcs.get_id(&uri).to_owned();
-        self.srcs.wait_parse_ready(file_id, false);
-        let file = self.srcs.get_file(file_id)?;
-        let file = file.read().ok()?;
-        let scope_tree = self.srcs.scope_tree.read().ok()?;
-        Some(DocumentSymbolResponse::Nested(
-            scope_tree.as_ref()?.document_symbols(&uri, &file.text),
-        ))
+        let binding = self.srcs.index.lock().ok()?;
+        let file = binding.get(&uri)?;
+
+        let mut stack: Vec<(Symbol, Vec<DocumentSymbol>)> = Vec::new();
+        let mut top_level: Vec<DocumentSymbol> = Vec::new();
+
+        for sym in &file.syms {
+            let parent = match sym.parent {
+                Some(p) => file.text.byte_slice(p).to_string(),
+                None => "".to_string(),
+            };
+            let type_str = match sym.type_node {
+                Some(p) => file.text.byte_slice(p).to_string(),
+                None => "".to_string(),
+            };
+            println!(
+                "sym: {}, parent: {}, type: {}",
+                file.text.byte_slice(sym.ident_node),
+                parent,
+                type_str
+            );
+            let doc_sym = sym.to_document_symbol(&file.text);
+            // Clean up the stack: pop until current symbol fits in the scope
+            while let Some((parent_sym, _)) = stack.last() {
+                if let Some(scope) = parent_sym.scope_node {
+                    if scope.contains(sym.ident_node.start) {
+                        break;
+                    }
+                }
+                let (_, children) = stack.pop().unwrap();
+                if let Some((_, parent_children)) = stack.last_mut() {
+                    let mut pc = parent_children.pop().unwrap();
+                    pc.children.get_or_insert(Vec::new()).extend(children);
+                    parent_children.push(pc);
+                } else {
+                    // top level
+                    top_level.extend(children);
+                }
+            }
+
+            // Add current symbol to stack
+            stack.push((*sym, vec![doc_sym]));
+        }
+
+        // Flush remaining stack
+        while let Some((_, children)) = stack.pop() {
+            if let Some((_, parent_children)) = stack.last_mut() {
+                let mut pc = parent_children.pop().unwrap();
+                pc.children.get_or_insert(Vec::new()).extend(children);
+                parent_children.push(pc);
+            } else {
+                top_level.extend(children);
+            }
+        }
+
+        Some(DocumentSymbolResponse::Nested(top_level))
     }
 
     pub fn document_highlight(
@@ -75,44 +105,44 @@ impl LSPServer {
         params: DocumentHighlightParams,
     ) -> Option<Vec<DocumentHighlight>> {
         let uri = params.text_document_position_params.text_document.uri;
-        let pos = params.text_document_position_params.position;
-        let file_id = self.srcs.get_id(&uri).to_owned();
-        self.srcs.wait_parse_ready(file_id, false);
-        let file = self.srcs.get_file(file_id)?;
-        let file = file.read().ok()?;
-        let token = get_definition_token(file.text.line(pos.line as usize), pos);
-        let scope_tree = self.srcs.scope_tree.read().ok()?;
-        // use the byte_idx of the definition if possible, otherwise use the cursor
-        let byte_idx =
-            match scope_tree
-                .as_ref()?
-                .get_definition(&token, file.text.pos_to_byte(&pos), &uri)
-            {
-                Some(def) => def.byte_idx,
-                None => file.text.pos_to_byte(&pos),
-            };
-        let syntax_tree = file.syntax_tree.as_ref()?;
-        let references = all_identifiers(syntax_tree, &token);
-        Some(
-            scope_tree
-                .as_ref()?
-                .document_highlights(&uri, &file.text, references, byte_idx),
-        )
-    }
-}
+        let binding = self.srcs.index.lock().ok()?;
+        let file = binding.get(&uri)?;
 
-/// return all identifiers in a syntax tree matching a given token
-fn all_identifiers(syntax_tree: &SyntaxTree, token: &str) -> Vec<(String, usize)> {
-    let mut idents: Vec<(String, usize)> = Vec::new();
-    for node in syntax_tree {
-        if let RefNode::Identifier(_) = node {
-            let (ident, byte_idx) = get_ident(syntax_tree, node);
-            if ident == token {
-                idents.push((ident, byte_idx));
+        let pos = params.text_document_position_params.position;
+        let token = get_definition_token(file.text.line(pos.line as usize), pos);
+
+        // Find all symbols with the same identifier
+        let root_node = file.tree.root_node();
+        let cursor = root_node.walk();
+        let mut highlights = Vec::new();
+        let mut stack = vec![cursor.node()];
+
+        while let Some(node) = stack.pop() {
+            println!("{}", file.text.byte_slice(node.byte_range()));
+            if node.kind() == "simple_identifier"
+                && file.text.byte_slice(node.byte_range()) == token
+            {
+                println!("1");
+                highlights.push(file.text.byte_range_to_range(node.byte_range().into()));
+            }
+
+            for i in 0..node.child_count() {
+                if let Some(child) = node.child(i) {
+                    println!("2");
+                    stack.push(child);
+                }
             }
         }
+        Some(
+            highlights
+                .iter()
+                .map(|r| DocumentHighlight {
+                    range: *r,
+                    kind: Some(DocumentHighlightKind::TEXT),
+                })
+                .collect(),
+        )
     }
-    idents
 }
 
 /// retrieve the token the user invoked goto definition or hover on
@@ -138,168 +168,6 @@ fn get_definition_token(line: RopeSlice, pos: Position) -> String {
         c = line_iter.next();
     }
     token
-}
-
-type ScopesAndDefs = Option<(Vec<Box<dyn Scope>>, Vec<Box<dyn Definition>>)>;
-
-/// Take a given syntax node from a sv-parser syntax tree and extract out the definition/scope at
-/// that point.
-pub fn match_definitions(
-    syntax_tree: &SyntaxTree,
-    event_iter: &mut EventIter,
-    node: RefNode,
-    url: &Url,
-) -> ScopesAndDefs {
-    let mut definitions: Vec<Box<dyn Definition>> = Vec::new();
-    let mut scopes: Vec<Box<dyn Scope>> = Vec::new();
-    match node {
-        RefNode::ModuleDeclaration(n) => {
-            let module = module_dec(syntax_tree, n, event_iter, url);
-            if module.is_some() {
-                scopes.push(Box::new(module?));
-            }
-        }
-        RefNode::InterfaceDeclaration(n) => {
-            let interface = interface_dec(syntax_tree, n, event_iter, url);
-            if interface.is_some() {
-                scopes.push(Box::new(interface?));
-            }
-        }
-        RefNode::UdpDeclaration(n) => {
-            let dec = udp_dec(syntax_tree, n, event_iter, url);
-            if dec.is_some() {
-                scopes.push(Box::new(dec?));
-            }
-        }
-        RefNode::ProgramDeclaration(n) => {
-            let dec = program_dec(syntax_tree, n, event_iter, url);
-            if dec.is_some() {
-                scopes.push(Box::new(dec?));
-            }
-        }
-        RefNode::PackageDeclaration(n) => {
-            let dec = package_dec(syntax_tree, n, event_iter, url);
-            if dec.is_some() {
-                scopes.push(Box::new(dec?));
-            }
-        }
-        RefNode::ConfigDeclaration(n) => {
-            let dec = config_dec(syntax_tree, n, event_iter, url);
-            if dec.is_some() {
-                scopes.push(Box::new(dec?));
-            }
-        }
-        RefNode::ClassDeclaration(n) => {
-            let dec = class_dec(syntax_tree, n, event_iter, url);
-            if dec.is_some() {
-                scopes.push(Box::new(dec?));
-            }
-        }
-        RefNode::PortDeclaration(n) => {
-            let ports = port_dec_non_ansi(syntax_tree, n, event_iter, url);
-            if ports.is_some() {
-                for port in ports? {
-                    definitions.push(Box::new(port));
-                }
-            }
-        }
-        RefNode::NetDeclaration(n) => {
-            let nets = net_dec(syntax_tree, n, event_iter, url);
-            if nets.is_some() {
-                for net in nets? {
-                    definitions.push(Box::new(net));
-                }
-            }
-        }
-        RefNode::DataDeclaration(n) => {
-            let vars = data_dec(syntax_tree, n, event_iter, url);
-            if let Some(vars) = vars {
-                for var in vars {
-                    match var {
-                        Declaration::Dec(dec) => definitions.push(Box::new(dec)),
-                        Declaration::Import(dec) => definitions.push(Box::new(dec)),
-                        Declaration::Scope(scope) => scopes.push(Box::new(scope)),
-                    }
-                }
-            }
-        }
-        RefNode::ParameterDeclaration(n) => {
-            let vars = param_dec(syntax_tree, n, event_iter, url);
-            if vars.is_some() {
-                for var in vars? {
-                    definitions.push(Box::new(var));
-                }
-            }
-        }
-        RefNode::LocalParameterDeclaration(n) => {
-            let vars = localparam_dec(syntax_tree, n, event_iter, url);
-            if vars.is_some() {
-                for var in vars? {
-                    definitions.push(Box::new(var));
-                }
-            }
-        }
-        RefNode::FunctionDeclaration(n) => {
-            let dec = function_dec(syntax_tree, n, event_iter, url);
-            if dec.is_some() {
-                scopes.push(Box::new(dec?));
-            }
-        }
-        RefNode::TaskDeclaration(n) => {
-            let dec = task_dec(syntax_tree, n, event_iter, url);
-            if dec.is_some() {
-                scopes.push(Box::new(dec?));
-            }
-        }
-        RefNode::ModportDeclaration(n) => {
-            let decs = modport_dec(syntax_tree, n, event_iter, url);
-            if decs.is_some() {
-                for dec in decs? {
-                    definitions.push(Box::new(dec));
-                }
-            }
-        }
-        RefNode::ModuleInstantiation(n) => {
-            let decs = module_inst(syntax_tree, n, event_iter, url);
-            if decs.is_some() {
-                for dec in decs? {
-                    definitions.push(Box::new(dec));
-                }
-            }
-        }
-        RefNode::TextMacroDefinition(n) => {
-            let dec = text_macro_def(syntax_tree, n, event_iter, url);
-            if dec.is_some() {
-                definitions.push(Box::new(dec?));
-            }
-        }
-        _ => (),
-    }
-    Some((scopes, definitions))
-}
-
-/// convert the syntax tree to a scope tree
-/// the root node is the global scope
-pub fn get_scopes(syntax_tree: &SyntaxTree, url: &Url) -> Option<GenericScope> {
-    trace!("{}", syntax_tree);
-    let mut scopes: Vec<Box<dyn Scope>> = Vec::new();
-    let mut global_scope: GenericScope = GenericScope::new(url);
-    global_scope.ident = "global".to_string();
-    let mut event_iter = syntax_tree.into_iter().event();
-    // iterate over each enter event and extract out any scopes or definitions
-    // match_definitions is recursively called so we get a tree in the end
-    while let Some(event) = event_iter.next() {
-        match event {
-            NodeEvent::Enter(node) => {
-                let mut result = match_definitions(syntax_tree, &mut event_iter, node, url)?;
-                global_scope.defs.append(&mut result.1);
-                scopes.append(&mut result.0);
-            }
-            NodeEvent::Leave(_) => (),
-        }
-    }
-    global_scope.scopes.append(&mut scopes);
-    Some(global_scope)
 }
 
 /// get the hover information
@@ -351,7 +219,6 @@ fn get_hover(doc: &Rope, line: usize) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::sources::{parse, LSPSupport};
     use crate::support::test_init;
     use ropey::Rope;
     use std::fs::read_to_string;
@@ -373,18 +240,41 @@ mod tests {
         let text = read_to_string(d).unwrap();
         let doc = Rope::from_str(&text);
         let url = Url::parse("file:///test_data/definition_test.sv").unwrap();
-        let syntax_tree = parse(&doc, &url, &None, &Vec::new()).unwrap();
-        trace!("{}", &syntax_tree);
-        let scope_tree = get_scopes(&syntax_tree, &url).unwrap();
-        trace!("{:#?}", &scope_tree);
-        for def in &scope_tree.defs {
-            trace!("{:?} {:?}", def, doc.byte_to_pos(def.byte_idx()));
-        }
+        let server = LSPServer::new(None);
+
+        let open_params = DidOpenTextDocumentParams {
+            text_document: TextDocumentItem {
+                uri: url.clone(),
+                language_id: "systemverilog".to_owned(),
+                version: 0,
+                text: text.to_owned(),
+            },
+        };
+        server.did_open(open_params);
+        let resp = server
+            .goto_definition(GotoDefinitionParams {
+                text_document_position_params: TextDocumentPositionParams {
+                    text_document: TextDocumentIdentifier { uri: url },
+                    position: Position::new(3, 13),
+                },
+                work_done_progress_params: WorkDoneProgressParams {
+                    work_done_token: None,
+                },
+                partial_result_params: PartialResultParams {
+                    partial_result_token: None,
+                },
+            })
+            .unwrap();
+
         let token = get_definition_token(doc.line(3), Position::new(3, 13));
-        for def in scope_tree.defs {
-            if token == def.ident() {
-                assert_eq!(doc.byte_to_pos(def.byte_idx()), Position::new(3, 9))
+        if let GotoDefinitionResponse::Array(defs) = resp {
+            for def in defs {
+                if token == doc.byte_slice(doc.range_to_byte_range(def.range)) {
+                    assert_eq!(def.range.start, Position::new(3, 9))
+                }
             }
+        } else {
+            panic!();
         }
     }
 
@@ -429,22 +319,44 @@ module test;
   logic a;
   logic b;
 endmodule"#;
-        let doc = Rope::from_str(text);
         let url = Url::parse("file:///test.sv").unwrap();
-        let syntax_tree = parse(&doc, &url, &None, &Vec::new()).unwrap();
-        let scope_tree = get_scopes(&syntax_tree, &url).unwrap();
-        let symbol = scope_tree.document_symbols(&url, &doc);
-        let symbol = symbol.first().unwrap();
-        assert_eq!(&symbol.name, "test");
-        let names: Vec<String> = symbol
-            .children
-            .as_ref()
-            .unwrap()
-            .iter()
-            .map(|x| x.name.clone())
-            .collect();
-        assert!(names.contains(&"a".to_string()));
-        assert!(names.contains(&"b".to_string()));
+        let server = LSPServer::new(None);
+        let open_params = DidOpenTextDocumentParams {
+            text_document: TextDocumentItem {
+                uri: url.clone(),
+                language_id: "systemverilog".to_owned(),
+                version: 0,
+                text: text.to_owned(),
+            },
+        };
+        server.did_open(open_params);
+
+        let symbols = server
+            .document_symbol(DocumentSymbolParams {
+                text_document: TextDocumentIdentifier { uri: url },
+                work_done_progress_params: WorkDoneProgressParams {
+                    work_done_token: None,
+                },
+                partial_result_params: PartialResultParams {
+                    partial_result_token: None,
+                },
+            })
+            .unwrap();
+        if let DocumentSymbolResponse::Nested(syms) = symbols {
+            let symbol = syms.first().unwrap();
+            assert_eq!(&symbol.name, "test");
+            let names: Vec<String> = symbol
+                .children
+                .as_ref()
+                .unwrap()
+                .iter()
+                .map(|x| x.name.clone())
+                .collect();
+            assert!(names.contains(&"a".to_string()));
+            assert!(names.contains(&"b".to_string()));
+        } else {
+            panic!();
+        }
     }
 
     #[test]
@@ -455,31 +367,33 @@ module test;
   logic clk;
   assign clk = 1'b1;
 endmodule"#;
-        let doc = Rope::from_str(text);
         let url = Url::parse("file:///test.sv").unwrap();
-        let syntax_tree = parse(&doc, &url, &None, &Vec::new()).unwrap();
-        let scope_tree = get_scopes(&syntax_tree, &url).unwrap();
-        let references = all_identifiers(&syntax_tree, "clk");
-        let highlights = scope_tree.document_highlights(
-            &url,
-            &doc,
-            references,
-            doc.pos_to_byte(&Position::new(2, 8)),
-        );
-        let expected = vec![
-            DocumentHighlight {
-                range: Range {
-                    start: Position {
-                        line: 2,
-                        character: 8,
-                    },
-                    end: Position {
-                        line: 2,
-                        character: 11,
-                    },
-                },
-                kind: None,
+        let server = LSPServer::new(None);
+        let open_params = DidOpenTextDocumentParams {
+            text_document: TextDocumentItem {
+                uri: url.clone(),
+                language_id: "systemverilog".to_owned(),
+                version: 0,
+                text: text.to_owned(),
             },
+        };
+        server.did_open(open_params);
+
+        let highlights = server
+            .document_highlight(DocumentHighlightParams {
+                text_document_position_params: TextDocumentPositionParams {
+                    text_document: TextDocumentIdentifier { uri: url },
+                    position: Position::new(2, 8),
+                },
+                work_done_progress_params: WorkDoneProgressParams {
+                    work_done_token: None,
+                },
+                partial_result_params: PartialResultParams {
+                    partial_result_token: None,
+                },
+            })
+            .unwrap();
+        let expected = vec![
             DocumentHighlight {
                 range: Range {
                     start: Position {
@@ -491,7 +405,20 @@ endmodule"#;
                         character: 12,
                     },
                 },
-                kind: None,
+                kind: Some(DocumentHighlightKind::TEXT),
+            },
+            DocumentHighlight {
+                range: Range {
+                    start: Position {
+                        line: 2,
+                        character: 8,
+                    },
+                    end: Position {
+                        line: 2,
+                        character: 11,
+                    },
+                },
+                kind: Some(DocumentHighlightKind::TEXT),
             },
         ];
         assert_eq!(highlights, expected)

@@ -6,6 +6,8 @@ use streaming_iterator::StreamingIterator;
 use tower_lsp::lsp_types::*;
 use tree_sitter::{Node, Point, Query, QueryCursor, QueryError, TextProvider, Tree};
 
+use crate::sources::LSPSupport;
+
 /// The Sources struct manages all source files
 pub struct Sources {
     // all files
@@ -58,6 +60,24 @@ impl Symbol {
             commit_characters: None,
             data: None,
             tags: None,
+        }
+    }
+
+    pub fn to_document_symbol(self, text: &Rope) -> DocumentSymbol {
+        let name = text.byte_slice(self.ident_node).to_string();
+        let range = text.byte_range_to_range(self.scope_node.unwrap_or(self.ident_node));
+        let selection_range = text.byte_range_to_range(self.ident_node);
+
+        DocumentSymbol {
+            name,
+            detail: None,
+            kind: self.skind,
+            tags: None,
+            #[allow(deprecated)]
+            deprecated: None,
+            range,
+            selection_range,
+            children: None,
         }
     }
 }

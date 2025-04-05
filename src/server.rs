@@ -335,16 +335,16 @@ impl LanguageServer for Backend {
         &self,
         params: GotoDefinitionParams,
     ) -> Result<Option<GotoDefinitionResponse>> {
-        Ok(None)
+        Ok(self.server.goto_definition(params))
     }
     async fn hover(&self, params: HoverParams) -> Result<Option<Hover>> {
-        Ok(None)
+        Ok(self.server.hover(params))
     }
     async fn document_symbol(
         &self,
         params: DocumentSymbolParams,
     ) -> Result<Option<DocumentSymbolResponse>> {
-        Ok(None)
+        Ok(self.server.document_symbol(params))
     }
     async fn formatting(&self, params: DocumentFormattingParams) -> Result<Option<Vec<TextEdit>>> {
         Ok(None)
@@ -359,7 +359,7 @@ impl LanguageServer for Backend {
         &self,
         params: DocumentHighlightParams,
     ) -> Result<Option<Vec<DocumentHighlight>>> {
-        Ok(None)
+        Ok(self.server.document_highlight(params))
     }
 }
 
