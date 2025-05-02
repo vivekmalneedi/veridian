@@ -23,6 +23,10 @@ pub struct Symbol {
 }
 
 impl Symbol {
+    pub fn is_port(&self) -> bool {
+        self.direction != PortDirection::None
+    }
+
     pub fn to_completion(self, text: &Rope) -> CompletionItem {
         CompletionItem {
             label: text.byte_slice(self.ident_node).to_string(),
@@ -438,12 +442,6 @@ pub const SYMBOL_QUERY: &str = include_str!("query.scm");
 mod tests {
     use super::*;
     use tree_sitter::Point;
-
-    impl Symbol {
-        fn is_port(&self) -> bool {
-            self.direction != PortDirection::None
-        }
-    }
 
     pub fn parse(text: &Rope) -> Option<Tree> {
         let mut parser = tree_sitter::Parser::new();

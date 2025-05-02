@@ -268,7 +268,11 @@ impl Sources {
         let mut cand: Vec<CompletionItem> = Vec::new();
         let mut stack: Vec<Symbol> = Vec::new();
         for file in index.iter() {
-            let byte_idx = if file.0 == uri { file.1.text.pos_to_byte(&pos)} else {0};
+            let byte_idx = if file.0 == uri {
+                file.1.text.pos_to_byte(&pos)
+            } else {
+                0
+            };
             for sym in &file.1.syms {
                 // pop scope from stack if it doesn't contain sym
                 if let Some(scope) = stack.last().and_then(|s| s.scope_node) {
@@ -331,7 +335,11 @@ impl Sources {
 
         let mut type_token = "".to_string();
         for file in index.iter() {
-            let byte_idx = if file.0 == uri { file.1.text.pos_to_byte(&pos)} else {0};
+            let byte_idx = if file.0 == uri {
+                file.1.text.pos_to_byte(&pos)
+            } else {
+                0
+            };
             // find symbol that matches token
             for sym in &file.1.syms {
                 // pop scope from stack if it doesn't contain sym
@@ -434,14 +442,46 @@ impl Sources {
     }
 
     pub fn get_definition(&self, token: &str, pos: Position, uri: &Url) -> Vec<Location> {
-        // TODO: get completions
         debug!("retrieving definition for token: {}", &token);
         let index = self.index.lock().unwrap();
+
+        let f = index.get(uri).unwrap();
+
+        // check if node at pos is a named_port_connection
+        let named_port_connection: bool = {
+            let node = f.tree.root_node().named_descendant_for_byte_range(
+                f.text.pos_to_byte(&pos),
+                f.text.pos_to_byte(&pos),
+            );
+            if let Some(n) = node {
+                if let Some(p) = n.parent() {
+                    p.kind() == "named_port_connection"
+                } else {
+                    false
+                }
+            } else {
+                false
+            }
+        };
+
         let mut cand: Vec<Location> = Vec::new();
         let mut stack: Vec<Symbol> = Vec::new();
         for file in index.iter() {
-            let byte_idx = if file.0 == uri { file.1.text.pos_to_byte(&pos)} else {0};
+            let byte_idx = if file.0 == uri {
+                file.1.text.pos_to_byte(&pos)
+            } else {
+                0
+            };
             for sym in &file.1.syms {
+                let parent = match sym.parent {
+                    Some(p) => file.1.text.byte_slice(p).to_string(),
+                    None => "".to_string(),
+                };
+                println!(
+                    "sym: {}, parent: {}",
+                    file.1.text.byte_slice(sym.ident_node),
+                    parent
+                );
                 if let Some(scope) = stack.last().and_then(|s| s.scope_node) {
                     if !scope.contains(sym.ident_node.start) {
                         stack.pop();
@@ -458,12 +498,25 @@ impl Sources {
                         stack.push(*sym);
                     }
                 }
-                // check if parent of sym contains pos
-                if sym.parent.is_some() {
-                    if let Some(scope) = stack.last().and_then(|s| s.scope_node) {
-                        if (file.0 != uri) || !scope.contains(byte_idx) {
-                            continue;
+
+                let scope = {
+                    if sym.parent.is_some() && named_port_connection && sym.is_port() {
+                        if stack.len() > 1 {
+                            stack.get(stack.len() - 2)
+                        } else {
+                            None
                         }
+                    } else if sym.parent.is_some() {
+                        stack.last()
+                    } else {
+                        None
+                    }
+                };
+
+                // check if parent of sym contains pos
+                if let Some(scope) = scope.and_then(|s| s.scope_node) {
+                    if (file.0 != uri) || !scope.contains(byte_idx) {
+                        continue;
                     }
                 }
 

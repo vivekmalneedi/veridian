@@ -279,6 +279,57 @@ mod tests {
     }
 
     #[test]
+    fn test_definition_instance_port() {
+        test_init();
+        let text = r#"
+interface a (
+    input logic b
+);
+endinterface
+module test;
+    logic c;
+    a intf (
+        .b(c)
+    );
+endmodule"#;
+        let url = Url::parse("file:///test.sv").unwrap();
+        let server = LSPServer::new(None);
+        let open_params = DidOpenTextDocumentParams {
+            text_document: TextDocumentItem {
+                uri: url.clone(),
+                language_id: "systemverilog".to_owned(),
+                version: 0,
+                text: text.to_owned(),
+            },
+        };
+        server.did_open(open_params);
+
+        let resp = server
+            .goto_definition(GotoDefinitionParams {
+                text_document_position_params: TextDocumentPositionParams {
+                    text_document: TextDocumentIdentifier { uri: url },
+                    position: Position::new(8, 9),
+                },
+                work_done_progress_params: WorkDoneProgressParams {
+                    work_done_token: None,
+                },
+                partial_result_params: PartialResultParams {
+                    partial_result_token: None,
+                },
+            })
+            .unwrap();
+
+        if let GotoDefinitionResponse::Array(defs) = resp {
+            assert!(defs.len() == 1);
+            for def in defs {
+                assert_eq!(def.range.start, Position { line: 2, character: 16 })
+            }
+        } else {
+            panic!();
+        }
+    }
+
+    #[test]
     fn test_hover() {
         test_init();
         let text = r#"
