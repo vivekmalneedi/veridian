@@ -5,7 +5,6 @@ use std::sync::Arc;
 use structopt::StructOpt;
 use tower_lsp::{LspService, Server};
 
-mod symbol;
 mod completion;
 mod definition;
 mod diagnostics;
@@ -14,6 +13,7 @@ mod server;
 mod sources;
 #[cfg(test)]
 mod support;
+mod symbol;
 use server::Backend;
 
 #[derive(StructOpt, Debug)]

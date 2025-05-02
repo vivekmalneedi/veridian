@@ -52,11 +52,9 @@ impl LSPServer {
                 CompletionTriggerKind::TRIGGER_FOR_INCOMPLETE_COMPLETIONS => None,
                 CompletionTriggerKind::INVOKED => {
                     debug!("Invoked Completion");
-                    let mut comps: Vec<CompletionItem> = self.srcs.get_completions(
-                        &token,
-                        doc.position,
-                        &doc.text_document.uri,
-                    );
+                    let mut comps: Vec<CompletionItem> =
+                        self.srcs
+                            .get_completions(&token, doc.position, &doc.text_document.uri);
                     // complete keywords
                     comps.extend::<Vec<CompletionItem>>(
                         keyword_completions(KEYWORDS)
@@ -72,44 +70,40 @@ impl LSPServer {
                 }
                 _ => None,
             },
-            None => {
-                match trigger {
-                    '.' => Some(CompletionList {
+            None => match trigger {
+                '.' => Some(CompletionList {
+                    is_incomplete: false,
+                    items: self.srcs.get_dot_completions(
+                        token.trim_end_matches('.'),
+                        doc.position,
+                        &doc.text_document.uri,
+                    ),
+                }),
+                '$' => Some(CompletionList {
+                    is_incomplete: false,
+                    items: self.sys_tasks.clone(),
+                }),
+                '`' => Some(CompletionList {
+                    is_incomplete: false,
+                    items: self.directives.clone(),
+                }),
+                _ => {
+                    let mut comps: Vec<CompletionItem> =
+                        self.srcs
+                            .get_completions(&token, doc.position, &doc.text_document.uri);
+                    comps.extend::<Vec<CompletionItem>>(
+                        self.key_comps
+                            .iter()
+                            .filter(|x| x.label.starts_with(&token))
+                            .cloned()
+                            .collect(),
+                    );
+                    Some(CompletionList {
                         is_incomplete: false,
-                        items: self.srcs.get_dot_completions(
-                            token.trim_end_matches('.'),
-                            doc.position,
-                            &doc.text_document.uri,
-                        ),
-                    }),
-                    '$' => Some(CompletionList {
-                        is_incomplete: false,
-                        items: self.sys_tasks.clone(),
-                    }),
-                    '`' => Some(CompletionList {
-                        is_incomplete: false,
-                        items: self.directives.clone(),
-                    }),
-                    _ => {
-                        let mut comps: Vec<CompletionItem> = self.srcs.get_completions(
-                            &token,
-                            doc.position,
-                            &doc.text_document.uri,
-                        );
-                        comps.extend::<Vec<CompletionItem>>(
-                           self.key_comps 
-                                .iter()
-                                .filter(|x| x.label.starts_with(&token))
-                                .cloned()
-                                .collect(),
-                        );
-                        Some(CompletionList {
-                            is_incomplete: false,
-                            items: comps,
-                        })
-                    }
+                        items: comps,
+                    })
                 }
-            }
+            },
         };
         Some(CompletionResponse::List(response?))
     }

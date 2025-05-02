@@ -1,8 +1,8 @@
 use crate::server::LSPServer;
 use crate::sources::LSPSupport;
+use log::debug;
 use ropey::{Rope, RopeSlice};
 use tower_lsp::lsp_types::*;
-use log::debug;
 
 use crate::symbol::*;
 
@@ -320,7 +320,13 @@ endmodule"#;
         if let GotoDefinitionResponse::Array(defs) = resp {
             assert!(defs.len() == 1);
             for def in defs {
-                assert_eq!(def.range.start, Position { line: 2, character: 16 })
+                assert_eq!(
+                    def.range.start,
+                    Position {
+                        line: 2,
+                        character: 16
+                    }
+                )
             }
         } else {
             panic!();
