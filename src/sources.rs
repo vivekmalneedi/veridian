@@ -382,20 +382,18 @@ impl Sources {
                     Some(p) => file.1.text.byte_slice(p).to_string(),
                     None => "".to_string(),
                 };
-                println!(
+                debug!(
                     "sym: {}, parent: {}",
                     file.1.text.byte_slice(sym.ident_node),
                     parent
                 );
 
-                println!("1");
                 // pop scope from stack if it doesn't contain sym
                 if let Some(scope) = stack.last().and_then(|s| s.scope_node) {
                     if !scope.contains(sym.ident_node.start) {
                         stack.pop();
                     }
                 }
-                println!("2");
                 // push scope to stack
                 if let Some(scope) = sym.scope_node {
                     // multiple definitions can create equivalent scopes
@@ -409,10 +407,8 @@ impl Sources {
                 }
                 // check if scope in scope stack contains bidx
                 if let Some(parent) = sym.parent {
-                    println!("3");
                     // add children of token
                     if file.1.text.byte_slice(parent) == token {
-                        println!("4");
                         cand.push(sym.to_completion(&file.1.text));
                         continue;
                     }
@@ -477,7 +473,7 @@ impl Sources {
                     Some(p) => file.1.text.byte_slice(p).to_string(),
                     None => "".to_string(),
                 };
-                println!(
+                debug!(
                     "sym: {}, parent: {}",
                     file.1.text.byte_slice(sym.ident_node),
                     parent
@@ -680,9 +676,7 @@ endmodule"#;
                 text: text.to_owned(),
             },
         };
-        println!("running did open...");
         server.did_open(open_params);
-        println!("did open complete");
         let files = server.srcs.files.lock().unwrap();
         let file = files.get(&uri).expect("file not in files map");
         assert_eq!(file.text.to_string(), text.to_owned());

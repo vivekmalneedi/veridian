@@ -25,6 +25,10 @@
     "function" @keyword
     (_
         (simple_identifier) @ident))
+(function_prototype
+    "function" @keyword
+    (_
+        (simple_identifier) @ident))
 (package_declaration
     "package" @keyword
     (simple_identifier) @ident)
@@ -159,9 +163,10 @@
     (list_of_param_assignments
         (param_assignment
             (simple_identifier) @ident))
-    (list_of_type_assignments
-        (type_assignment
-            (simple_identifier) @ident))
+    (type_parameter_declaration
+      (list_of_type_assignments
+          (type_assignment
+              (simple_identifier) @ident)))
     ])
 (local_parameter_declaration
     "localparam" @type

@@ -2,6 +2,7 @@ use crate::server::LSPServer;
 use crate::sources::LSPSupport;
 use ropey::{Rope, RopeSlice};
 use tower_lsp::lsp_types::*;
+use log::debug;
 
 use crate::symbol::*;
 
@@ -57,7 +58,7 @@ impl LSPServer {
                 Some(p) => file.text.byte_slice(p).to_string(),
                 None => "".to_string(),
             };
-            println!(
+            debug!(
                 "sym: {}, parent: {}, type: {}",
                 file.text.byte_slice(sym.ident_node),
                 parent,
@@ -118,17 +119,14 @@ impl LSPServer {
         let mut stack = vec![cursor.node()];
 
         while let Some(node) = stack.pop() {
-            println!("{}", file.text.byte_slice(node.byte_range()));
             if node.kind() == "simple_identifier"
                 && file.text.byte_slice(node.byte_range()) == token
             {
-                println!("1");
                 highlights.push(file.text.byte_range_to_range(node.byte_range().into()));
             }
 
             for i in 0..node.child_count() {
                 if let Some(child) = node.child(i) {
-                    println!("2");
                     stack.push(child);
                 }
             }

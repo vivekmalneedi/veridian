@@ -84,11 +84,11 @@ impl LSPServer {
                     }),
                     '$' => Some(CompletionList {
                         is_incomplete: false,
-                        items: other_completions(SYS_TASKS),
+                        items: self.sys_tasks.clone(),
                     }),
                     '`' => Some(CompletionList {
                         is_incomplete: false,
-                        items: other_completions(DIRECTIVES),
+                        items: self.directives.clone(),
                     }),
                     _ => {
                         let mut comps: Vec<CompletionItem> = self.srcs.get_completions(
@@ -97,7 +97,7 @@ impl LSPServer {
                             &doc.text_document.uri,
                         );
                         comps.extend::<Vec<CompletionItem>>(
-                            keyword_completions(KEYWORDS)
+                           self.key_comps 
                                 .iter()
                                 .filter(|x| x.label.starts_with(&token))
                                 .cloned()
@@ -111,7 +111,6 @@ impl LSPServer {
                 }
             }
         };
-        // eprintln!("comp response: {}", now.elapsed().as_millis());
         Some(CompletionResponse::List(response?))
     }
 }
@@ -732,7 +731,6 @@ endinterface"#;
         let response: CompletionResponse = server.completion(completion_params).unwrap();
         dbg!(&response);
         if let CompletionResponse::List(item) = response {
-            // eprintln!("{:#?}", item);
             let names: Vec<&String> = item.items.iter().map(|x| &x.label).collect();
             assert!(names.contains(&&"simple_bus".to_string()));
         } else {

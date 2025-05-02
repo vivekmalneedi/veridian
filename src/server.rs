@@ -16,11 +16,13 @@ use tower_lsp::lsp_types::*;
 use tower_lsp::{Client, LanguageServer};
 use which::which;
 
+use crate::completion::keyword::*;
+
 pub struct LSPServer {
     pub srcs: Sources,
-    //pub key_comps: Vec<CompletionItem>,
-    //pub sys_tasks: Vec<CompletionItem>,
-    //pub directives: Vec<CompletionItem>,
+    pub key_comps: Vec<CompletionItem>,
+    pub sys_tasks: Vec<CompletionItem>,
+    pub directives: Vec<CompletionItem>,
     pub conf: RwLock<ProjectConfig>,
     pub log_handle: Mutex<Option<LoggerHandle>>,
 }
@@ -29,9 +31,9 @@ impl LSPServer {
     pub fn new(log_handle: Option<LoggerHandle>) -> LSPServer {
         LSPServer {
             srcs: Sources::new(),
-            //key_comps: keyword_completions(KEYWORDS),
-            //sys_tasks: other_completions(SYS_TASKS),
-            //directives: other_completions(DIRECTIVES),
+            key_comps: keyword_completions(KEYWORDS),
+            sys_tasks: other_completions(SYS_TASKS),
+            directives: other_completions(DIRECTIVES),
             conf: RwLock::new(ProjectConfig::default()),
             log_handle: Mutex::new(log_handle),
         }
