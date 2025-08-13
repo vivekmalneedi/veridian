@@ -450,7 +450,7 @@ endmodule
             ..CompletionItem::default()
         };
         if let CompletionResponse::List(item) = response {
-            eprintln!("{:#?}", item);
+            eprintln!("{item:#?}");
             assert!(item.items.contains(&item1));
             for comp in &item.items {
                 assert!(comp.label != "abcd");
@@ -519,7 +519,7 @@ endmodule
             ..CompletionItem::default()
         };
         if let CompletionResponse::List(item) = response {
-            eprintln!("{:#?}", item);
+            eprintln!("{item:#?}");
             assert!(item.items.contains(&item1));
             assert!(item.items.len() == 1);
         } else {
@@ -542,7 +542,7 @@ endmodule
         };
         let response: CompletionResponse = server.completion(completion_params).unwrap();
         if let CompletionResponse::List(item) = response {
-            eprintln!("{:#?}", item);
+            eprintln!("{item:#?}");
             assert!(item.items.contains(&item1));
             assert!(item.items.len() == 1);
         } else {
@@ -605,7 +605,7 @@ endmodule
             ..CompletionItem::default()
         };
         if let CompletionResponse::List(item) = response {
-            eprintln!("{:#?}", item);
+            eprintln!("{item:#?}");
             assert!(item.items.contains(&item1));
             assert!(item.items.len() == 1);
         } else {
@@ -628,7 +628,7 @@ endmodule
         };
         let response: CompletionResponse = server.completion(completion_params).unwrap();
         if let CompletionResponse::List(item) = response {
-            eprintln!("{:#?}", item);
+            eprintln!("{item:#?}");
             assert!(item.items.contains(&item1));
             assert!(item.items.len() == 1);
         } else {

@@ -1111,7 +1111,7 @@ pub fn modport_dec(
                                     event_iter,
                                     RefNode::ModportSimplePortNamed
                                 );
-                                port.type_str = format!("{} {}", prepend, append);
+                                port.type_str = format!("{prepend} {append}");
                                 modport.ports.push(Box::new(port));
                             }
                         }
