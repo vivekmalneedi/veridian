@@ -84,14 +84,9 @@ jobs:
                   key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
 
             - name: Run cargo fmt
-              uses: actions-rs/cargo@v1
-              with:
-                  command: fmt
-                  args: --all -- --check
-            - uses: actions-rs/clippy-check@v1
-              with:
-                  token: ${{ secrets.GITHUB_TOKEN }}
-                  args: --all-features -- -D warnings
+              run: cargo fmt --all -- --check
+            - name: Run clippy
+              run: cargo clippy --all-targets --all-features -- -D warnings
 
     build_ubuntu:
         name: Build Ubuntu
