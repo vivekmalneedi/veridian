@@ -3,6 +3,10 @@
     (_
         (module_keyword) @keyword
         (simple_identifier) @ident))
+(modport_declaration
+    "modport" @keyword
+    (_
+        (simple_identifier) @ident))
 (program_declaration
     (_
         "program" @keyword
@@ -86,8 +90,7 @@
             (simple_identifier) @type
             ])?)
     (interface_port_header
-        (simple_identifier) @interface
-        (simple_identifier)? @modport) @type
+        (simple_identifier) @interface) @type
     (port_direction) @direction
     ]?
     (simple_identifier) @ident)
@@ -124,7 +127,6 @@
 (port_declaration
     (interface_port_declaration
         (simple_identifier) @interface
-        (simple_identifier)? @modport
         (list_of_interface_identifiers
             (simple_identifier) @ident)))
 (udp_output_declaration
@@ -154,6 +156,11 @@
     (tf_port_direction) @direction
     (list_of_tf_variable_identifiers
         (simple_identifier) @ident))
+(modport_ports_declaration
+    (_
+        (port_direction) @direction
+        (_
+            (simple_identifier) @ident)))
 ] @port
 
 [
@@ -261,5 +268,9 @@
     (list_of_net_decl_assignments
         (net_decl_assignment
             (simple_identifier) @ident)))
+(text_macro_definition
+  ("directive_define") @type
+  (_
+    (simple_identifier) @ident))
 ] @variable
 

@@ -1,6 +1,8 @@
 use ropey::Rope;
+use std::fmt;
 use std::ops::Bound;
 use std::ops::RangeBounds;
+use std::str::FromStr;
 use streaming_iterator::StreamingIterator;
 use tower_lsp::lsp_types::*;
 use tree_sitter::{Node, Query, QueryCursor, Tree};
@@ -113,15 +115,32 @@ enum PortDirection {
     Interface((ByteRange, Option<ByteRange>)),
 }
 
-impl From<&str> for PortDirection {
-    fn from(direction: &str) -> Self {
+impl FromStr for PortDirection {
+    type Err = ();
+
+    fn from_str(direction: &str) -> Result<Self, Self::Err> {
         match direction {
-            "input" => PortDirection::Input,
-            "output" => PortDirection::Output,
-            "inout" => PortDirection::InOut,
-            "ref" => PortDirection::Ref,
-            _ => PortDirection::None,
+            "input" => Ok(PortDirection::Input),
+            "output" => Ok(PortDirection::Output),
+            "inout" => Ok(PortDirection::InOut),
+            "ref" => Ok(PortDirection::Ref),
+            _ => Ok(PortDirection::None),
         }
+    }
+}
+
+impl fmt::Display for PortDirection {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let s = match self {
+            PortDirection::Input => "input",
+            PortDirection::Output => "output",
+            PortDirection::InOut => "inout",
+            PortDirection::Ref => "ref",
+            PortDirection::Interface(_) => "interface",
+            PortDirection::None => "",
+        };
+
+        write!(f, "{}", s)
     }
 }
 
@@ -197,18 +216,12 @@ impl SymbolBuilder {
 
     /// Set the symbol builder's direction.
     fn direction(&mut self, direction: &str) {
-        self.direction = direction.into();
+        self.direction = direction.parse().unwrap_or(PortDirection::None);
     }
 
     fn direction_interface(&mut self, interface: ByteRange) {
         self.direction = PortDirection::None;
         self.direction = PortDirection::Interface((interface, None));
-    }
-
-    fn direction_modport(&mut self, modport: ByteRange) {
-        if let PortDirection::Interface((i, _)) = &self.direction {
-            self.direction = PortDirection::Interface((*i, Some(modport)))
-        }
     }
 }
 
@@ -267,6 +280,9 @@ pub fn index_text(text: &Rope, tree: &Tree, query: &Query) -> Vec<Symbol> {
                                 "struct" => Some((CompletionItemKind::STRUCT, SymbolKind::STRUCT)),
                                 "union" => Some((CompletionItemKind::ENUM, SymbolKind::ENUM)),
                                 "enum" => Some((CompletionItemKind::ENUM, SymbolKind::ENUM)),
+                                "modport" => {
+                                    Some((CompletionItemKind::PROPERTY, SymbolKind::PROPERTY))
+                                }
                                 _ => None,
                             },
                         );
@@ -318,7 +334,6 @@ pub fn index_text(text: &Rope, tree: &Tree, query: &Query) -> Vec<Symbol> {
                     }
                     "signed" => builder.signed(),
                     "interface" => builder.direction_interface(cap.node.byte_range().into()),
-                    "modport" => builder.direction_modport(cap.node.byte_range().into()),
                     _ => (),
                 }
             }
@@ -481,11 +496,12 @@ mod tests {
                 None => "",
             };
             println!(
-                "sym: {}, parent: {}, scope: {}, type: {}",
+                "sym: {}, parent: {}, scope: {}, type: {}, direction: {}",
                 range_text(symbol.ident_node, text),
                 parent,
                 scope,
-                ty
+                ty,
+                symbol.direction.to_string()
             );
         }
         symbols
@@ -527,8 +543,11 @@ endmodule
         };
         let mut ind = test_index(&text);
         ind.retain(|s| s.is_port());
-        let port = ind.first().unwrap();
-        assert_eq!(port.direction, direction.into());
+        let port = ind.last().unwrap();
+        assert_eq!(
+            port.direction,
+            direction.parse().unwrap_or(PortDirection::None)
+        );
         assert_eq!(port.signed, signed);
         assert_eq!(range_text(port.ident_node, &text), ident_str);
         if let Some(type_node) = port.type_node {
@@ -646,10 +665,10 @@ endmodule
             "input",
             true,
             "",
-            "b",
+            "d",
             "test",
         );
-        port(false, "output signed f,g;", "output", true, "", "f", "test");
+        port(false, "output signed f,g;", "output", true, "", "g", "test");
     }
 
     #[test]

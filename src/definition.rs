@@ -478,4 +478,239 @@ endmodule"#;
         ];
         assert_eq!(highlights, expected)
     }
+
+    // Finds /*REF*/ and /*DEF*/ markers, returns cleaned text and positions.
+    //
+    fn extract_markers(text: &str) -> (String, Position, Position) {
+        let ref_mark = "/*REF*/";
+        let def_mark = "/*DEF*/";
+
+        let mut ref_pos: Option<Position> = None;
+        let mut def_pos: Option<Position> = None;
+
+        let mut clean_lines = Vec::<String>::new();
+
+        for (line_idx, line) in text.lines().enumerate() {
+            let mut clean_line = line.to_string();
+
+            if let Some(col) = line.find(ref_mark) {
+                ref_pos = Some(Position::new(line_idx as u32, col as u32));
+                clean_line = clean_line.replace(ref_mark, "");
+            }
+
+            if let Some(col) = line.find(def_mark) {
+                def_pos = Some(Position::new(line_idx as u32, col as u32));
+                clean_line = clean_line.replace(def_mark, "");
+            }
+
+            clean_lines.push(clean_line);
+        }
+
+        let clean_text = clean_lines.join("\n");
+
+        let ref_pos = ref_pos.expect("No /*REF*/ marker found");
+        let def_pos = def_pos.expect("No /*DEF*/ marker found");
+
+        (clean_text, ref_pos, def_pos)
+    }
+
+    fn go_to_def_test(uri: &str, text: &str) {
+        test_init();
+
+        let (clean_text, ref_pos, def_pos) = extract_markers(text);
+
+        let url = Url::parse(uri).unwrap();
+        let server = LSPServer::new(None);
+
+        server.did_open(DidOpenTextDocumentParams {
+            text_document: TextDocumentItem {
+                uri: url.clone(),
+                language_id: "systemverilog".into(),
+                version: 0,
+                text: clean_text,
+            },
+        });
+
+        let resp = server
+            .goto_definition(GotoDefinitionParams {
+                text_document_position_params: TextDocumentPositionParams {
+                    text_document: TextDocumentIdentifier { uri: url },
+                    position: ref_pos,
+                },
+                work_done_progress_params: WorkDoneProgressParams {
+                    work_done_token: None,
+                },
+                partial_result_params: PartialResultParams {
+                    partial_result_token: None,
+                },
+            })
+            .unwrap();
+
+        let defs: Vec<Location> = match resp {
+            GotoDefinitionResponse::Array(a) => a,
+            GotoDefinitionResponse::Scalar(loc) => vec![loc],
+            GotoDefinitionResponse::Link(links) => links
+                .into_iter()
+                .map(|l| Location {
+                    uri: l.target_uri,
+                    range: l.target_range,
+                })
+                .collect(),
+        };
+
+        assert_eq!(defs.len(), 1, "Expected 1 definition result");
+
+        let actual = defs[0].range.start;
+        assert_eq!(
+            actual, def_pos,
+            "Definition position mismatch. Expected {:?}, got {:?}",
+            def_pos, actual
+        );
+    }
+
+    #[test]
+    fn test_parameter() {
+        let text = r#"
+    module param_mod #(
+      parameter /*DEF*/WIDTH = 8
+    ) (
+      input logic [WIDTH-1:0] a
+    );
+
+    module top;
+      param_mod #(./*REF*/WIDTH(16)) u_mod();
+    endmodule
+    "#;
+
+        go_to_def_test("file:///test02.sv", text);
+    }
+
+    #[test]
+    fn test_typedef_struct() {
+        let text = r#"
+    typedef struct packed {
+      logic [3:0] x;
+      logic [3:0] y;
+    } /*DEF*/my_struct_t;
+
+    module top;
+      /*REF*/my_struct_t s;
+    endmodule
+    "#;
+
+        go_to_def_test("file:///test03.sv", text);
+    }
+
+    // #[test]
+    // fn test_package_typedef_and_param() {
+    //     let text = r#"
+    // package my_pkg;
+    //   typedef int /*DEF*/my_int_t;
+    //   parameter int /*DEF*/P = 42;
+    // endpackage
+    //
+    // import my_pkg::*;
+    //
+    // module use_pkg;
+    //   /*REF*/my_int_t a;
+    //   initial $display(/*REF*/P);
+    // endmodule
+    // "#;
+    //
+    //     go_to_def_test("file:///test04.sv", text);
+    // }
+
+    #[test]
+    fn test_function_in_package() {
+        let text = r#"
+    package arith_pkg;
+      function int /*DEF*/add(int a, int b);
+        return a + b;
+      endfunction
+    endpackage
+
+    import arith_pkg::*;
+
+    module top;
+      int x = /*REF*/add(1, 2);
+    endmodule
+    "#;
+
+        go_to_def_test("file:///test05.sv", text);
+    }
+
+    #[test]
+    fn test_class_and_methods() {
+        let text = r#"
+    package class_pkg;
+      class /*DEF*/Foo;
+        int q;
+
+        function new(int x);
+          q = x;
+        endfunction
+
+        function int /*DEF*/get();
+          return q;
+        endfunction
+      endclass
+    endpackage
+
+    import class_pkg::*;
+
+    module use_class;
+      /*REF*/Foo f = new(5);
+      initial $display(f./*REF*/get());
+    endmodule
+    "#;
+
+        go_to_def_test("file:///test06.sv", text);
+    }
+
+    #[test]
+    fn test_interface_and_modport() {
+        let text = r#"
+    interface bus_if;
+      logic clk;
+      modport /*DEF*/master (input clk);
+    endinterface
+
+    module top(bus_if./*REF*/master b);
+    endmodule
+    "#;
+
+        go_to_def_test("file:///test07.sv", text);
+    }
+
+    // #[test]
+    // fn test_hierarchical_ref() {
+    //     let text = r#"
+    // module sub;
+    //   int /*DEF*/value = 10;
+    // endmodule
+    //
+    // module top;
+    //   sub u_sub();
+    //
+    //   initial begin
+    //     $display(u_sub./*REF*/value);
+    //   end
+    // endmodule
+    // "#;
+    //
+    //     go_to_def_test("file:///test08.sv", text);
+    // }
+
+    #[test]
+    fn test_macro_definition() {
+        let text = r#"
+    `define /*DEF*/SCALE_FACTOR 4
+
+    module top;
+      int x = `/*REF*/SCALE_FACTOR;
+    endmodule
+    "#;
+
+        go_to_def_test("file:///test10.sv", text);
+    }
 }

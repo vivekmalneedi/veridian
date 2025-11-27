@@ -438,7 +438,7 @@ impl Sources {
     }
 
     pub fn get_definition(&self, token: &str, pos: Position, uri: &Url) -> Vec<Location> {
-        debug!("retrieving definition for token: {}", &token);
+        log::debug!("retrieving definition for token: {}", &token);
         let index = self.index.lock().unwrap();
 
         let f = index.get(uri).unwrap();
@@ -473,7 +473,7 @@ impl Sources {
                     Some(p) => file.1.text.byte_slice(p).to_string(),
                     None => "".to_string(),
                 };
-                debug!(
+                log::debug!(
                     "sym: {}, parent: {}",
                     file.1.text.byte_slice(sym.ident_node),
                     parent
@@ -518,6 +518,7 @@ impl Sources {
 
                 // TODO: test nested definitions?
                 // check if symbol identifier equals token
+                dbg!(file.1.text.byte_slice(sym.ident_node));
                 if file.1.text.byte_slice(sym.ident_node) == token {
                     cand.push(Location::new(
                         file.0.clone(),
