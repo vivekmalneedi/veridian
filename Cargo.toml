@@ -25,7 +25,6 @@ structopt = "0.3.26"
 strum = "0.27.1"
 strum_macros = "0.27.1"
 tree-sitter = "0.25.3"
-#tree-sitter-systemverilog = { path = "../tree-sitter-systemverilog" }
 streaming-iterator = "0.1.9"
 tree-sitter-systemverilog = "0.3.1"
 

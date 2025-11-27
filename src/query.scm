@@ -269,7 +269,7 @@
         (net_decl_assignment
             (simple_identifier) @ident)))
 (text_macro_definition
-  ("directive_define") @type
+  ("`define") @type
   (_
     (simple_identifier) @ident))
 ] @variable
