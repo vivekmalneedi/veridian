@@ -10,7 +10,7 @@ use std::fs::File;
 use std::io::Read;
 use std::path::PathBuf;
 use std::string::ToString;
-use std::sync::{Mutex, RwLock};
+use tokio::sync::{Mutex, RwLock};
 use tower_lsp::jsonrpc::{Error, ErrorCode, Result};
 use tower_lsp::lsp_types::*;
 use tower_lsp::{Client, LanguageServer};
@@ -213,15 +213,15 @@ fn absolute_path(path_str: &str) -> Option<PathBuf> {
 impl LanguageServer for Backend {
     async fn initialize(&self, params: InitializeParams) -> Result<InitializeResult> {
         // grab include dirs and source dirs from config, and convert to abs path
-        let mut inc_dirs = self.server.srcs.include_dirs.write().unwrap();
-        let mut src_dirs = self.server.srcs.source_dirs.write().unwrap();
+        let mut inc_dirs = self.server.srcs.include_dirs.write().await;
+        let mut src_dirs = self.server.srcs.source_dirs.write().await;
         match read_config(params.root_uri) {
             Ok(conf) => {
                 inc_dirs.extend(conf.include_dirs.iter().filter_map(|x| absolute_path(x)));
                 debug!("{:#?}", inc_dirs);
                 src_dirs.extend(conf.source_dirs.iter().filter_map(|x| absolute_path(x)));
                 debug!("{:#?}", src_dirs);
-                let mut log_handle = self.server.log_handle.lock().unwrap();
+                let mut log_handle = self.server.log_handle.lock().await;
                 let log_handle = log_handle.as_mut();
                 if let Some(handle) = log_handle {
                     handle
@@ -232,13 +232,13 @@ impl LanguageServer for Backend {
                             data: None,
                         })?;
                 }
-                *self.server.conf.write().unwrap() = conf;
+                *self.server.conf.write().await = conf;
             }
             Err(e) => {
                 warn!("found errors in config file: {:#?}", e);
             }
         }
-        let mut conf = self.server.conf.write().unwrap();
+        let mut conf = self.server.conf.write().await;
         conf.verible.syntax.enabled = which(&conf.verible.syntax.path).is_ok();
         if cfg!(feature = "slang") {
             info!("enabled linting with slang");
@@ -257,7 +257,7 @@ impl LanguageServer for Backend {
         drop(inc_dirs);
         drop(src_dirs);
         // parse all source files found from walking source dirs and include dirs
-        self.server.srcs.init();
+        self.server.srcs.init().await;
         Ok(InitializeResult {
             server_info: None,
             capabilities: ServerCapabilities {
@@ -305,7 +305,7 @@ impl LanguageServer for Backend {
         Ok(())
     }
     async fn did_open(&self, params: DidOpenTextDocumentParams) {
-        let diagnostics = self.server.did_open(params);
+        let diagnostics = self.server.did_open(params).await;
         self.client
             .publish_diagnostics(
                 diagnostics.uri,
@@ -315,13 +315,13 @@ impl LanguageServer for Backend {
             .await;
     }
     async fn did_change(&self, params: DidChangeTextDocumentParams) {
-        self.server.did_change(params);
+        self.server.did_change(params).await;
     }
     async fn did_close(&self, _params: DidCloseTextDocumentParams) {
         // TODO; implement
     }
     async fn did_save(&self, params: DidSaveTextDocumentParams) {
-        let diagnostics = self.server.did_save(params);
+        let diagnostics = self.server.did_save(params).await;
         self.client
             .publish_diagnostics(
                 diagnostics.uri,
@@ -331,37 +331,37 @@ impl LanguageServer for Backend {
             .await;
     }
     async fn completion(&self, params: CompletionParams) -> Result<Option<CompletionResponse>> {
-        Ok(self.server.completion(params))
+        Ok(self.server.completion(params).await)
     }
     async fn goto_definition(
         &self,
         params: GotoDefinitionParams,
     ) -> Result<Option<GotoDefinitionResponse>> {
-        Ok(self.server.goto_definition(params))
+        Ok(self.server.goto_definition(params).await)
     }
     async fn hover(&self, params: HoverParams) -> Result<Option<Hover>> {
-        Ok(self.server.hover(params))
+        Ok(self.server.hover(params).await)
     }
     async fn document_symbol(
         &self,
         params: DocumentSymbolParams,
     ) -> Result<Option<DocumentSymbolResponse>> {
-        Ok(self.server.document_symbol(params))
+        Ok(self.server.document_symbol(params).await)
     }
     async fn formatting(&self, params: DocumentFormattingParams) -> Result<Option<Vec<TextEdit>>> {
-        Ok(self.server.formatting(params))
+        Ok(self.server.formatting(params).await)
     }
     async fn range_formatting(
         &self,
         params: DocumentRangeFormattingParams,
     ) -> Result<Option<Vec<TextEdit>>> {
-        Ok(self.server.range_formatting(params))
+        Ok(self.server.range_formatting(params).await)
     }
     async fn document_highlight(
         &self,
         params: DocumentHighlightParams,
     ) -> Result<Option<Vec<DocumentHighlight>>> {
-        Ok(self.server.document_highlight(params))
+        Ok(self.server.document_highlight(params).await)
     }
 }
 

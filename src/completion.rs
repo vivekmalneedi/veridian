@@ -8,11 +8,11 @@ pub mod keyword;
 use keyword::*;
 
 impl LSPServer {
-    pub fn completion(&self, params: CompletionParams) -> Option<CompletionResponse> {
+    pub async fn completion(&self, params: CompletionParams) -> Option<CompletionResponse> {
         debug!("completion requested");
         trace!("{:#?}", &params);
         let doc = params.text_document_position;
-        let files = self.srcs.files.lock().unwrap();
+        let files = self.srcs.files.lock().await;
         let file = files.get(&doc.text_document.uri)?;
         let token = get_completion_token(
             &file.text,
@@ -32,11 +32,14 @@ impl LSPServer {
                     match context.trigger_character?.as_str() {
                         "." => Some(CompletionList {
                             is_incomplete: false,
-                            items: self.srcs.get_dot_completions(
-                                token.trim_end_matches('.'),
-                                doc.position,
-                                &doc.text_document.uri,
-                            ),
+                            items: self
+                                .srcs
+                                .get_dot_completions(
+                                    token.trim_end_matches('.'),
+                                    doc.position,
+                                    &doc.text_document.uri,
+                                )
+                                .await,
                         }),
                         "$" => Some(CompletionList {
                             is_incomplete: false,
@@ -52,9 +55,10 @@ impl LSPServer {
                 CompletionTriggerKind::TRIGGER_FOR_INCOMPLETE_COMPLETIONS => None,
                 CompletionTriggerKind::INVOKED => {
                     debug!("Invoked Completion");
-                    let mut comps: Vec<CompletionItem> =
-                        self.srcs
-                            .get_completions(&token, doc.position, &doc.text_document.uri);
+                    let mut comps: Vec<CompletionItem> = self
+                        .srcs
+                        .get_completions(&token, doc.position, &doc.text_document.uri)
+                        .await;
                     // complete keywords
                     comps.extend::<Vec<CompletionItem>>(
                         keyword_completions(KEYWORDS)
@@ -73,11 +77,14 @@ impl LSPServer {
             None => match trigger {
                 '.' => Some(CompletionList {
                     is_incomplete: false,
-                    items: self.srcs.get_dot_completions(
-                        token.trim_end_matches('.'),
-                        doc.position,
-                        &doc.text_document.uri,
-                    ),
+                    items: self
+                        .srcs
+                        .get_dot_completions(
+                            token.trim_end_matches('.'),
+                            doc.position,
+                            &doc.text_document.uri,
+                        )
+                        .await,
                 }),
                 '$' => Some(CompletionList {
                     is_incomplete: false,
@@ -88,9 +95,10 @@ impl LSPServer {
                     items: self.directives.clone(),
                 }),
                 _ => {
-                    let mut comps: Vec<CompletionItem> =
-                        self.srcs
-                            .get_completions(&token, doc.position, &doc.text_document.uri);
+                    let mut comps: Vec<CompletionItem> = self
+                        .srcs
+                        .get_completions(&token, doc.position, &doc.text_document.uri)
+                        .await;
                     comps.extend::<Vec<CompletionItem>>(
                         self.key_comps
                             .iter()
@@ -226,8 +234,8 @@ mod tests {
         assert_eq!(&result, "cde");
     }
 
-    #[test]
-    fn test_completion() {
+    #[tokio::test]
+    async fn test_completion() {
         test_init();
         let server = LSPServer::new(None);
         let uri = Url::parse("file:///test.sv").unwrap();
@@ -245,7 +253,7 @@ endmodule
                 text: text.to_owned(),
             },
         };
-        server.did_open(open_params);
+        server.did_open(open_params).await;
 
         let change_params = DidChangeTextDocumentParams {
             text_document: VersionedTextDocumentIdentifier {
@@ -297,7 +305,7 @@ endmodule
                 },
             ],
         };
-        server.did_change(change_params);
+        server.did_change(change_params).await;
 
         let completion_params = CompletionParams {
             text_document_position: TextDocumentPositionParams {
@@ -314,7 +322,7 @@ endmodule
                 trigger_character: None,
             }),
         };
-        let response: CompletionResponse = server.completion(completion_params).unwrap();
+        let response: CompletionResponse = server.completion(completion_params).await.unwrap();
         let item1 = CompletionItem {
             label: "abc".to_owned(),
             kind: Some(CompletionItemKind::VARIABLE),
@@ -335,8 +343,8 @@ endmodule
         }
     }
 
-    #[test]
-    fn test_nested_completion() {
+    #[tokio::test]
+    async fn test_nested_completion() {
         test_init();
         let server = LSPServer::new(None);
         let uri = Url::parse("file:///test.sv").unwrap();
@@ -360,7 +368,7 @@ endmodule
                 text: text.to_owned(),
             },
         };
-        server.did_open(open_params);
+        server.did_open(open_params).await;
 
         let change_params = DidChangeTextDocumentParams {
             text_document: VersionedTextDocumentIdentifier {
@@ -412,7 +420,7 @@ endmodule
                 },
             ],
         };
-        server.did_change(change_params);
+        server.did_change(change_params).await;
 
         let completion_params = CompletionParams {
             text_document_position: TextDocumentPositionParams {
@@ -429,7 +437,7 @@ endmodule
                 trigger_character: None,
             }),
         };
-        let response: CompletionResponse = server.completion(completion_params).unwrap();
+        let response: CompletionResponse = server.completion(completion_params).await.unwrap();
         let item1 = CompletionItem {
             label: "abc".to_owned(),
             kind: Some(CompletionItemKind::VARIABLE),
@@ -454,8 +462,8 @@ endmodule
         }
     }
 
-    #[test]
-    fn test_dot_completion() {
+    #[tokio::test]
+    async fn test_dot_completion() {
         test_init();
         let server = LSPServer::new(None);
         let uri = Url::parse("file:///test.sv").unwrap();
@@ -477,7 +485,7 @@ endmodule
                 text: text.to_owned(),
             },
         };
-        server.did_open(open_params);
+        server.did_open(open_params).await;
 
         let completion_params = CompletionParams {
             text_document_position: TextDocumentPositionParams {
@@ -494,7 +502,7 @@ endmodule
                 trigger_character: Some(".".to_string()),
             }),
         };
-        let response: CompletionResponse = server.completion(completion_params).unwrap();
+        let response: CompletionResponse = server.completion(completion_params).await.unwrap();
         dbg!(&response);
         let item1 = CompletionItem {
             label: "abcd".to_owned(),
@@ -524,7 +532,7 @@ endmodule
                 trigger_character: Some(".".to_string()),
             }),
         };
-        let response: CompletionResponse = server.completion(completion_params).unwrap();
+        let response: CompletionResponse = server.completion(completion_params).await.unwrap();
         if let CompletionResponse::List(item) = response {
             eprintln!("{:#?}", item);
             assert!(item.items.contains(&item1));
@@ -534,8 +542,8 @@ endmodule
         }
     }
 
-    #[test]
-    fn test_trigger_dot_nocontext() {
+    #[tokio::test]
+    async fn test_trigger_dot_nocontext() {
         test_init();
         let server = LSPServer::new(None);
         let uri = Url::parse("file:///test.sv").unwrap();
@@ -557,7 +565,7 @@ endmodule
                 text: text.to_owned(),
             },
         };
-        server.did_open(open_params);
+        server.did_open(open_params).await;
 
         let completion_params = CompletionParams {
             text_document_position: TextDocumentPositionParams {
@@ -571,7 +579,7 @@ endmodule
             partial_result_params: PartialResultParams::default(),
             context: None,
         };
-        let response: CompletionResponse = server.completion(completion_params).unwrap();
+        let response: CompletionResponse = server.completion(completion_params).await.unwrap();
         dbg!(&response);
         let item1 = CompletionItem {
             label: "abcd".to_owned(),
@@ -601,7 +609,7 @@ endmodule
                 trigger_character: Some(".".to_string()),
             }),
         };
-        let response: CompletionResponse = server.completion(completion_params).unwrap();
+        let response: CompletionResponse = server.completion(completion_params).await.unwrap();
         if let CompletionResponse::List(item) = response {
             eprintln!("{:#?}", item);
             assert!(item.items.contains(&item1));
@@ -611,8 +619,8 @@ endmodule
         }
     }
 
-    #[test]
-    fn test_dot_completion_instantiation() {
+    #[tokio::test]
+    async fn test_dot_completion_instantiation() {
         test_init();
         let server = LSPServer::new(None);
         let text = r#"interface test_inter;
@@ -635,14 +643,16 @@ endinterface
 "#;
 
         let url = Url::parse("file:///test.sv").unwrap();
-        server.did_open(DidOpenTextDocumentParams {
-            text_document: TextDocumentItem {
-                uri: url.clone(),
-                language_id: "systemverilog".to_owned(),
-                version: 0,
-                text: text.to_owned(),
-            },
-        });
+        server
+            .did_open(DidOpenTextDocumentParams {
+                text_document: TextDocumentItem {
+                    uri: url.clone(),
+                    language_id: "systemverilog".to_owned(),
+                    version: 0,
+                    text: text.to_owned(),
+                },
+            })
+            .await;
 
         let completion_params = CompletionParams {
             text_document_position: TextDocumentPositionParams {
@@ -659,7 +669,7 @@ endinterface
                 trigger_character: Some(".".to_string()),
             }),
         };
-        let response: CompletionResponse = server.completion(completion_params).unwrap();
+        let response: CompletionResponse = server.completion(completion_params).await.unwrap();
         dbg!(&response);
 
         if let CompletionResponse::List(list) = response {
@@ -675,8 +685,8 @@ endinterface
         }
     }
 
-    #[test]
-    fn test_inter_file_completion() {
+    #[tokio::test]
+    async fn test_inter_file_completion() {
         test_init();
         let server = LSPServer::new(None);
         let uri = Url::parse("file:///test.sv").unwrap();
@@ -704,8 +714,8 @@ endinterface"#;
                 text: text2.to_owned(),
             },
         };
-        server.did_open(open_params);
-        server.did_open(open_params2);
+        server.did_open(open_params).await;
+        server.did_open(open_params2).await;
 
         let completion_params = CompletionParams {
             text_document_position: TextDocumentPositionParams {
@@ -722,7 +732,7 @@ endinterface"#;
                 trigger_character: None,
             }),
         };
-        let response: CompletionResponse = server.completion(completion_params).unwrap();
+        let response: CompletionResponse = server.completion(completion_params).await.unwrap();
         dbg!(&response);
         if let CompletionResponse::List(item) = response {
             let names: Vec<&String> = item.items.iter().map(|x| &x.label).collect();

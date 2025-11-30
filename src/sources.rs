@@ -8,20 +8,21 @@ use std::collections::HashMap;
 use std::fs;
 use std::ops::Range as StdRange;
 use std::path::PathBuf;
-use std::sync::{Arc, Mutex, RwLock};
+use std::sync::Arc;
+use tokio::sync::{Mutex, RwLock};
 use tower_lsp::lsp_types::*;
 use walkdir::{DirEntry, WalkDir};
 
 use tree_sitter::{InputEdit, Point, Query, Tree};
 
 impl LSPServer {
-    pub fn did_open(&self, params: DidOpenTextDocumentParams) -> PublishDiagnosticsParams {
+    pub async fn did_open(&self, params: DidOpenTextDocumentParams) -> PublishDiagnosticsParams {
         let document: TextDocumentItem = params.text_document;
         let uri = document.uri.clone();
         let text = Rope::from_str(&document.text);
         debug!("did_open: {}", &document.uri);
         // check if doc is already added
-        let mut files = self.srcs.files.lock().unwrap();
+        let mut files = self.srcs.files.lock().await;
         if files.contains_key(&document.uri) {
             // convert to a did_change that replace the entire text
             self.did_change(DidChangeTextDocumentParams {
@@ -31,7 +32,8 @@ impl LSPServer {
                     range_length: None,
                     text: document.text,
                 }],
-            });
+            })
+            .await;
         } else {
             files.insert(
                 document.uri.clone(),
@@ -46,13 +48,13 @@ impl LSPServer {
         let urls: Vec<Url> = files.keys().cloned().collect();
 
         drop(files);
-        parse(uri.clone(), srcs, index, Vec::new());
-        get_diagnostics(uri, &text, urls, &self.conf.read().unwrap())
+        parse(uri.clone(), srcs, index, Vec::new()).await;
+        get_diagnostics(uri, &text, urls, &*self.conf.read().await)
     }
 
-    pub fn did_change(&self, params: DidChangeTextDocumentParams) {
+    pub async fn did_change(&self, params: DidChangeTextDocumentParams) {
         debug!("did_change: {}", &params.text_document.uri);
-        let mut files = self.srcs.files.lock().unwrap();
+        let mut files = self.srcs.files.lock().await;
         let file = files.get_mut(&params.text_document.uri).unwrap();
         let mut edits: Vec<InputEdit> = Vec::new();
         // loop through changes and apply
@@ -89,21 +91,21 @@ impl LSPServer {
         let srcs = self.srcs.files.clone();
         let index = self.srcs.index.clone();
 
-        parse(params.text_document.uri, srcs, index, edits);
+        parse(params.text_document.uri, srcs, index, edits).await;
     }
 
-    pub fn did_save(&self, params: DidSaveTextDocumentParams) -> PublishDiagnosticsParams {
+    pub async fn did_save(&self, params: DidSaveTextDocumentParams) -> PublishDiagnosticsParams {
         let document: TextDocumentIdentifier = params.text_document;
         let uri = document.uri.clone();
         debug!("did_save: {}", &document.uri);
         // check if doc is already added
-        let files = self.srcs.files.lock().unwrap();
+        let files = self.srcs.files.lock().await;
         let file = files.get(&uri).unwrap();
         let urls: Vec<Url> = files.keys().cloned().collect();
         let text = file.text.clone();
 
         drop(files);
-        get_diagnostics(uri, &text, urls, &self.conf.read().unwrap())
+        get_diagnostics(uri, &text, urls, &*self.conf.read().await)
     }
 }
 
@@ -119,15 +121,15 @@ pub struct Index {
     pub tree: Tree,
 }
 
-pub fn parse(
+pub async fn parse(
     uri: Url,
     files: Arc<Mutex<HashMap<Url, Source>>>,
     index: Arc<Mutex<HashMap<Url, Index>>>,
     edits: Vec<InputEdit>,
 ) {
-    let files = files.lock().unwrap();
+    let files = files.lock().await;
     // TODO: optimize holding of index lock
-    let mut index = index.lock().unwrap();
+    let mut index = index.lock().await;
     let file = files.get(&uri).expect("file not in files map");
     let text = file.text.clone();
     drop(files);
@@ -233,12 +235,12 @@ impl Sources {
             source_dirs: Arc::new(RwLock::new(Vec::new())),
         }
     }
-    pub fn init(&self) {
+    pub async fn init(&self) {
         let mut paths: Vec<PathBuf> = Vec::new();
-        for path in &*self.include_dirs.read().unwrap() {
+        for path in &*self.include_dirs.read().await {
             paths.push(path.clone());
         }
-        for path in &*self.source_dirs.read().unwrap() {
+        for path in &*self.source_dirs.read().await {
             paths.push(path.clone());
         }
         // find and add all source/header files recursively from configured include and source directories
@@ -246,7 +248,7 @@ impl Sources {
         for path in src_paths {
             if let Ok(url) = Url::from_file_path(&path) {
                 if let Ok(text) = fs::read_to_string(&path) {
-                    let mut files = self.files.lock().unwrap();
+                    let mut files = self.files.lock().await;
                     files.insert(
                         url.clone(),
                         Source {
@@ -261,10 +263,13 @@ impl Sources {
     }
 
     /// compute identifier completions
-    pub fn get_completions(&self, token: &str, pos: Position, uri: &Url) -> Vec<CompletionItem> {
-        // TODO: get completions
-        debug!("retrieving identifier completion for token: {}", &token);
-        let index = self.index.lock().unwrap();
+    pub async fn get_completions(
+        &self,
+        token: &str,
+        pos: Position,
+        uri: &Url,
+    ) -> Vec<CompletionItem> {
+        let index = self.index.lock().await;
         let mut cand: Vec<CompletionItem> = Vec::new();
         let mut stack: Vec<Symbol> = Vec::new();
         for file in index.iter() {
@@ -321,15 +326,13 @@ impl Sources {
     }
 
     /// compute dot completions
-    pub fn get_dot_completions(
+    pub async fn get_dot_completions(
         &self,
         token: &str,
         pos: Position,
         uri: &Url,
     ) -> Vec<CompletionItem> {
-        debug!("retrieving dot completion for token: {}", &token);
-        // TODO: get dot completions
-        let index = self.index.lock().unwrap();
+        let index = self.index.lock().await;
         let mut cand: Vec<CompletionItem> = Vec::new();
         let mut stack: Vec<Symbol> = Vec::new();
 
@@ -437,9 +440,9 @@ impl Sources {
         cand
     }
 
-    pub fn get_definition(&self, token: &str, pos: Position, uri: &Url) -> Vec<Location> {
+    pub async fn get_definition(&self, token: &str, pos: Position, uri: &Url) -> Vec<Location> {
         log::debug!("retrieving definition for token: {}", &token);
-        let index = self.index.lock().unwrap();
+        let index = self.index.lock().await;
 
         let f = index.get(uri).unwrap();
 
@@ -660,8 +663,8 @@ mod tests {
         }
     }
 
-    #[test]
-    fn test_open_and_change() {
+    #[tokio::test]
+    async fn test_open_and_change() {
         test_init();
         let server = LSPServer::new(None);
         let uri = Url::parse("file:///test.sv").unwrap();
@@ -677,8 +680,8 @@ endmodule"#;
                 text: text.to_owned(),
             },
         };
-        server.did_open(open_params);
-        let files = server.srcs.files.lock().unwrap();
+        server.did_open(open_params).await;
+        let files = server.srcs.files.lock().await;
         let file = files.get(&uri).expect("file not in files map");
         assert_eq!(file.text.to_string(), text.to_owned());
         drop(files);
@@ -703,8 +706,8 @@ endmodule"#;
                 text: "var1".to_owned(),
             }],
         };
-        server.did_change(change_params);
-        let files = server.srcs.files.lock().unwrap();
+        server.did_change(change_params).await;
+        let files = server.srcs.files.lock().await;
         let file = files.get(&uri).expect("file not in files map");
         assert_eq!(
             file.text.to_string(),
@@ -716,8 +719,8 @@ endmodule"#
         assert_eq!(file.version, 1);
     }
 
-    #[test]
-    fn test_fault_tolerance() {
+    #[tokio::test]
+    async fn test_fault_tolerance() {
         test_init();
         let server = LSPServer::new(None);
         let uri = Url::parse("file:///test.sv").unwrap();
@@ -732,8 +735,8 @@ endmodule"#;
                 text: text.to_owned(),
             },
         };
-        server.did_open(open_params);
-        let index = server.srcs.index.lock().unwrap();
+        server.did_open(open_params).await;
+        let index = server.srcs.index.lock().await;
         let file = index.get(&uri).expect("file not in files map");
         assert!(file.contains("test"));
     }

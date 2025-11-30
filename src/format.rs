@@ -6,13 +6,13 @@ use std::process::{Command, Stdio};
 use tower_lsp::lsp_types::*;
 
 impl LSPServer {
-    pub fn formatting(&self, params: DocumentFormattingParams) -> Option<Vec<TextEdit>> {
+    pub async fn formatting(&self, params: DocumentFormattingParams) -> Option<Vec<TextEdit>> {
         let uri = params.text_document.uri;
         info!("formatting {}", &uri);
-        let files = self.srcs.files.lock().unwrap();
+        let files = self.srcs.files.lock().await;
         let file = files.get(&uri)?;
 
-        let conf = self.conf.read().unwrap();
+        let conf = self.conf.read().await;
         if conf.verible.format.enabled {
             Some(vec![TextEdit::new(
                 Range::new(
@@ -31,13 +31,16 @@ impl LSPServer {
         }
     }
 
-    pub fn range_formatting(&self, params: DocumentRangeFormattingParams) -> Option<Vec<TextEdit>> {
+    pub async fn range_formatting(
+        &self,
+        params: DocumentRangeFormattingParams,
+    ) -> Option<Vec<TextEdit>> {
         let uri = params.text_document.uri;
         info!("range formatting {}", &uri);
-        let files = self.srcs.files.lock().unwrap();
+        let files = self.srcs.files.lock().await;
         let file = files.get(&uri)?;
 
-        let conf = self.conf.read().unwrap();
+        let conf = self.conf.read().await;
         if conf.verible.format.enabled {
             Some(vec![TextEdit::new(
                 file.text.char_range_to_range(0..file.text.len_chars()),

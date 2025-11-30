@@ -252,7 +252,6 @@ pub fn index_text(text: &Rope, tree: &Tree, query: &Query) -> Vec<Symbol> {
     while let Some(m) = mats.next() {
         // scopes
         if m.pattern_index == 0 {
-            println!("new scope {}", symbols.len());
             let mut builder = SymbolBuilder::new();
             for cap in m.captures {
                 match query.capture_names()[cap.index as usize] {
@@ -315,7 +314,6 @@ pub fn index_text(text: &Rope, tree: &Tree, query: &Query) -> Vec<Symbol> {
         }
         // ports
         else if m.pattern_index == 1 {
-            println!("new port");
             let mut builder = SymbolBuilder::new();
             builder.direction("inout");
             for cap in m.captures {
@@ -342,7 +340,6 @@ pub fn index_text(text: &Rope, tree: &Tree, query: &Query) -> Vec<Symbol> {
         }
         // params
         else if m.pattern_index == 2 {
-            println!("new param");
             let mut builder = SymbolBuilder::new();
             for cap in m.captures {
                 match query.capture_names()[cap.index as usize] {
@@ -364,7 +361,6 @@ pub fn index_text(text: &Rope, tree: &Tree, query: &Query) -> Vec<Symbol> {
         }
         // package import
         else if m.pattern_index == 3 {
-            println!("new member {}", symbols.len());
             let mut builder = SymbolBuilder::new();
             for cap in m.captures {
                 match query.capture_names()[cap.index as usize] {
@@ -385,7 +381,6 @@ pub fn index_text(text: &Rope, tree: &Tree, query: &Query) -> Vec<Symbol> {
         }
         // struct_union member
         else if m.pattern_index == 4 {
-            println!("new member {}", symbols.len());
             let mut builder = SymbolBuilder::new();
             for cap in m.captures {
                 match query.capture_names()[cap.index as usize] {
@@ -407,7 +402,6 @@ pub fn index_text(text: &Rope, tree: &Tree, query: &Query) -> Vec<Symbol> {
         }
         // instantiation
         else if m.pattern_index == 5 {
-            println!("new member {}", symbols.len());
             let mut builder = SymbolBuilder::new();
             for cap in m.captures {
                 match query.capture_names()[cap.index as usize] {
@@ -428,7 +422,6 @@ pub fn index_text(text: &Rope, tree: &Tree, query: &Query) -> Vec<Symbol> {
         }
         // variable
         else if m.pattern_index == 6 {
-            println!("new member {}", symbols.len());
             let mut builder = SymbolBuilder::new();
             for cap in m.captures {
                 match query.capture_names()[cap.index as usize] {
@@ -501,7 +494,7 @@ mod tests {
                 parent,
                 scope,
                 ty,
-                symbol.direction.to_string()
+                symbol.direction
             );
         }
         symbols

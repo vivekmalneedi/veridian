@@ -7,29 +7,32 @@ use tower_lsp::lsp_types::*;
 use crate::symbol::*;
 
 impl LSPServer {
-    pub fn goto_definition(&self, params: GotoDefinitionParams) -> Option<GotoDefinitionResponse> {
+    pub async fn goto_definition(
+        &self,
+        params: GotoDefinitionParams,
+    ) -> Option<GotoDefinitionResponse> {
         let doc = params.text_document_position_params.text_document.uri;
         let pos = params.text_document_position_params.position;
-        let files = self.srcs.files.lock().unwrap();
+        let files = self.srcs.files.lock().await;
         let file = files.get(&doc)?;
         let token = get_definition_token(file.text.line(pos.line as usize), pos);
         drop(files);
 
         Some(GotoDefinitionResponse::Array(
-            self.srcs.get_definition(&token, pos, &doc),
+            self.srcs.get_definition(&token, pos, &doc).await,
         ))
     }
 
-    pub fn hover(&self, params: HoverParams) -> Option<Hover> {
+    pub async fn hover(&self, params: HoverParams) -> Option<Hover> {
         let doc = params.text_document_position_params.text_document.uri;
         let pos = params.text_document_position_params.position;
-        let files = self.srcs.files.lock().unwrap();
+        let files = self.srcs.files.lock().await;
         let file = files.get(&doc)?;
         let text = file.text.clone();
         let token = get_definition_token(file.text.line(pos.line as usize), pos);
         drop(files);
 
-        let defs = self.srcs.get_definition(&token, pos, &doc);
+        let defs = self.srcs.get_definition(&token, pos, &doc).await;
         let def = defs.first()?;
         let def_line = def.range.start.line;
         Some(Hover {
@@ -41,9 +44,12 @@ impl LSPServer {
         })
     }
 
-    pub fn document_symbol(&self, params: DocumentSymbolParams) -> Option<DocumentSymbolResponse> {
+    pub async fn document_symbol(
+        &self,
+        params: DocumentSymbolParams,
+    ) -> Option<DocumentSymbolResponse> {
         let uri = params.text_document.uri;
-        let binding = self.srcs.index.lock().ok()?;
+        let binding = self.srcs.index.lock().await;
         let file = binding.get(&uri)?;
 
         let mut stack: Vec<(Symbol, Vec<DocumentSymbol>)> = Vec::new();
@@ -101,12 +107,12 @@ impl LSPServer {
         Some(DocumentSymbolResponse::Nested(top_level))
     }
 
-    pub fn document_highlight(
+    pub async fn document_highlight(
         &self,
         params: DocumentHighlightParams,
     ) -> Option<Vec<DocumentHighlight>> {
         let uri = params.text_document_position_params.text_document.uri;
-        let binding = self.srcs.index.lock().ok()?;
+        let binding = self.srcs.index.lock().await;
         let file = binding.get(&uri)?;
 
         let pos = params.text_document_position_params.position;
@@ -230,8 +236,8 @@ mod tests {
         assert_eq!(token, "ab_c".to_owned());
     }
 
-    #[test]
-    fn test_get_definition() {
+    #[tokio::test]
+    async fn test_get_definition() {
         test_init();
         let mut d = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
         d.push("test_data/definition_test.sv");
@@ -248,7 +254,7 @@ mod tests {
                 text: text.to_owned(),
             },
         };
-        server.did_open(open_params);
+        server.did_open(open_params).await;
         let resp = server
             .goto_definition(GotoDefinitionParams {
                 text_document_position_params: TextDocumentPositionParams {
@@ -262,6 +268,7 @@ mod tests {
                     partial_result_token: None,
                 },
             })
+            .await
             .unwrap();
 
         let token = get_definition_token(doc.line(3), Position::new(3, 13));
@@ -276,8 +283,8 @@ mod tests {
         }
     }
 
-    #[test]
-    fn test_definition_instance_port() {
+    #[tokio::test]
+    async fn test_definition_instance_port() {
         test_init();
         let text = r#"
 interface a (
@@ -300,7 +307,7 @@ endmodule"#;
                 text: text.to_owned(),
             },
         };
-        server.did_open(open_params);
+        server.did_open(open_params).await;
 
         let resp = server
             .goto_definition(GotoDefinitionParams {
@@ -315,6 +322,7 @@ endmodule"#;
                     partial_result_token: None,
                 },
             })
+            .await
             .unwrap();
 
         if let GotoDefinitionResponse::Array(defs) = resp {
@@ -366,8 +374,8 @@ logic b;"#
         );
     }
 
-    #[test]
-    fn test_symbols() {
+    #[tokio::test]
+    async fn test_symbols() {
         test_init();
         let text = r#"
 module test;
@@ -384,7 +392,7 @@ endmodule"#;
                 text: text.to_owned(),
             },
         };
-        server.did_open(open_params);
+        server.did_open(open_params).await;
 
         let symbols = server
             .document_symbol(DocumentSymbolParams {
@@ -396,6 +404,7 @@ endmodule"#;
                     partial_result_token: None,
                 },
             })
+            .await
             .unwrap();
         if let DocumentSymbolResponse::Nested(syms) = symbols {
             let symbol = syms.first().unwrap();
@@ -414,8 +423,8 @@ endmodule"#;
         }
     }
 
-    #[test]
-    fn test_highlight() {
+    #[tokio::test]
+    async fn test_highlight() {
         test_init();
         let text = r#"
 module test;
@@ -432,7 +441,7 @@ endmodule"#;
                 text: text.to_owned(),
             },
         };
-        server.did_open(open_params);
+        server.did_open(open_params).await;
 
         let highlights = server
             .document_highlight(DocumentHighlightParams {
@@ -447,6 +456,7 @@ endmodule"#;
                     partial_result_token: None,
                 },
             })
+            .await
             .unwrap();
         let expected = vec![
             DocumentHighlight {
@@ -514,7 +524,7 @@ endmodule"#;
         (clean_text, ref_pos, def_pos)
     }
 
-    fn go_to_def_test(uri: &str, text: &str) {
+    async fn go_to_def_test(uri: &str, text: &str) {
         test_init();
 
         let (clean_text, ref_pos, def_pos) = extract_markers(text);
@@ -522,14 +532,16 @@ endmodule"#;
         let url = Url::parse(uri).unwrap();
         let server = LSPServer::new(None);
 
-        server.did_open(DidOpenTextDocumentParams {
-            text_document: TextDocumentItem {
-                uri: url.clone(),
-                language_id: "systemverilog".into(),
-                version: 0,
-                text: clean_text,
-            },
-        });
+        server
+            .did_open(DidOpenTextDocumentParams {
+                text_document: TextDocumentItem {
+                    uri: url.clone(),
+                    language_id: "systemverilog".into(),
+                    version: 0,
+                    text: clean_text,
+                },
+            })
+            .await;
 
         let resp = server
             .goto_definition(GotoDefinitionParams {
@@ -544,6 +556,7 @@ endmodule"#;
                     partial_result_token: None,
                 },
             })
+            .await
             .unwrap();
 
         let defs: Vec<Location> = match resp {
@@ -568,8 +581,8 @@ endmodule"#;
         );
     }
 
-    #[test]
-    fn test_parameter() {
+    #[tokio::test]
+    async fn test_parameter() {
         let text = r#"
     module param_mod #(
       parameter /*DEF*/WIDTH = 8
@@ -582,11 +595,11 @@ endmodule"#;
     endmodule
     "#;
 
-        go_to_def_test("file:///test02.sv", text);
+        go_to_def_test("file:///test02.sv", text).await;
     }
 
-    #[test]
-    fn test_typedef_struct() {
+    #[tokio::test]
+    async fn test_typedef_struct() {
         let text = r#"
     typedef struct packed {
       logic [3:0] x;
@@ -598,10 +611,10 @@ endmodule"#;
     endmodule
     "#;
 
-        go_to_def_test("file:///test03.sv", text);
+        go_to_def_test("file:///test03.sv", text).await;
     }
 
-    // #[test]
+    // #[tokio::test]
     // fn test_package_typedef_and_param() {
     //     let text = r#"
     // package my_pkg;
@@ -617,11 +630,11 @@ endmodule"#;
     // endmodule
     // "#;
     //
-    //     go_to_def_test("file:///test04.sv", text);
+    //     go_to_def_test("file:///test04.sv", text).await;
     // }
 
-    #[test]
-    fn test_function_in_package() {
+    #[tokio::test]
+    async fn test_function_in_package() {
         let text = r#"
     package arith_pkg;
       function int /*DEF*/add(int a, int b);
@@ -636,11 +649,11 @@ endmodule"#;
     endmodule
     "#;
 
-        go_to_def_test("file:///test05.sv", text);
+        go_to_def_test("file:///test05.sv", text).await;
     }
 
-    #[test]
-    fn test_class_and_methods() {
+    #[tokio::test]
+    async fn test_class_and_methods() {
         let text = r#"
     package class_pkg;
       class /*DEF*/Foo;
@@ -664,11 +677,11 @@ endmodule"#;
     endmodule
     "#;
 
-        go_to_def_test("file:///test06.sv", text);
+        go_to_def_test("file:///test06.sv", text).await;
     }
 
-    #[test]
-    fn test_interface_and_modport() {
+    #[tokio::test]
+    async fn test_interface_and_modport() {
         let text = r#"
     interface bus_if;
       logic clk;
@@ -679,10 +692,10 @@ endmodule"#;
     endmodule
     "#;
 
-        go_to_def_test("file:///test07.sv", text);
+        go_to_def_test("file:///test07.sv", text).await;
     }
 
-    // #[test]
+    // #[tokio::test]
     // fn test_hierarchical_ref() {
     //     let text = r#"
     // module sub;
@@ -698,11 +711,11 @@ endmodule"#;
     // endmodule
     // "#;
     //
-    //     go_to_def_test("file:///test08.sv", text);
+    //     go_to_def_test("file:///test08.sv", text).await;
     // }
 
-    #[test]
-    fn test_macro_definition() {
+    #[tokio::test]
+    async fn test_macro_definition() {
         let text = r#"
     `define /*DEF*/SCALE_FACTOR 4
 
@@ -711,6 +724,6 @@ endmodule"#;
     endmodule
     "#;
 
-        go_to_def_test("file:///test10.sv", text);
+        go_to_def_test("file:///test10.sv", text).await;
     }
 }
