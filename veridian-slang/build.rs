@@ -8,7 +8,7 @@ type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
 fn download_slang(download_to: &Path) -> Result<PathBuf> {
     // Keep the version the same as the one in `CMakeLists.txt`
-    let target = "https://github.com/MikePopoloski/slang/archive/refs/tags/v7.0.tar.gz";
+    let target = "https://github.com/MikePopoloski/slang/archive/refs/tags/v9.1.tar.gz";
 
     fs::create_dir_all(download_to)?;
 
