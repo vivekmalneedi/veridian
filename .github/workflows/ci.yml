@@ -13,7 +13,7 @@ jobs:
         runs-on: ubuntu-22.04
         steps:
             - name: Checkout sources
-              uses: actions/checkout@v2
+              uses: actions/checkout@v6
               with:
                   submodules: true
 
@@ -21,7 +21,7 @@ jobs:
               uses: actions-rs/toolchain@v1
               with:
                   profile: minimal
-                  toolchain: 1.83.0
+                  toolchain: 1.91.1
                   override: true
 
             - name: cache cargo dirs
@@ -47,14 +47,14 @@ jobs:
                   command: test
                   args: --all-features
             #todo: vscode extensions tests
-            - uses: actions/setup-node@v4
+            - uses: actions/setup-node@v6
               with:
-                  node-version: "18"
+                  node-version: "24"
             - name: build extension
               working-directory: extensions/vscode
               run: |
                   npm install
-                  npm install -g @vscode/vsce@3.2.1
+                  npm install -g @vscode/vsce
                   vsce package -o veridian.vsix
 
     lints:
@@ -62,7 +62,7 @@ jobs:
         runs-on: ubuntu-22.04
         steps:
             - name: Checkout sources
-              uses: actions/checkout@v2
+              uses: actions/checkout@v6
               with:
                   submodules: true
 
@@ -70,7 +70,7 @@ jobs:
               uses: actions-rs/toolchain@v1
               with:
                   profile: minimal
-                  toolchain: 1.83.0
+                  toolchain: 1.91.1
                   override: true
                   components: rustfmt, clippy
 
@@ -99,13 +99,13 @@ jobs:
         if: ${{ github.ref == 'refs/heads/master' && ( github.event_name == 'workflow_dispatch' || github.event_name == 'schedule' ) }}
         steps:
             - name: Checkout sources
-              uses: actions/checkout@v2
+              uses: actions/checkout@v6
 
             - name: Install stable toolchain
               uses: actions-rs/toolchain@v1
               with:
                   profile: minimal
-                  toolchain: 1.83.0
+                  toolchain: 1.91.1
                   override: true
 
             - name: cache cargo dirs
@@ -129,7 +129,7 @@ jobs:
                   cp target/release/veridian .
                   tar -czvf veridian-ubuntu-22.04.tar.gz veridian
 
-            - uses: actions/upload-artifact@v2
+            - uses: actions/upload-artifact@v4
               with:
                   name: veridian-ubuntu-22.04.tar.gz
                   path: veridian-ubuntu-22.04.tar.gz
@@ -140,15 +140,15 @@ jobs:
         runs-on: ubuntu-latest
         if: ${{ ( github.event_name == 'workflow_dispatch' || github.event_name == 'schedule' ) }}
         steps:
-            - uses: actions/checkout@v2
-            - uses: actions/setup-node@v4
+            - uses: actions/checkout@v6
+            - uses: actions/setup-node@v6
               with:
-                  node-version: "18"
+                  node-version: "24"
             - name: build extension
               working-directory: extensions/vscode
               run: |
                   npm install
-                  npm install -g @vscode/vsce@3.2.1
+                  npm install -g @vscode/vsce
                   vsce package -o veridian.vsix
 
             - uses: actions/upload-artifact@v4
@@ -165,7 +165,7 @@ jobs:
             - uses: actions/download-artifact@v4
               with:
                   name: veridian-ubuntu-22.04.tar.gz
-            - uses: actions/download-artifact@v2
+            - uses: actions/download-artifact@v4
               with:
                   name: veridian.vsix
             - uses: marvinpinto/action-automatic-releases@latest
